@@ -1,0 +1,25 @@
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.glb binary
+*.bin binary
+*.b3dm binary
+*.i3dm binary
+*.pnts binary
+*.cmpt binary
+*.3tz binary
+*.stl binary
+*.ply binary
+*.drc binary
+*.ktx2 binary
+*.basis binary
+*.wasm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff2 binary
