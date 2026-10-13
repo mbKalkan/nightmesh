@@ -24,6 +24,9 @@ export function buildContentSecurityPolicy(cspSource: string, nonce: string): st
     `script-src 'nonce-${nonce}' ${cspSource} 'wasm-unsafe-eval'`,
     // Decoders run in workers started from blob: URLs.
     'worker-src blob:',
+    // Textures are decoded off the main thread by fetching blob: URLs made from the model's own
+    // bytes. Only blob: is allowed: nothing can be fetched from the network or the disk.
+    'connect-src blob:',
   ].join('; ');
 }
 

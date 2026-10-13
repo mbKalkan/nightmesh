@@ -12,7 +12,8 @@ function sourceFiles(dir: string): string[] {
 }
 
 const messages = sourceFiles('src/extension').flatMap((file) =>
-  [...readFileSync(file, 'utf8').matchAll(/l10n\.t\(\s*(['"])((?:(?!\1).)*)\1/g)].map((m) => m[2]),
+  // `l10n.t('…')` in VS Code code and `t('…')` in texts.ts, which takes `l10n.t` as `t`.
+  [...readFileSync(file, 'utf8').matchAll(/\bt\(\s*(['"])((?:(?!\1).)*)\1/g)].map((m) => m[2]),
 );
 
 const placeholders = (text: string) => (text.match(/\{\d+\}/g) ?? []).sort();

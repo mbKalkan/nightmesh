@@ -1,7 +1,13 @@
+import { posix } from 'node:path';
 import * as vscode from 'vscode';
 import { formatForPath } from '../shared/formats';
 import type { HostToWebviewMessage, WebviewToHostMessage } from '../shared/protocol';
-import { viewerStrings } from './strings';
+import { watchFile } from './fileWatcher';
+import { fileResourceOpener } from './model/fileResources';
+import { loadMessages, type ResourceOpener } from './model/load';
+import { resolveResourceUri } from './model/resources';
+import { fileSource, memorySource, type ByteSource } from './model/sources';
+import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
 
 export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
@@ -39,16 +45,92 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     });
 
     const post = (message: HostToWebviewMessage) => panel.webview.postMessage(message);
-    const subscription = panel.webview.onDidReceiveMessage((message: WebviewToHostMessage) => {
-      if (message.type === 'ready') {
-        void post({
-          type: 'load',
-          fileName: uri.path.slice(uri.path.lastIndexOf('/') + 1),
-          format,
-          strings: viewerStrings(),
-        });
+    let loadId = 0;
+    let disposed = false;
+    const load = async (reload: boolean) => {
+      const id = ++loadId;
+      const current = () => id === loadId && !disposed;
+      let source: ByteSource;
+      try {
+        source = await openSource(uri);
+      } catch {
+        // A save in progress can briefly remove the file; keep showing the last good model.
+        if (current()) await post(readFailure(id, reload));
+        return;
       }
+      try {
+        const messages = loadMessages(source, resourceOpener(uri), {
+          loadId: id,
+          reload,
+          texts: loadTexts(vscode.l10n.t),
+        });
+        for await (const message of messages) {
+          if (!current()) break;
+          await post(message);
+        }
+      } catch {
+        if (current()) await post(readFailure(id, reload));
+      } finally {
+        await source.close();
+      }
+    };
+
+    const subscriptions = [
+      panel.webview.onDidReceiveMessage((message: WebviewToHostMessage) => {
+        if (message.type === 'ready') {
+          void post({
+            type: 'open',
+            fileName: uri.path.slice(uri.path.lastIndexOf('/') + 1),
+            format,
+            strings: viewerStrings(vscode.l10n.t),
+          });
+          void load(false);
+        } else if (message.type === 'reload') {
+          void load(true);
+        }
+      }),
+      watchFile(uri, () => void load(true)),
+    ];
+    panel.onDidDispose(() => {
+      disposed = true;
+      subscriptions.forEach((subscription) => subscription.dispose());
     });
-    panel.onDidDispose(() => subscription.dispose());
   }
+}
+
+function readFailure(loadId: number, reload: boolean): HostToWebviewMessage {
+  return {
+    type: 'failed',
+    loadId,
+    reload,
+    message: vscode.l10n.t("The file couldn't be read."),
+    details: [],
+  };
+}
+
+/** Local files are read in place; other schemes (Git, remote file systems) only as a whole. */
+async function openSource(uri: vscode.Uri): Promise<ByteSource> {
+  if (uri.scheme === 'file') return fileSource(uri.fsPath);
+  return memorySource(await vscode.workspace.fs.readFile(uri));
+}
+
+/** Resources may come from the model's workspace folder, or its own folder outside one. */
+function resourceOpener(uri: vscode.Uri): ResourceOpener {
+  const modelFolder = posix.dirname(uri.path);
+  const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.path ?? modelFolder;
+  if (uri.scheme === 'file') {
+    return fileResourceOpener(modelFolder, root, (path) => uri.with({ path }).fsPath);
+  }
+  return async (reference) => {
+    const resolution = resolveResourceUri(reference, modelFolder, root);
+    if (resolution.kind === 'refused') return resolution.reason;
+    if (resolution.kind === 'data') return memorySource(resolution.bytes);
+    try {
+      return memorySource(await vscode.workspace.fs.readFile(uri.with({ path: resolution.path })));
+    } catch (error) {
+      return error instanceof vscode.FileSystemError && error.code === 'FileNotFound'
+        ? 'missing'
+        : 'unreadable';
+    }
+  };
 }

@@ -6,9 +6,27 @@ import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
 
-const viewportCenter = async (page: Page) => {
-  const { x, y } = await centerOf(page, '.nm-viewport');
-  return pixelAt(page, x, y);
+/** The color in a corner of the viewport, where models framed by the camera don't reach. */
+const corner = async (page: Page) => {
+  const box = (await page.locator('.nm-viewport').boundingBox())!;
+  return pixelAt(page, Math.round(box.x + 6), Math.round(box.y + box.height - 6));
+};
+
+const close = (a: number[], b: number[], tolerance = 2) =>
+  a.every((value, i) => Math.abs(value - b[i]) <= tolerance);
+
+/** Whether anything but background shows, looking at a 5 × 5 grid across the viewport. */
+const drawn = async (page: Page) => {
+  const box = (await page.locator('.nm-viewport').boundingBox())!;
+  const background = await corner(page);
+  for (let row = 1; row <= 5; row++) {
+    for (let column = 1; column <= 5; column++) {
+      const x = Math.round(box.x + (box.width * column) / 6);
+      const y = Math.round(box.y + (box.height * row) / 6);
+      if (!close(await pixelAt(page, x, y), background, 8)) return true;
+    }
+  }
+  return false;
 };
 
 /** Whether the canvas holds a live WebGL 2 context and fills the viewport at the device scale. */
@@ -27,23 +45,25 @@ const canvasState = (page: Page) =>
 
 for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
   test.describe(`${theme} theme`, () => {
-    test('opens a model in a WebGL 2 viewport', async ({ page }) => {
+    test('draws a model', async ({ page }) => {
       const viewer = await openViewer(page, theme);
-      await viewer.load('triangle.glb');
+      await viewer.open('scene.glb');
 
-      await expect(page.locator('.nm-file-name')).toHaveText('triangle.glb');
-      await expect(page.locator('.nm-viewport')).toHaveAttribute('aria-label', 'triangle.glb');
+      await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+      await expect(page.locator('.nm-file-name')).toHaveText('scene.glb');
+      await expect(page.locator('.nm-viewport')).toHaveAttribute('aria-label', 'scene.glb');
       expect(await canvasState(page)).toEqual({ webgl2: true, fills: true });
       await expect(page.locator('.nm-error')).toBeHidden();
-      await page.screenshot({ path: `${SCREENS}/viewport-${theme}.png` });
+      await expect(page.locator('.nm-notice')).toBeHidden();
+      expect(await drawn(page)).toBe(true);
+      await page.screenshot({ path: `${SCREENS}/scene-${theme}.png` });
       expect(viewer.problems).toEqual([]);
     });
 
     test('explains when WebGL 2 is not available', async ({ page }) => {
       const viewer = await openViewer(page, theme, { withoutWebGL: true });
-      await viewer.load('triangle.glb');
+      await viewer.open('scene.glb');
 
-      await expect(page.locator('.nm-error')).toBeVisible();
       await expect(page.locator('.nm-error-title')).toHaveText("This model can't be displayed");
       await expect(page.locator('.nm-error-message')).toContainText("WebGL 2 isn't available");
       await expect(page.locator('.nm-canvas')).toHaveCount(0);
@@ -51,34 +71,156 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
       await page.screenshot({ path: `${SCREENS}/no-webgl-${theme}.png` });
       expect(viewer.problems).toEqual([]);
     });
+
+    test('lists what could not be loaded over the part that could', async ({ page }) => {
+      const viewer = await openViewer(page, theme);
+      await viewer.open('truncated.glb');
+
+      await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+      await expect(page.locator('.nm-notice-title')).toHaveText(
+        "Part of this model couldn't be loaded",
+      );
+      await expect(page.locator('.nm-notice-list li')).toContainText([
+        'The file ends early, as if it was cut off while being copied or saved.',
+        /^Primitives left out: \d+$/,
+      ]);
+      expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
+      await page.screenshot({ path: `${SCREENS}/truncated-${theme}.png` });
+      expect(viewer.problems).toEqual([]);
+    });
   });
 }
 
-test('clears the viewport to the theme background and follows theme changes', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
-  await viewer.load('triangle.glb');
-  await expect.poll(() => viewportCenter(page)).toEqual([31, 31, 31]);
+test.describe('models that open', () => {
+  for (const fixture of [
+    'triangle.glb',
+    'triangle.gltf',
+    'materials.glb',
+    'animated.glb',
+    'variants.glb',
+    'textured.gltf',
+    'embedded.gltf',
+    'dense.glb',
+    'meshopt.glb',
+    'quantized.glb',
+  ]) {
+    test(fixture, async ({ page }) => {
+      const viewer = await openViewer(page, 'dark');
+      await viewer.open(fixture);
 
+      await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+      await expect(page.locator('.nm-notice')).toBeHidden();
+      expect(await drawn(page)).toBe(true);
+      await page.screenshot({ path: `${SCREENS}/open-${fixture.replace('.', '-')}.png` });
+      expect(viewer.problems).toEqual([]);
+    });
+  }
+});
+
+test.describe('files that cannot be shown', () => {
+  const cases: [string, string | RegExp, string[]][] = [
+    ['empty.glb', 'The file is empty.', []],
+    ['not-a-model.glb', "The file isn't a glTF model, or it is damaged.", []],
+    ['lfs-pointer.glb', /^This file is a Git LFS pointer/, []],
+    [
+      'unsupported-extension.glb',
+      "This model needs EXT_nightmesh_unknown, which Nightmesh can't draw yet.",
+      [],
+    ],
+    [
+      'missing-resource.gltf',
+      "None of this model's geometry could be loaded.",
+      ["missing.bin wasn't found next to the model."],
+    ],
+    [
+      'network-resource.gltf',
+      "None of this model's geometry could be loaded.",
+      ["triangle.bin wasn't loaded: Nightmesh doesn't use the network."],
+    ],
+    [
+      'outside-folder.gltf',
+      "None of this model's geometry could be loaded.",
+      ["triangle.bin wasn't loaded: it is outside the model's folder and workspace."],
+    ],
+    [
+      'absolute-path.gltf',
+      "None of this model's geometry could be loaded.",
+      ["triangle.bin wasn't loaded: only paths relative to the model are followed."],
+    ],
+  ];
+  for (const [fixture, message, details] of cases) {
+    test(fixture, async ({ page }) => {
+      const viewer = await openViewer(page, 'dark');
+      await viewer.open(fixture);
+
+      await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'failed');
+      await expect(page.locator('.nm-error-title')).toHaveText("This model can't be displayed");
+      await expect(page.locator('.nm-error-message')).toHaveText(message);
+      await expect(page.locator('.nm-error-details li')).toHaveText(details);
+      expect(viewer.problems).toEqual([]);
+    });
+  }
+
+  test('says when the file was damaged', async ({ page }) => {
+    const viewer = await openViewer(page, 'dark');
+    await viewer.open('not-a-model.glb');
+    await page.screenshot({ path: `${SCREENS}/damaged-dark.png` });
+    await viewer.setTheme('light');
+    await page.screenshot({ path: `${SCREENS}/damaged-light.png` });
+  });
+});
+
+test('clears to the theme background and follows theme changes', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  await expect.poll(() => corner(page)).toEqual([31, 31, 31]);
+
+  // Light themes darken the background a little, so white models stand out.
   await viewer.setTheme('light');
-  await expect.poll(() => viewportCenter(page)).toEqual([255, 255, 255]);
+  await expect.poll(async () => close(await corner(page), [241, 241, 241])).toBe(true);
 
   await viewer.setTheme('hcDark');
-  await expect.poll(() => viewportCenter(page)).toEqual([0, 0, 0]);
+  await expect.poll(() => corner(page)).toEqual([0, 0, 0]);
+
+  await viewer.setTheme('hcLight');
+  await expect.poll(async () => close(await corner(page), [240, 240, 240])).toBe(true);
   expect(viewer.problems).toEqual([]);
 });
 
 test('keeps the canvas sized to the viewport when the window resizes', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
-  await viewer.load('triangle.glb');
+  await viewer.open('scene.glb');
 
   await page.setViewportSize({ width: 640, height: 420 });
   await expect.poll(() => canvasState(page)).toEqual({ webgl2: true, fills: true });
   expect(viewer.problems).toEqual([]);
 });
 
-test('tells the user when the graphics device stops and recovers', async ({ page }) => {
+test('orbits with the mouse and keeps the view when the file changes', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
-  await viewer.load('triangle.glb');
+  await viewer.open('scene.glb');
+  const viewport = page.locator('.nm-viewport');
+  const before = await viewport.screenshot();
+
+  const { x, y } = await centerOf(page, '.nm-viewport');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 120, y + 30, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await viewport.screenshot()).equals(before)).toBe(false);
+  const orbited = await viewport.screenshot();
+
+  await viewer.open('scene.glb', { reload: true });
+  await expect(viewport).toHaveAttribute('data-state', 'shown');
+  await expect.poll(async () => (await viewport.screenshot()).equals(orbited)).toBe(true);
+  expect(viewer.problems).toEqual([]);
+});
+
+test('tells the user when the graphics device stops, and asks for the model again', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
   const loseContext = (action: 'loseContext' | 'restoreContext') =>
     page.locator('.nm-canvas').evaluate((el, action) => {
       const gl = (el as HTMLCanvasElement).getContext('webgl2');
@@ -95,14 +237,16 @@ test('tells the user when the graphics device stops and recovers', async ({ page
 
   await loseContext('restoreContext');
   await expect(page.locator('.nm-error')).toBeHidden();
-  await expect.poll(() => viewportCenter(page)).toEqual([31, 31, 31]);
+  await expect.poll(async () => (await viewer.sent()).at(-1)).toEqual({ type: 'reload' });
+  await viewer.open('scene.glb', { reload: true });
+  await expect.poll(() => drawn(page)).toBe(true);
   expect(viewer.problems).toEqual([]);
 });
 
-test('sends ready once and does not ask the host for anything else yet', async ({ page }) => {
+test('asks the host for nothing but the model', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
-  await viewer.load('triangle.gltf');
+  await viewer.open('textured.gltf');
 
-  await expect(page.locator('.nm-file-name')).toHaveText('triangle.gltf');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
   expect(await viewer.sent()).toEqual([{ type: 'ready' }]);
 });

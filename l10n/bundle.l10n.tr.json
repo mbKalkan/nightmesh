@@ -1,5 +1,26 @@
 {
+  "Loading…": "Yükleniyor…",
   "This model can't be displayed": "Bu model görüntülenemiyor",
   "WebGL 2 isn't available, so the model can't be drawn. Check that hardware acceleration isn't turned off in VS Code.": "WebGL 2 kullanılamadığı için model çizilemiyor. VS Code'da donanım hızlandırmanın kapalı olmadığını kontrol edin.",
-  "The graphics device stopped responding. The model will be drawn again when it recovers.": "Grafik aygıtı yanıt vermeyi bıraktı. Aygıt toparlanınca model yeniden çizilecek."
+  "The graphics device stopped responding. The model will be drawn again when it recovers.": "Grafik aygıtı yanıt vermeyi bıraktı. Aygıt toparlanınca model yeniden çizilecek.",
+  "Something went wrong while drawing this model.": "Model çizilirken bir sorun oluştu.",
+  "Part of this model couldn't be loaded": "Modelin bir kısmı yüklenemedi",
+  "Close": "Kapat",
+  "{0} wasn't found next to the model.": "{0} modelin yanında bulunamadı.",
+  "{0} wasn't loaded: Nightmesh doesn't use the network.": "{0} yüklenmedi: Nightmesh ağ kullanmaz.",
+  "{0} wasn't loaded: only paths relative to the model are followed.": "{0} yüklenmedi: yalnızca modele göre göreli yollar izlenir.",
+  "{0} wasn't loaded: it is outside the model's folder and workspace.": "{0} yüklenmedi: modelin klasörünün ve çalışma alanının dışında.",
+  "{0} isn't a valid file reference.": "{0} geçerli bir dosya başvurusu değil.",
+  "{0} couldn't be read.": "{0} okunamadı.",
+  "The file is empty.": "Dosya boş.",
+  "The file isn't a glTF model, or it is damaged.": "Dosya bir glTF modeli değil ya da hasarlı.",
+  "This file is a Git LFS pointer: the model itself hasn't been downloaded to this machine. Run git lfs pull to get it.": "Bu dosya bir Git LFS işaretçisi: modelin kendisi bu makineye indirilmemiş. İndirmek için git lfs pull çalıştırın.",
+  "This model is glTF {0}. Nightmesh opens glTF 2.0 models.": "Bu model glTF {0}. Nightmesh glTF 2.0 modellerini açar.",
+  "This model needs {0}, which Nightmesh can't draw yet.": "Bu model {0} gerektiriyor; Nightmesh bunu henüz çizemiyor.",
+  "None of this model's geometry could be loaded.": "Bu modelin geometrisinin hiçbir kısmı yüklenemedi.",
+  "The file ends early, as if it was cut off while being copied or saved.": "Dosya erken bitiyor; kopyalanırken ya da kaydedilirken kesilmiş gibi.",
+  "Primitives left out: {0}": "Atlanan primitive: {0}",
+  "Textures left out: {0}": "Atlanan doku: {0}",
+  "Animations left out: {0}": "Atlanan animasyon: {0}",
+  "The file couldn't be read.": "Dosya okunamadı."
 }

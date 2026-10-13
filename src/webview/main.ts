@@ -1,46 +1,157 @@
 import './styles/viewer.css';
-import type { HostToWebviewMessage, LoadMessage } from '../shared/protocol';
+import type {
+  FailedMessage,
+  HostToWebviewMessage,
+  ModelMessage,
+  OpenMessage,
+  ViewerStrings,
+} from '../shared/protocol';
 import { Shell } from './shell';
-import { Viewport } from './viewport';
+import { viewportBackground, watchTheme } from './theme';
 import { vscode } from './vscodeApi';
 
+type SceneModule = typeof import('./scene');
+type View = InstanceType<SceneModule['ModelView']>;
+
+/** A model on its way from the host: its JSON, and its parts as they arrive. */
+interface Arrival {
+  message: ModelMessage;
+  parts: Map<string, ArrayBuffer>;
+  received: number;
+}
+
 const shell = new Shell(document.getElementById('app') as HTMLElement);
-let viewport: Viewport | undefined;
+let strings: ViewerStrings | undefined;
+let view: Promise<View | undefined> | undefined;
+let arrival: Arrival | undefined;
+let latestLoad = 0;
+let hasModel = false;
 
 window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) => {
   const message = event.data;
   switch (message.type) {
-    case 'load':
-      show(message);
+    case 'open':
+      open(message);
+      break;
+    case 'model':
+      receiveModel(message);
+      break;
+    case 'part':
+      receivePart(message.loadId, message.key, ownBuffer(message.data));
+      break;
+    case 'parts':
+      message.keys.forEach((key, i) => {
+        const end = message.offsets[i + 1] ?? message.data.byteLength;
+        receivePart(message.loadId, key, message.data.slice(message.offsets[i], end).buffer);
+      });
+      break;
+    case 'failed':
+      fail(message);
       break;
   }
 });
 
-// VS Code swaps body classes and CSS variables when the color theme changes.
-let themeTimer: ReturnType<typeof setTimeout> | undefined;
-const themeObserver = new MutationObserver(() => {
-  clearTimeout(themeTimer);
-  themeTimer = setTimeout(() => viewport?.render(), 50);
-});
-themeObserver.observe(document.body, {
-  attributes: true,
-  attributeFilter: ['class', 'data-vscode-theme-kind'],
-});
-themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+watchTheme(
+  () => void view?.then((current) => current?.setBackground(viewportBackground(shell.viewport))),
+);
 
 vscode.postMessage({ type: 'ready' });
 
-function show(message: LoadMessage): void {
-  const { strings } = message;
-  shell.setDocument(message.fileName, message.format);
-  if (viewport) {
-    return;
-  }
-  viewport = Viewport.create(shell.viewport, {
-    onContextLost: () => shell.showError(strings.errorTitle, strings.errorContextLost),
-    onContextRestored: () => shell.hideError(),
+function open(message: OpenMessage): void {
+  strings = message.strings;
+  shell.setDocument(message.fileName, message.format, strings);
+  view ??= createView(strings);
+}
+
+/** Probes WebGL 2 first, so a machine without it gets a message and not a stack of errors. */
+async function createView(text: ViewerStrings): Promise<View | undefined> {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'nm-canvas';
+  const context = canvas.getContext('webgl2', {
+    alpha: false,
+    antialias: true,
+    powerPreference: 'high-performance',
   });
-  if (!viewport) {
-    shell.showError(strings.errorTitle, strings.errorWebGL);
+  if (!context) {
+    shell.showError(text.errorTitle, text.errorWebGL);
+    return undefined;
   }
+  shell.viewport.prepend(canvas);
+  canvas.addEventListener('webglcontextlost', () =>
+    shell.showError(text.errorTitle, text.errorContextLost),
+  );
+  canvas.addEventListener('webglcontextrestored', () => {
+    shell.hideError();
+    if (hasModel) shell.setState('shown');
+    // Vertex data left memory once it was on the GPU; the host sends the model again.
+    if (hasModel) vscode.postMessage({ type: 'reload' });
+  });
+  const scene: SceneModule = await import('./scene');
+  const created = new scene.ModelView(shell.viewport, canvas, context);
+  created.setBackground(viewportBackground(shell.viewport));
+  return created;
+}
+
+function receiveModel(message: ModelMessage): void {
+  if (message.loadId < latestLoad) return;
+  latestLoad = message.loadId;
+  arrival = { message, parts: new Map(), received: 0 };
+  if (!(message.reload && hasModel)) shell.setProgress(message.bytes > 0 ? 0 : undefined);
+  if (message.parts === 0) void build(arrival);
+}
+
+function receivePart(loadId: number, key: string, data: ArrayBuffer): void {
+  const current = arrival;
+  if (!current || current.message.loadId !== loadId) return;
+  current.parts.set(key, data);
+  current.received += data.byteLength;
+  if (!(current.message.reload && hasModel)) {
+    shell.setProgress(current.received / current.message.bytes);
+  }
+  if (current.parts.size === current.message.parts) void build(current);
+}
+
+async function build(current: Arrival): Promise<void> {
+  const text = strings!;
+  try {
+    const target = await view;
+    if (!target) {
+      // No WebGL: the message saying so stays.
+      shell.setState('failed');
+      return;
+    }
+    const { parseModel } = await import('./scene');
+    const gltf = await parseModel(current.message.json, current.parts);
+    if (current !== arrival) return;
+    target.show(gltf.scene, current.message.reload && hasModel);
+    hasModel = true;
+    shell.hideError();
+    shell.setState('shown');
+    shell.setNotices(text.partialTitle, current.message.notices);
+  } catch (error) {
+    if (current !== arrival) return;
+    console.warn(error);
+    // A file caught mid-save can be incomplete; keep showing the last good model.
+    if (!(current.message.reload && hasModel)) shell.showError(text.errorTitle, text.errorRender);
+  } finally {
+    if (current === arrival) {
+      shell.setProgress(undefined);
+      arrival = undefined;
+    }
+  }
+}
+
+function fail(message: FailedMessage): void {
+  if (message.loadId < latestLoad) return;
+  latestLoad = message.loadId;
+  arrival = undefined;
+  shell.setProgress(undefined);
+  if (message.reload && hasModel) return;
+  shell.showError(strings?.errorTitle ?? '', message.message, message.details);
+}
+
+/** An array that is exactly its buffer, as glTF's loader expects; copies only when it isn't. */
+function ownBuffer(data: Uint8Array): ArrayBuffer {
+  const whole = data.byteOffset === 0 && data.byteLength === data.buffer.byteLength;
+  return (whole ? data : data.slice()).buffer as ArrayBuffer;
 }
