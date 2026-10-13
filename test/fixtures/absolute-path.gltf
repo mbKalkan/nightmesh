@@ -1,0 +1,83 @@
+{
+  "asset": {
+    "generator": "Nightmesh fixture generator",
+    "version": "2.0",
+    "copyright": "Public domain (CC0 1.0)"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 3,
+      "max": [
+        1,
+        1,
+        0
+      ],
+      "min": [
+        0,
+        0,
+        0
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 3,
+      "bufferView": 1,
+      "byteOffset": 0
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 36,
+      "byteStride": 12,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 36,
+      "byteLength": 8,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "/models/triangle.bin",
+      "byteLength": 44
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Triangle",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "mode": 4,
+          "indices": 1
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Triangle",
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
+}
