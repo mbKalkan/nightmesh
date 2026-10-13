@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import type { Page } from '@playwright/test';
+import { fileResourceOpener } from '../../src/extension/model/fileResources';
+import { loadMessages } from '../../src/extension/model/load';
+import { fileSource } from '../../src/extension/model/sources';
+import { loadTexts, viewerStrings, type Translate } from '../../src/extension/texts';
 import { buildWebviewHtml } from '../../src/extension/webviewHtml';
 import { formatForPath } from '../../src/shared/formats';
-import type { HostToWebviewMessage, ViewerStrings } from '../../src/shared/protocol';
+import type { HostToWebviewMessage } from '../../src/shared/protocol';
 import { themes, type ThemeName } from './themes';
 
 interface Theme {
@@ -13,6 +17,7 @@ interface Theme {
 }
 
 const ORIGIN = 'http://webview.test';
+const FIXTURES = resolve('test/fixtures');
 
 const CONTENT_TYPES: Record<string, string> = {
   '.js': 'text/javascript',
@@ -20,13 +25,11 @@ const CONTENT_TYPES: Record<string, string> = {
   '.map': 'application/json',
 };
 
-export const strings: ViewerStrings = {
-  errorTitle: "This model can't be displayed",
-  errorWebGL:
-    "WebGL 2 isn't available, so the model can't be drawn. Check that hardware acceleration isn't turned off in VS Code.",
-  errorContextLost:
-    'The graphics device stopped responding. The model will be drawn again when it recovers.',
-};
+/** English, as VS Code shows it without a language pack. */
+export const english: Translate = (message, ...args) =>
+  message.replace(/\{(\d+)\}/g, (_, index: string) => String(args[Number(index)]));
+
+export const strings = viewerStrings(english);
 
 export interface ViewerOptions {
   /** Makes `getContext('webgl2')` fail, as on a machine without GPU acceleration. */
@@ -111,22 +114,52 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
     (window as unknown as { __sent: { type: string }[] }).__sent.some((m) => m.type === 'ready'),
   );
 
+  let loadId = 0;
   return {
     problems,
-    /** Delivers a message as if it came from the extension host. */
+    /** Delivers a message as if it came from the extension host. Bytes travel as base64. */
     async post(message: HostToWebviewMessage) {
-      await page.evaluate((data) => window.dispatchEvent(new MessageEvent('message', { data })), {
-        ...message,
-      });
+      const bytes = 'data' in message ? Buffer.from(message.data).toString('base64') : null;
+      await page.evaluate(
+        ({ message, bytes }) => {
+          const data = { ...message } as Record<string, unknown>;
+          if (bytes !== null) data.data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+          window.dispatchEvent(new MessageEvent('message', { data }));
+        },
+        { message: { ...message, data: undefined }, bytes },
+      );
     },
-    async load(fixture: string) {
-      await this.post({
-        type: 'load',
-        fileName: fixture,
-        format: formatForPath(fixture) ?? 'glb',
-        strings,
+    /**
+     * Opens a fixture the way the extension host does, with the host's own loading code: the
+     * fixtures folder stands in for the workspace, so resources can't reach outside it.
+     */
+    async open(fixture: string, { reload = false } = {}) {
+      if (!reload) {
+        await this.post({
+          type: 'open',
+          fileName: fixture,
+          format: formatForPath(fixture) ?? 'glb',
+          strings,
+        });
+      }
+      // Cleared here, so waiting for it below waits for this load and not the one before.
+      await page.evaluate(() => {
+        delete (document.querySelector('.nm-viewport') as HTMLElement).dataset.state;
       });
-      await page.waitForSelector('.nm-canvas, .nm-error:not([hidden])');
+      const source = await fileSource(join(FIXTURES, fixture));
+      const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
+        join(FIXTURES, path.slice('/fixtures'.length)),
+      );
+      try {
+        const options = { loadId: ++loadId, reload, texts: loadTexts(english) };
+        for await (const message of loadMessages(source, opener, options)) {
+          await this.post(message);
+        }
+      } finally {
+        await source.close();
+      }
+      await page.waitForSelector('.nm-viewport[data-state]');
+      await page.waitForSelector('.nm-progress', { state: 'hidden' });
     },
     /** Switches the theme the way VS Code does: CSS variables plus body classes. */
     async setTheme(name: ThemeName) {

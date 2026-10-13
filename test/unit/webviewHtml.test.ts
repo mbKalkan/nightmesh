@@ -29,8 +29,12 @@ describe('buildContentSecurityPolicy', () => {
     expect(directive('worker-src')).toBe('worker-src blob:');
   });
 
+  it('connects only to blob: URLs, which hold bytes already in the webview', () => {
+    expect(directive('connect-src')).toBe('connect-src blob:');
+  });
+
   it('does not allow network or frame access', () => {
-    expect(csp).not.toMatch(/connect-src|frame-src|child-src/);
+    expect(csp).not.toMatch(/frame-src|child-src/);
     // No scheme-wide sources such as a bare `https:` or `*`.
     expect(csp).not.toMatch(/(^|\s)(https?:|\*)(\s|;|$)/);
   });
