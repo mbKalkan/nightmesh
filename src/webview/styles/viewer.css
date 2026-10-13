@@ -1,0 +1,131 @@
+/* Viewer chrome. Colors come from VS Code theme variables so every theme looks native. */
+
+:root {
+  --nm-toolbar-height: 35px;
+  --nm-border: var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+/* Without a height the viewport collapses and the canvas has nothing to fill. */
+#app {
+  height: 100%;
+}
+
+.nm-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Toolbar */
+
+.nm-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--nm-toolbar-height);
+  padding: 0 8px 0 14px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--nm-border);
+  background: var(--vscode-editor-background);
+  user-select: none;
+}
+
+.nm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nm-file-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--vscode-charts-blue, var(--vscode-icon-foreground, var(--vscode-foreground)));
+}
+
+.nm-file-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Viewport */
+
+.nm-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+}
+
+/* Keyboard focus on the model area itself, e.g. after tabbing past the toolbar. */
+.nm-viewport:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.nm-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Error state, drawn over the viewport */
+
+.nm-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  box-sizing: border-box;
+  background: var(--vscode-editor-background);
+  text-align: center;
+}
+
+.nm-error-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke-width: 0.8;
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-error-title {
+  margin: 8px 0 0;
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.nm-error-message {
+  max-width: 440px;
+  margin: 0 0 12px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.5;
+}

@@ -1,0 +1,5 @@
+{
+  "This model can't be displayed": "Bu model görüntülenemiyor",
+  "WebGL 2 isn't available, so the model can't be drawn. Check that hardware acceleration isn't turned off in VS Code.": "WebGL 2 kullanılamadığı için model çizilemiyor. VS Code'da donanım hızlandırmanın kapalı olmadığını kontrol edin.",
+  "The graphics device stopped responding. The model will be drawn again when it recovers.": "Grafik aygıtı yanıt vermeyi bıraktı. Aygıt toparlanınca model yeniden çizilecek."
+}
