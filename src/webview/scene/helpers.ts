@@ -22,6 +22,9 @@ export interface HelperColors {
 const GRID_OPACITY = 0.28;
 /** The negative half of each axis is drawn this much fainter than the positive one. */
 const NEGATIVE_AXIS = 0.35;
+/** The bounding box, where the model doesn't hide it and, fainter, where it does. */
+const BOUNDS_OPACITY = 0.8;
+const BOUNDS_BEHIND_OPACITY = 0.25;
 /** The grid reaches this far beyond the model, in model extents, and at least this many cells. */
 const GRID_REACH = 1.5;
 const GRID_MIN_CELLS = 5;
@@ -35,8 +38,8 @@ export function gridCell(extent: number): number {
 }
 
 /**
- * Drawn around the model to read it by: a ground grid under it, in metre cells, and the world's
- * axes through the origin. Neither is picked, framed or measured.
+ * Drawn around the model to read it by: a ground grid under it, in metre cells, the world's axes
+ * through the origin, and its bounding box. None is picked, framed or measured.
  */
 export class Helpers {
   readonly group = new Group();
@@ -57,12 +60,32 @@ export class Helpers {
     z: [0.22, 0.58, 1],
   };
   private box: Box3 | undefined;
+  private readonly bounds = new Group();
+  private readonly boundsGeometry = new BufferGeometry();
+  private readonly boundsFront = new LineBasicMaterial({
+    transparent: true,
+    opacity: BOUNDS_OPACITY,
+    depthWrite: false,
+  });
+  private readonly boundsBehind = new LineBasicMaterial({
+    transparent: true,
+    opacity: BOUNDS_BEHIND_OPACITY,
+    depthTest: false,
+    depthWrite: false,
+  });
 
   constructor() {
     this.grid.name = 'Nightmesh grid';
     this.axes.name = 'Nightmesh axes';
+    this.bounds.name = 'Nightmesh bounds';
     this.axes.visible = false;
-    this.group.add(this.grid, this.axes);
+    this.bounds.visible = false;
+    this.bounds.add(
+      new LineSegments(this.boundsGeometry, this.boundsFront),
+      new LineSegments(this.boundsGeometry, this.boundsBehind),
+    );
+    this.group.add(this.grid, this.axes, this.bounds);
+    this.setColors(this.colors);
   }
 
   get gridShown(): boolean {
@@ -81,9 +104,43 @@ export class Helpers {
     this.axes.visible = shown;
   }
 
+  get boundsShown(): boolean {
+    return this.bounds.visible;
+  }
+
+  set boundsShown(shown: boolean) {
+    this.bounds.visible = shown;
+  }
+
   setColors(colors: HelperColors): void {
     this.colors = colors;
+    const [r, g, b] = colors.grid;
+    for (const material of [this.boundsFront, this.boundsBehind]) {
+      material.color.setRGB(r, g, b, SRGBColorSpace);
+    }
     if (this.box) this.fit(this.box);
+  }
+
+  /** Draws the bounding box around `box`: the model's, as it is posed now. */
+  setBounds(box: Box3): void {
+    const { min, max } = box;
+    if (box.isEmpty()) {
+      this.boundsGeometry.setAttribute('position', new Float32BufferAttribute([], 3));
+      return;
+    }
+    const corner = (i: number) => [
+      i & 1 ? max.x : min.x,
+      i & 2 ? max.y : min.y,
+      i & 4 ? max.z : min.z,
+    ];
+    const positions: number[] = [];
+    // The twelve edges join corners that differ along one axis.
+    for (let i = 0; i < 8; i++) {
+      for (const axis of [1, 2, 4])
+        if (!(i & axis)) positions.push(...corner(i), ...corner(i | axis));
+    }
+    this.boundsGeometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    this.boundsGeometry.computeBoundingSphere();
   }
 
   /** Lays the grid under `box`, centered below it, and sizes the axes to it. */
@@ -146,6 +203,9 @@ export class Helpers {
       lines.geometry.dispose();
       (lines.material as LineBasicMaterial).dispose();
     }
+    this.boundsGeometry.dispose();
+    this.boundsFront.dispose();
+    this.boundsBehind.dispose();
   }
 }
 

@@ -57,3 +57,25 @@ describe('Helpers', () => {
     helpers.dispose();
   });
 });
+
+describe('Helpers bounding box', () => {
+  it('draws the twelve edges of the box, when asked for', () => {
+    const helpers = new Helpers();
+    expect(helpers.boundsShown).toBe(false);
+    helpers.setBounds(new Box3(new Vector3(-1, 0, -2), new Vector3(1, 3, 2)));
+    const bounds = helpers.group.getObjectByName('Nightmesh bounds')!;
+    const [front, behind] = bounds.children as LineSegments[];
+    // The same edges twice: where the model hides them they are drawn fainter.
+    expect(front.geometry).toBe(behind.geometry);
+    const position = front.geometry.getAttribute('position') as BufferAttribute;
+    expect(position.count).toBe(24);
+    const corners = new Set<string>();
+    for (let i = 0; i < position.count; i++) {
+      corners.add([position.getX(i), position.getY(i), position.getZ(i)].join());
+    }
+    expect(corners.size).toBe(8);
+    helpers.boundsShown = true;
+    expect(bounds.visible).toBe(true);
+    helpers.dispose();
+  });
+});

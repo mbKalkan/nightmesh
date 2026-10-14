@@ -131,6 +131,8 @@ export interface ViewStrings {
   /** The grid with its cell size: `Grid ({0} squares)`. */
   gridCell: string;
   axes: string;
+  bounds: string;
+  backgrounds: Record<Background, string>;
 }
 
 /** Which side panels show and how wide they are. */
@@ -151,7 +153,12 @@ export interface Preferences {
   layout?: Partial<PanelLayout>;
   grid?: boolean;
   axes?: boolean;
+  bounds?: boolean;
+  background?: Background;
 }
+
+/** What the view clears to: the theme's editor background, or a fixed shade. */
+export type Background = 'theme' | 'dark' | 'neutral' | 'light';
 
 /** UI strings localized by the extension host and handed to the webview. */
 export interface ViewerStrings {

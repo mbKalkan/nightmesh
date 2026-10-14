@@ -6,6 +6,7 @@ import type {
   Motion,
   OpenMessage,
   PanelLayout,
+  Background,
   Preferences,
   ShadingStrings,
   StandardView,
@@ -189,6 +190,7 @@ function open(message: OpenMessage): void {
   if (!opened) {
     preferences = message.preferences ?? {};
     shell.setLayout({ ...DEFAULT_LAYOUT, ...preferences.layout });
+    showBackground();
   }
   opened = message;
   strings = message.strings;
@@ -297,6 +299,19 @@ function viewMenuItems(): MenuItem[] {
       checked: shown.axes,
       run: () => setHelpers({ axes: !shown.axes }),
     },
+    {
+      label: text.bounds,
+      kind: 'check',
+      checked: shown.bounds,
+      run: () => setHelpers({ bounds: !shown.bounds }),
+    },
+    'separator',
+    ...(['theme', 'dark', 'neutral', 'light'] as const).map((background) => ({
+      label: text.backgrounds[background],
+      kind: 'radio' as const,
+      checked: (preferences.background ?? 'theme') === background,
+      run: () => setBackground(background),
+    })),
     ...cameraItems(current),
   ];
 }
@@ -328,14 +343,32 @@ function savePreferences(change: Preferences): void {
   vscode.postMessage({ type: 'preferences', preferences });
 }
 
-/** The ground grid shows unless the user hid it; the origin axes only when asked for. */
-function helpersShown(): { grid: boolean; axes: boolean } {
-  return { grid: preferences.grid ?? true, axes: preferences.axes ?? false };
+/** The ground grid shows unless the user hid it; the origin axes and bounding box when asked. */
+function helpersShown(): { grid: boolean; axes: boolean; bounds: boolean } {
+  return {
+    grid: preferences.grid ?? true,
+    axes: preferences.axes ?? false,
+    bounds: preferences.bounds ?? false,
+  };
 }
 
-function setHelpers(change: { grid?: boolean; axes?: boolean }): void {
+function setHelpers(change: { grid?: boolean; axes?: boolean; bounds?: boolean }): void {
   savePreferences(change);
   shownView?.setHelpers(helpersShown());
+}
+
+/** Clears the view to the background picked, and draws the helpers to show on it. */
+function showBackground(): void {
+  const background = preferences.background ?? 'theme';
+  if (background === 'theme') delete shell.viewport.dataset.background;
+  else shell.viewport.dataset.background = background;
+  shownView?.setBackground(viewportBackground(shell.viewport));
+  shownView?.setHelperColors(helperColors(shell.viewport));
+}
+
+function setBackground(background: Background): void {
+  savePreferences({ background });
+  showBackground();
 }
 
 function receiveStructure(message: StructureMessage): void {

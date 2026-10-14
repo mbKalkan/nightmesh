@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowestTextContrast } from './contrast';
 import { openViewer } from './harness';
+import { pixelAt } from './pixels';
 import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
@@ -49,6 +50,11 @@ test('opens the View menu from the toolbar, in every theme', async ({ page }) =>
     'Orthographic',
     'Grid (1 m squares)',
     'Origin Axes',
+    'Bounding Box',
+    'Theme Background',
+    'Dark Background',
+    'Neutral Background',
+    'Light Background',
     'Front Camera',
     'Top Camera',
   ]);
@@ -76,7 +82,10 @@ test('works the View menu with the keyboard', async ({ page }) => {
   await expect(item(page, 'Front')).toBeFocused();
   await page.keyboard.press('End');
   await expect(item(page, 'Top Camera')).toBeFocused();
-  for (let step = 0; step < 4; step++) await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Home');
+  await expect(item(page, 'Front')).toBeFocused();
+  // Past the six views and Perspective.
+  for (let step = 0; step < 7; step++) await page.keyboard.press('ArrowDown');
   await expect(item(page, 'Orthographic')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(menu(page)).toBeHidden();
@@ -174,6 +183,41 @@ test('shows a ground grid unless hidden, and the origin axes when asked, and kee
   await expect
     .poll(() => savedPreferences(viewer))
     .toMatchObject({ axes: true, layout: { inspector: false } });
+  expect(viewer.problems).toEqual([]);
+});
+
+test('draws the bounding box and clears to the background picked, and keeps both', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  const canvas = page.locator('.nm-canvas');
+  const before = await canvas.screenshot();
+
+  await viewButton(page).click();
+  await item(page, 'Bounding Box').click();
+  await expect.poll(() => savedPreferences(viewer)).toMatchObject({ bounds: true });
+  await expect.poll(async () => (await canvas.screenshot()).equals(before)).toBe(false);
+
+  await viewButton(page).click();
+  await expect(item(page, 'Theme Background')).toHaveAttribute('aria-checked', 'true');
+  await item(page, 'Light Background').click();
+  await expect.poll(() => savedPreferences(viewer)).toMatchObject({ background: 'light' });
+  // A corner of the view, away from the model and the grid, is the light shade.
+  const box = (await canvas.boundingBox())!;
+  await expect
+    .poll(() => pixelAt(page, Math.round(box.x + 6), Math.round(box.y + 6)))
+    .toEqual([235, 235, 235]);
+  await page.screenshot({ path: `${SCREENS}/view-bounds-light.png` });
+
+  await viewButton(page).click();
+  await item(page, 'Neutral Background').click();
+  await page.screenshot({ path: `${SCREENS}/view-neutral.png` });
+  await viewButton(page).click();
+  await item(page, 'Theme Background').click();
+  await expect
+    .poll(() => pixelAt(page, Math.round(box.x + 6), Math.round(box.y + 6)))
+    .toEqual([31, 31, 31]);
   expect(viewer.problems).toEqual([]);
 });
 

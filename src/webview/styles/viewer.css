@@ -751,13 +751,31 @@ body.vscode-high-contrast .nm-link {
   overflow: hidden;
   outline: none;
   /* The canvas clears to this; see theme.ts. */
-  background: var(--vscode-editor-background);
+  --nm-viewport-background: var(--vscode-editor-background);
+  background: var(--nm-viewport-background);
 }
 
 /* White models need a slightly darker background to stand out in light themes. */
 body.vscode-light .nm-viewport,
 body.vscode-high-contrast-light .nm-viewport {
-  background: color-mix(in srgb, var(--vscode-editor-background), var(--vscode-foreground) 7%);
+  --nm-viewport-background: color-mix(
+    in srgb,
+    var(--vscode-editor-background),
+    var(--vscode-foreground) 7%
+  );
+}
+
+/* A background the user picked over the theme's, from the View menu. */
+body .nm-viewport[data-background='dark'] {
+  --nm-viewport-background: #1f1f1f;
+}
+
+body .nm-viewport[data-background='neutral'] {
+  --nm-viewport-background: #6b6b6b;
+}
+
+body .nm-viewport[data-background='light'] {
+  --nm-viewport-background: #ebebeb;
 }
 
 /* Keyboard focus on the model area itself, e.g. after tabbing past the toolbar. */
@@ -1014,7 +1032,7 @@ body.vscode-light .nm-gizmo {
 
 /* Opaque, so an end pointing at the viewer hides the one behind it. */
 .nm-gizmo-negative circle {
-  fill: color-mix(in srgb, var(--nm-gizmo-color) 30%, var(--vscode-editor-background));
+  fill: color-mix(in srgb, var(--nm-gizmo-color) 30%, var(--nm-viewport-background));
 }
 
 .nm-gizmo-end:hover circle {
