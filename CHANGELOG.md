@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-14
+
+First preview release.
+
 ### Added
 
 - Open glTF models (`.glb`, and `.gltf` with its `.bin` files and textures) in a 3D view that
@@ -89,4 +93,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/commits/main
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/mbKalkan/nightmesh/releases/tag/v0.1.0
