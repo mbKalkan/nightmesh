@@ -194,6 +194,37 @@ test('lists thousands of nodes without drawing them all', async ({ page }) => {
   expect(viewer.problems).toEqual([]);
 });
 
+test('brings what is picked outside the tree to the middle of it', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.post(viewer.openMessage('many-nodes.gltf'));
+  const nodes: { name: string; mesh?: number }[] = Array.from({ length: 2000 }, (_, i) => ({
+    name: `Part ${i}`,
+  }));
+  nodes[1000].mesh = 0;
+  const json = JSON.stringify({
+    asset: { version: '2.0' },
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'Assembly', children: nodes.map((_, i) => i + 1) }, ...nodes],
+    meshes: [{ name: 'Gear', primitives: [{ attributes: {} }] }],
+  });
+  await viewer.post({ type: 'structure', loadId: 1, reload: false, json, fileSize: json.length });
+
+  // The mesh is at the end of the tree; the node using it, far above.
+  await tree(page).focus();
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  await expect(heading(page)).toHaveText(/Gear\s*Mesh 0/);
+  await page.locator('.nm-link', { hasText: 'Part 1000' }).click();
+
+  await expect(row(page, 'Part 1000')).toHaveAttribute('aria-selected', 'true');
+  const box = (await tree(page).boundingBox())!;
+  const picked = (await row(page, 'Part 1000').boundingBox())!;
+  const middle = (at: { y: number; height: number }) => at.y + at.height / 2;
+  expect(Math.abs(middle(picked) - middle(box))).toBeLessThan(picked.height);
+  expect(viewer.problems).toEqual([]);
+});
+
 test('counts the scene in a statistics tab beside the inspector', async ({ page }) => {
   const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');

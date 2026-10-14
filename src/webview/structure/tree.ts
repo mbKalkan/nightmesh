@@ -97,7 +97,7 @@ export class StructureTree {
     this.selected = key;
     const index = this.indexOf(key);
     if (index >= 0) this.focused = index;
-    this.revealFocused();
+    this.revealFocused(true);
     this.render();
   }
 
@@ -257,13 +257,18 @@ export class StructureTree {
     element.classList.toggle('nm-focused', index === this.focused);
   }
 
-  private revealFocused(): void {
+  /**
+   * Scrolls the focused row into view: just enough when the keyboard moves there, to the middle
+   * when it was picked elsewhere, as VS Code's Explorer does, so it doesn't sit at an edge.
+   */
+  private revealFocused(center = false): void {
     const top = this.focused * ROW_HEIGHT;
     const height = this.element.clientHeight;
-    if (top < this.element.scrollTop) this.element.scrollTop = top;
-    else if (top + ROW_HEIGHT > this.element.scrollTop + height) {
-      this.element.scrollTop = top + ROW_HEIGHT - height;
-    }
+    const above = top < this.element.scrollTop;
+    const below = top + ROW_HEIGHT > this.element.scrollTop + height;
+    if (center && (above || below)) this.element.scrollTop = top - (height - ROW_HEIGHT) / 2;
+    else if (above) this.element.scrollTop = top;
+    else if (below) this.element.scrollTop = top + ROW_HEIGHT - height;
   }
 
   /** Moves the focus to row `index`, and selects what's there unless it is a group. */
