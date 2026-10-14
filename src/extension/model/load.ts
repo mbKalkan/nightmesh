@@ -137,7 +137,14 @@ export async function* loadMessages(
       ),
     );
     const plan = planRender(json, buffers, images);
-    yield { type: 'images', loadId, images: await imageInfos(plan) };
+    const infos = await imageInfos(plan);
+    // The loader can't read an image from a bufferView without its type, which glTF doesn't
+    // require of images given by URI, and which some exporters leave out of the others too.
+    plan.json.images?.forEach((image, index) => {
+      const format = infos[index]?.format;
+      if (!image.mimeType && format) image.mimeType = `image/${format}`;
+    });
+    yield { type: 'images', loadId, images: infos };
     if (plan.json.animations?.length) {
       yield { type: 'animations', loadId, motion: await animationMotion(plan) };
     }

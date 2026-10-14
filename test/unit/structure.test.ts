@@ -261,7 +261,11 @@ describe('inspector', () => {
 
   it('describes a texture: its image, sampler and where it is used', () => {
     const texture = inspectFixture('textured.gltf', 'texture:0');
-    expect(rows(texture, 'Texture')).toEqual(['source: checker · checker.png · image/png']);
+    expect(rows(texture, 'Texture')).toEqual(['source: checker · checker.png']);
+    // The image's type shows when the file gives it.
+    expect(rows(inspectFixture('materials.glb', 'texture:0'), 'Texture')).toEqual([
+      'source: checker · image/png · 184 B',
+    ]);
     expect(rows(texture, 'Sampler')).toEqual([
       'magFilter: —',
       'minFilter: —',
