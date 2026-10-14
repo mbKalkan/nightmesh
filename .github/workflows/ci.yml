@@ -26,8 +26,6 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:visual
       - run: xvfb-run -a npm run test:smoke
       - run: npm run package -- --out nightmesh.vsix
       - uses: actions/upload-artifact@v7
@@ -35,3 +33,20 @@ jobs:
           name: nightmesh-vsix
           path: nightmesh.vsix
           retention-days: 7
+
+  # Software WebGL takes seconds per test, so the visual tests run in shards side by side.
+  visual:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual -- --shard=${{ matrix.shard }}/3
