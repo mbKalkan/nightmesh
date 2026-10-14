@@ -277,3 +277,28 @@ test('says which animations move nothing when they play', async ({ page }) => {
   await expect(section(page, 'Animation')).toContainText(['Motion', /^Moves$/]);
   expect(viewer.problems).toEqual([]);
 });
+
+test('sums up the animations in the statistics tab', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.open('animated.glb');
+  await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+  const title = page.locator('.nm-statistics .nm-section-title', { hasText: 'Animations' });
+  await expect(title).toBeVisible();
+  await expect(title.locator('xpath=following-sibling::dl[1]').locator('dt, dd')).toHaveText([
+    'Animations',
+    '5',
+    'Longest',
+    '2 s',
+    'Channels',
+    '5',
+    'Keyframes',
+    '16',
+    'Animated nodes',
+    '4',
+    'Moving nothing',
+    '1',
+  ]);
+  expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
+  await page.screenshot({ path: `${SCREENS}/statistics-animations.png` });
+  expect(viewer.problems).toEqual([]);
+});

@@ -320,6 +320,20 @@ describe('inspector', () => {
 });
 
 describe('statistics', () => {
+  it('sums up the animations: clips, the longest, channels, keyframes, what they move', () => {
+    const model = new GltfModel(fixture('animated.glb'));
+    expect(statistics(model).animations).toEqual({
+      clips: 5,
+      longest: 2,
+      channels: 5,
+      keyframes: 16,
+      nodes: 4,
+    });
+    const motion = ['moves', 'moves', 'moves', 'moves', 'none'] as const;
+    expect(statistics(model, undefined, motion).animations?.still).toBe(1);
+    expect(statistics(new GltfModel(fixture('scene.glb'))).animations).toBeUndefined();
+  });
+
   it('counts the scene shown, each mesh every time it is drawn', () => {
     const stats = statistics(new GltfModel(fixture('scene.glb')));
     expect(stats).toMatchObject({

@@ -2,7 +2,7 @@ import type { StructureStrings } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import type { GltfModel } from './gltf';
 import { entryKey, type EntryKey } from './outline';
-import type { MeshStatistics, Statistics } from './statistics';
+import type { AnimationStatistics, MeshStatistics, Statistics } from './statistics';
 
 /** Rows past this are summed up in a line, not listed. */
 const ROW_LIMIT = 1000;
@@ -88,6 +88,7 @@ export class StatisticsView {
     }
 
     const parts: HTMLElement[] = [note, totals];
+    if (statistics.animations) parts.push(...this.animations(statistics.animations));
     if (statistics.meshes.length > 0) {
       parts.push(
         element('h3', 'nm-section-title', strings.groups.meshes),
@@ -95,6 +96,24 @@ export class StatisticsView {
       );
     }
     this.element.replaceChildren(...parts);
+  }
+
+  /** How many clips, how long the longest, and how much they move. */
+  private animations(animations: AnimationStatistics): HTMLElement[] {
+    const { strings, format } = this;
+    const labels = strings.labels;
+    const list = document.createElement('dl');
+    list.className = 'nm-props';
+    const add = (label: string, value: string) =>
+      list.append(element('dt', '', label), element('dd', '', value));
+    add(strings.groups.animations, format.count(animations.clips));
+    if (animations.longest !== undefined) add(labels.longest, format.seconds(animations.longest));
+    add(strings.sections.channels, format.count(animations.channels));
+    add(labels.keyframes, format.count(animations.keyframes));
+    add(labels.animatedNodes, format.count(animations.nodes));
+    if (animations.still) add(labels.stillClips, format.count(animations.still));
+    for (const value of list.querySelectorAll('dd')) value.classList.add('nm-mono');
+    return [element('h3', 'nm-section-title', strings.groups.animations), list];
   }
 
   private table(meshes: readonly MeshStatistics[], model: GltfModel): HTMLElement {
