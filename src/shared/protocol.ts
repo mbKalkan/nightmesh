@@ -185,6 +185,8 @@ export interface ViewerStrings {
   close: string;
   /** The toolbar button that frames the selection, with its shortcut. */
   frame: string;
+  /** What the keys do in the view, for screen readers when it takes the focus. */
+  viewKeys: string;
   /** What the size in the corner of the view measures. */
   modelSize: string;
   selectionSize: string;

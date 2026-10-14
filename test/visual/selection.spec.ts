@@ -34,6 +34,9 @@ test('selects what is clicked in the view, and shows it in the tree', async ({ p
 
   await clickView(page, 0.5, 0.53);
   await expect(heading(page)).toHaveText(/Sphere\s*Node 2/);
+  // Screen readers hear what was picked: the tree, which would say it, doesn't have the focus.
+  await expect(page.locator('[data-announcer]')).toHaveText('Sphere, Node 2');
+  await expect(page.locator('.nm-viewport')).toHaveAccessibleDescription(/^Arrow keys orbit/);
   await expect(row(page, 'Sphere')).toHaveAttribute('aria-selected', 'true');
   await expect.poll(async () => (await highlight(page))?.count ?? 0).toBeGreaterThan(50);
   await page.screenshot({ path: `${SCREENS}/selection-picked.png` });
