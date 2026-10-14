@@ -15,6 +15,8 @@ OBJ, STL, PLY and 3D Tiles planned.
   **Copy Reference** to get `models/robot.glb, node "Arm" (nodes[12]), under Root › Body` on the
   clipboard, ready to paste into a chat with Claude Code or any assistant that works in your
   workspace. **Copy Reference with Details** adds what the inspector says about it.
+- **Look from any side.** Front, right and top views on the number keys, as in Blender,
+  perspective or orthographic, and an axes gizmo to click.
 - **Dark-first.** Follows your VS Code theme, including high contrast.
 - **Read-only.** Your model files are never written to.
 

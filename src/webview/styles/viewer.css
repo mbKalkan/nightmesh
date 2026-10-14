@@ -806,13 +806,13 @@ body.vscode-high-contrast-light .nm-viewport {
 }
 
 /* Axis colors as three.js and Blender draw them, dark enough to read on light themes. */
-.nm-measure {
+.nm-viewport {
   --nm-axis-x: #f14c4c;
   --nm-axis-y: #89d185;
   --nm-axis-z: #3794ff;
 }
 
-body.vscode-light .nm-measure {
+body.vscode-light .nm-viewport {
   --nm-axis-x: #c62828;
   --nm-axis-y: #2e7d32;
   --nm-axis-z: #1565c0;
@@ -964,4 +964,135 @@ body.vscode-high-contrast .nm-axis-z {
 .nm-icon-button:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
+}
+
+/* The axes gizmo, in the bottom right corner of the view */
+
+.nm-gizmo {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 88px;
+  height: 88px;
+  overflow: visible;
+  pointer-events: none;
+  --nm-gizmo-label: #1f1f1f;
+}
+
+body.vscode-light .nm-gizmo {
+  --nm-gizmo-label: #ffffff;
+}
+
+.nm-gizmo-x {
+  --nm-gizmo-color: var(--nm-axis-x);
+}
+
+.nm-gizmo-y {
+  --nm-gizmo-color: var(--nm-axis-y);
+}
+
+.nm-gizmo-z {
+  --nm-gizmo-color: var(--nm-axis-z);
+}
+
+.nm-gizmo-end {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.nm-gizmo-end line {
+  stroke: var(--nm-gizmo-color);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.nm-gizmo-end circle {
+  fill: var(--nm-gizmo-color);
+  stroke: var(--nm-gizmo-color);
+  stroke-width: 1.5;
+}
+
+/* Opaque, so an end pointing at the viewer hides the one behind it. */
+.nm-gizmo-negative circle {
+  fill: color-mix(in srgb, var(--nm-gizmo-color) 30%, var(--vscode-editor-background));
+}
+
+.nm-gizmo-end:hover circle {
+  fill: var(--nm-gizmo-color);
+  stroke: var(--vscode-foreground);
+}
+
+.nm-gizmo-end text {
+  fill: var(--nm-gizmo-label);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Menus that drop from the toolbar, drawn as VS Code draws its own */
+
+.nm-menu-button {
+  gap: 1px;
+  padding: 0 2px;
+}
+
+.nm-menu-button[aria-expanded='true'] {
+  background: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground));
+}
+
+.nm-menu {
+  position: fixed;
+  z-index: 100;
+  box-sizing: border-box;
+  min-width: 200px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, transparent));
+  border-radius: 5px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  font-size: 13px;
+  user-select: none;
+}
+
+.nm-menu-item {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-right: 10px;
+  border-radius: 3px;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+
+.nm-menu-item:focus {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+  outline: 1px solid var(--vscode-menu-selectionBorder, transparent);
+  outline-offset: -1px;
+}
+
+.nm-menu-check {
+  flex: none;
+  width: 26px;
+  text-align: center;
+}
+
+.nm-menu-label {
+  flex: 1;
+}
+
+.nm-menu-shortcut {
+  margin-left: 28px;
+}
+
+.nm-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, currentColor));
 }

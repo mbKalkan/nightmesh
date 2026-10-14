@@ -5,14 +5,18 @@ import type {
   ModelMessage,
   Motion,
   OpenMessage,
+  StandardView,
   StructureMessage,
   ViewerStrings,
 } from '../shared/protocol';
 import { Shell, type PanelLayout } from './shell';
 import { AnimationBar } from './animationBar';
+import { Gizmo } from './gizmo';
+import { MenuButton, type MenuItem } from './menu';
 import { Formatter } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { highlightColor, viewportBackground, watchTheme } from './theme';
+import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
 type SceneModule = typeof import('./scene');
@@ -40,13 +44,16 @@ let structureLoad = -1;
 /** The structure entry selected, which the 3D view highlights once it has a model. */
 let selectedKey = 'model';
 let view: Promise<View | undefined> | undefined;
+/** The 3D view once it is made, for what has to know its state right away, as the View menu. */
+let shownView: View | undefined;
+let viewOptions: MenuButton | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
 let hasModel = false;
 /** What the context menu's reference commands name: what was right-clicked last. */
 let menuKey: string | undefined;
 /** The context menu the 3D view opened, having set `menuKey` to what is under the pointer. */
-let viewMenu: Event | undefined;
+let viewContextMenu: Event | undefined;
 /** The row or link the context menu was opened on, outlined while the menu shows. */
 let menuTarget: Element | undefined;
 
@@ -98,7 +105,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
 // the selection. The 3D view opens its own menu, having set what is under the pointer; the
 // browser's, which its orbit controls stop, are left alone.
 document.addEventListener('contextmenu', (event) => {
-  if (event.defaultPrevented || event === viewMenu) return;
+  if (event.defaultPrevented || event === viewContextMenu) return;
   const target = event.target instanceof Element ? event.target : null;
   // Opened from the keyboard in the tree, the menu is for the tree itself: its row in focus.
   const entry =
@@ -129,6 +136,20 @@ shell.viewport.addEventListener('keydown', (event) => {
   event.preventDefault();
 });
 
+// The number keys turn to standard views and 5 switches projection, as on Blender's number pad;
+// + and - zoom; in the view, the arrows orbit. Not in the panels, where keys move through lists
+// and find rows by what is typed.
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey || event.metaKey || event.altKey || !shownView) return;
+  const target = event.target as HTMLElement;
+  const inView = target === shell.viewport;
+  if (!inView && target !== document.body && !target.closest('.nm-toolbar')) return;
+  const action = viewKey(event, inView);
+  if (!action) return;
+  event.preventDefault();
+  action(shownView);
+});
+
 // Space plays and pauses wherever it has no job of its own: not on a button or a list, which it
 // presses or opens, nor in the panels, where it folds the tree and scrolls the details.
 document.addEventListener('keydown', (event) => {
@@ -148,6 +169,7 @@ function open(message: OpenMessage): void {
   strings = message.strings;
   metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
+  viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
   if (!animationBar) {
     animationBar = new AnimationBar(strings.animation, strings.structure.motion, message.locale, {
       clip: (index) => void view?.then((target) => target?.setClip(index)),
@@ -170,6 +192,28 @@ function open(message: OpenMessage): void {
     activated: () => void view?.then((target) => target?.frameSelection()),
     preview: async (texture) => (await view)?.textureImage(texture),
   });
+}
+
+/** The View menu: the standard views, then the projection. */
+function viewMenuItems(): MenuItem[] {
+  const current = shownView;
+  const text = strings?.view;
+  if (!current || !text) return [];
+  return [
+    ...STANDARD_VIEWS.map((name) => ({
+      label: text.views[name],
+      shortcut: SHORTCUTS[name],
+      run: () => current.look(name),
+    })),
+    'separator',
+    ...(['perspective', 'orthographic'] as const).map((projection) => ({
+      label: text.projections[projection],
+      shortcut: '5',
+      kind: 'radio' as const,
+      checked: current.projection === projection,
+      run: () => current.setProjection(projection),
+    })),
+  ];
 }
 
 function markMenuTarget(target: Element | undefined): void {
@@ -231,6 +275,11 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     if (hasModel) vscode.postMessage({ type: 'reload' });
   });
   const scene: SceneModule = await import('./scene');
+  const titles = Object.fromEntries(
+    STANDARD_VIEWS.map((name) => [name, `${text.view.views[name]} (${SHORTCUTS[name]})`]),
+  ) as Record<StandardView, string>;
+  const gizmo = new Gizmo(titles, (name) => created.look(name));
+  shell.viewport.append(gizmo.element);
   const created = new scene.ModelView(shell.viewport, canvas, context, {
     picked: (node, frame) => {
       // The structure shows what was picked, and tells the view to highlight it.
@@ -244,15 +293,18 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       menuKey = node === undefined ? 'model' : `node:${node}`;
       markMenuTarget(undefined);
       // VS Code opens its menu for a context menu event no one has handled.
-      viewMenu = new MouseEvent('contextmenu', {
+      viewContextMenu = new MouseEvent('contextmenu', {
         bubbles: true,
         cancelable: true,
         clientX: x,
         clientY: y,
       });
-      shell.viewport.dispatchEvent(viewMenu);
+      shell.viewport.dispatchEvent(viewContextMenu);
     },
+    turned: (rotation) => gizmo.update(rotation),
   });
+  shownView = created;
+  shell.viewButton.hidden = false;
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());
   created.select(selectedKey);

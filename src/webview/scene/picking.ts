@@ -9,6 +9,7 @@ import {
   type Material,
   type Mesh,
   type Object3D,
+  type OrthographicCamera,
   type PerspectiveCamera,
   type Points,
   type Scene,
@@ -39,7 +40,7 @@ export class Picker {
   pick(
     renderer: WebGLRenderer,
     scene: Scene,
-    camera: PerspectiveCamera,
+    camera: PerspectiveCamera | OrthographicCamera,
     model: Object3D,
     hidden: readonly Object3D[],
     { x, y, width, height }: { x: number; y: number; width: number; height: number },

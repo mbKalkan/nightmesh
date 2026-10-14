@@ -4,7 +4,7 @@ import {
   Mesh,
   NeutralToneMapping,
   PMREMGenerator,
-  PerspectiveCamera,
+  Quaternion,
   SRGBColorSpace,
   Scene,
   SkinnedMesh,
@@ -20,7 +20,6 @@ import {
   type Object3D,
   type Texture,
 } from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -28,6 +27,8 @@ import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { Picker } from './picking';
 import { Playback } from './playback';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
+import type { Projection, StandardView } from '../../shared/protocol';
+import { OPPOSITE, Viewpoint } from './viewpoint';
 
 /** Decoders a model needs, made the first time any model needs them. */
 export interface Decoders {
@@ -50,6 +51,8 @@ export interface ViewEvents {
    * pointer, or undefined over empty space. A right-drag pans, and opens no menu.
    */
   menu(node: number | undefined, x: number, y: number): void;
+  /** The camera turned: its rotation as a quaternion, x, y, z and w, for the axes gizmo. */
+  turned(rotation: [number, number, number, number]): void;
 }
 
 export interface AnimationState {
@@ -64,8 +67,6 @@ export interface AnimationState {
 /** While playing, the size of the selection is measured again this often, in milliseconds. */
 const MEASURE_INTERVAL = 500;
 
-/** The direction the camera looks at a model from when it frames it: front, right, above. */
-const VIEW_DIRECTION = new Vector3(1, 0.6, 1.4).normalize();
 /** A press that moves less than this, in CSS pixels, is a click rather than a drag. */
 const CLICK_SLOP = 4;
 
@@ -77,8 +78,7 @@ const CLICK_SLOP = 4;
 export class ModelView {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(45, 1, 0.01, 1000);
-  private readonly controls: OrbitControls;
+  private readonly viewpoint: Viewpoint;
   private readonly resizeObserver: ResizeObserver;
   private readonly highlight = new Highlight();
   private readonly picker = new Picker();
@@ -98,6 +98,8 @@ export class ModelView {
   private lastMeasure = 0;
   private draco: Promise<DRACOLoader> | undefined;
   private ktx2: Promise<KTX2Loader> | undefined;
+  /** The camera's rotation when the gizmo was last told. */
+  private readonly turnedTo = new Quaternion(Number.NaN);
 
   constructor(
     private readonly container: HTMLElement,
@@ -114,11 +116,7 @@ export class ModelView {
     pmrem.dispose();
     this.scene.add(this.highlight.group);
 
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.addEventListener('change', () => {
-      this.updateClipping();
-      this.requestRender();
-    });
+    this.viewpoint = new Viewpoint(canvas, this.modelSphere, () => this.requestRender());
     this.listenForClicks();
     // Vertex data left memory once it was on the GPU, so a lost context can't redraw the model:
     // drop it, and draw again once the model comes back.
@@ -160,11 +158,11 @@ export class ModelView {
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
     this.modelBox().getBoundingSphere(this.modelSphere);
-    if (!keepCamera || !this.framed) this.frame();
+    if (!keepCamera || !this.framed) this.viewpoint.frame(this.modelBox());
     this.framed = true;
     this.startAnimations(model, gltf.animations, keepCamera);
     this.select(this.selected);
-    this.updateClipping();
+    this.viewpoint.updateClipping();
     this.render();
   }
 
@@ -300,16 +298,44 @@ export class ModelView {
       : undefined;
   }
 
-  /** Frames what is selected, or the whole model when nothing drawn is. */
+  /**
+   * Frames what is selected, or the whole model when nothing drawn is, from where the camera
+   * looks now.
+   */
   frameSelection(): void {
+    if (!this.model) return;
     const objects = this.index?.objects(this.selected) ?? [];
-    if (objects.length === 0) return this.frame();
-    this.frameBox(framingBounds(objects, this.modelSphere.radius));
+    const box =
+      objects.length > 0 ? framingBounds(objects, this.modelSphere.radius) : this.modelBox();
+    this.viewpoint.frame(box, this.viewpoint.direction());
   }
 
-  /** Points the camera at the whole model. */
-  frame(): void {
-    if (this.model) this.frameBox(this.modelBox());
+  /** Turns to look from a standard view. */
+  look(view: StandardView): void {
+    this.viewpoint.look(view);
+  }
+
+  /** Turns to look from the other side of the standard view it is in, or from the back. */
+  lookOpposite(): void {
+    this.viewpoint.look(OPPOSITE[this.viewpoint.view ?? 'front']);
+  }
+
+  get projection(): Projection {
+    return this.viewpoint.projection;
+  }
+
+  setProjection(projection: Projection): void {
+    this.viewpoint.setProjection(projection);
+  }
+
+  /** Orbits by angles in radians, as the arrow keys do. */
+  orbit(left: number, up: number): void {
+    this.viewpoint.orbit(left, up);
+  }
+
+  /** Zooms in by `factor`, or out below 1, as + and - do. */
+  zoom(factor: number): void {
+    this.viewpoint.zoom(factor);
   }
 
   requestRender(): void {
@@ -347,7 +373,7 @@ export class ModelView {
     void this.ktx2?.then((loader) => loader.dispose());
     cancelAnimationFrame(this.frameRequest);
     this.resizeObserver.disconnect();
-    this.controls.dispose();
+    this.viewpoint.dispose();
     this.picker.dispose();
     this.highlight.dispose();
     if (this.model) disposeObject(this.model);
@@ -372,56 +398,6 @@ export class ModelView {
     const box = this.model ? new Box3().setFromObject(this.model) : new Box3();
     if (box.isEmpty()) box.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
     return box;
-  }
-
-  /**
-   * Points the camera at `box`, from the front, right and above, as close as it can while every
-   * corner of the box stays in view.
-   */
-  private frameBox(box: Box3): void {
-    const center = box.getCenter(new Vector3());
-    // Camera axes for the view direction; corners are measured along them from the center.
-    const forward = VIEW_DIRECTION.clone().negate();
-    const right = new Vector3().crossVectors(forward, this.camera.up).normalize();
-    const up = new Vector3().crossVectors(right, forward);
-    const tanY = Math.tan((this.camera.fov * Math.PI) / 360);
-    const tanX = tanY * this.camera.aspect;
-    let distance = 0;
-    for (const x of [box.min.x, box.max.x]) {
-      for (const y of [box.min.y, box.max.y]) {
-        for (const z of [box.min.z, box.max.z]) {
-          const corner = new Vector3(x, y, z).sub(center);
-          // A corner closer to the camera needs the camera further back to stay in the frustum.
-          const toward = -corner.dot(forward);
-          distance = Math.max(
-            distance,
-            toward + Math.abs(corner.dot(right)) / tanX,
-            toward + Math.abs(corner.dot(up)) / tanY,
-          );
-        }
-      }
-    }
-    distance = Math.max(distance * 1.08, 1e-3);
-
-    this.camera.position.copy(center).addScaledVector(VIEW_DIRECTION, distance);
-    this.controls.target.copy(center);
-    this.controls.update();
-    this.updateClipping();
-    this.requestRender();
-  }
-
-  /**
-   * Keeps the whole model between the clipping planes wherever the camera is: the far plane past
-   * its farthest side, the near one well short of the point orbited, so a part zoomed in on is
-   * never cut and the rest of the model doesn't disappear behind it.
-   */
-  private updateClipping(): void {
-    const toModel = this.camera.position.distanceTo(this.modelSphere.center);
-    const far = Math.max(toModel + this.modelSphere.radius * 2, 1e-2);
-    const toTarget = this.camera.position.distanceTo(this.controls.target);
-    this.camera.far = far;
-    this.camera.near = Math.max(Math.min(toTarget / 100, far / 1000), far / 1e6);
-    this.camera.updateProjectionMatrix();
   }
 
   /**
@@ -458,7 +434,7 @@ export class ModelView {
     const object = this.picker.pick(
       this.renderer,
       this.scene,
-      this.camera,
+      this.viewpoint.camera,
       this.model,
       [this.highlight.group],
       {
@@ -472,15 +448,19 @@ export class ModelView {
   }
 
   private render(): void {
-    this.renderer.render(this.scene, this.camera);
+    const camera = this.viewpoint.camera;
+    this.renderer.render(this.scene, camera);
+    if (!camera.quaternion.equals(this.turnedTo)) {
+      this.turnedTo.copy(camera.quaternion);
+      this.events.turned(camera.quaternion.toArray() as [number, number, number, number]);
+    }
   }
 
   private resize(): void {
     const width = Math.max(1, this.container.clientWidth);
     const height = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.viewpoint.setAspect(width / height);
     // Draw right away: waiting a frame would show a stretched image while resizing.
     this.render();
   }

@@ -31,6 +31,18 @@ export function viewerStrings(t: Translate): ViewerStrings {
       speed: t('Speed'),
       motion: { holds: t('Holds one pose'), none: t('Moves nothing') },
     },
+    view: {
+      menu: t('View'),
+      views: {
+        front: t('Front'),
+        back: t('Back'),
+        right: t('Right'),
+        left: t('Left'),
+        top: t('Top'),
+        bottom: t('Bottom'),
+      },
+      projections: { perspective: t('Perspective'), orthographic: t('Orthographic') },
+    },
   };
 }
 

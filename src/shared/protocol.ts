@@ -103,6 +103,18 @@ export interface AnimationStrings {
   motion: Record<Exclude<Motion, 'moves'>, string>;
 }
 
+/** The six views straight along an axis: a glTF model's front faces +Z, with +Y up. */
+export type StandardView = 'front' | 'back' | 'right' | 'left' | 'top' | 'bottom';
+
+export type Projection = 'perspective' | 'orthographic';
+
+/** The View menu, and the axes gizmo's tooltips. */
+export interface ViewStrings {
+  menu: string;
+  views: Record<StandardView, string>;
+  projections: Record<Projection, string>;
+}
+
 /** UI strings localized by the extension host and handed to the webview. */
 export interface ViewerStrings {
   loading: string;
@@ -120,6 +132,7 @@ export interface ViewerStrings {
   selectionSize: string;
   structure: StructureStrings;
   animation: AnimationStrings;
+  view: ViewStrings;
 }
 
 /** Sent once the webview is ready: what file this is. */
