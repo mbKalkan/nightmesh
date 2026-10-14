@@ -73,6 +73,15 @@ describe('loadMessages', () => {
     ]);
   });
 
+  it('tells the viewer which extensions a model uses, so it can load their decoders', async () => {
+    const [draco] = await load('draco.glb');
+    expect(draco).toMatchObject({ type: 'model', notices: [] });
+    expect(draco.type === 'model' && draco.extensions).toContain('KHR_draco_mesh_compression');
+    const [ktx2] = await load('ktx2.glb');
+    expect(ktx2).toMatchObject({ type: 'model', notices: [] });
+    expect(ktx2.type === 'model' && ktx2.extensions).toContain('KHR_texture_basisu');
+  });
+
   it('reads embedded data: URIs', async () => {
     const [model] = await load('embedded.gltf');
     expect(model).toMatchObject({ type: 'model', bytes: 44, notices: [] });
@@ -89,10 +98,6 @@ describe('loadMessages', () => {
     });
     expect(await failure('unsupported-extension.glb')).toEqual({
       message: "This model needs EXT_nightmesh_unknown, which Nightmesh can't draw yet.",
-      details: [],
-    });
-    expect(await failure('draco.glb')).toEqual({
-      message: "This model needs KHR_draco_mesh_compression, which Nightmesh can't draw yet.",
       details: [],
     });
   });

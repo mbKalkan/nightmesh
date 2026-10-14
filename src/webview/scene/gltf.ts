@@ -1,13 +1,20 @@
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import type { Decoders } from './modelView';
 
 /**
  * Builds a three.js scene from glTF JSON and the parts the host sent for it. The parts go into
  * the loader's cache under the keys it looks them up by (`bufferView:3`, `buffer:5`), so it never
  * fetches anything and uses the bytes as they arrived, without copying them.
  */
-export function parseModel(json: string, parts: ReadonlyMap<string, ArrayBuffer>): Promise<GLTF> {
+export function parseModel(
+  json: string,
+  parts: ReadonlyMap<string, ArrayBuffer>,
+  decoders: Decoders = {},
+): Promise<GLTF> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  if (decoders.draco) loader.setDRACOLoader(decoders.draco);
+  if (decoders.ktx2) loader.setKTX2Loader(decoders.ktx2);
   loader.register((parser) => ({
     name: 'nightmesh_parts',
     // The parser empties its cache when it starts; this runs right after.

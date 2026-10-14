@@ -1,9 +1,14 @@
 // Bundles the extension host (Node, CommonJS) and the webview (browser, ESM with lazy chunks).
+import { readFile } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { basename } from 'node:path';
 import * as esbuild from 'esbuild';
+import { embindWithoutEval } from './embindWithoutEval.mjs';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
+const require = createRequire(import.meta.url);
 
 /** @type {import('esbuild').BuildOptions} */
 const shared = {
@@ -25,6 +30,34 @@ const extension = {
   external: ['vscode'],
 };
 
+/** Changes made to embedded text files on the way in, by file name. */
+const PATCHES = { 'basis_transcoder.js': embindWithoutEval };
+
+/**
+ * The webview can't fetch the extension's own files (its CSP allows only blob: URLs), so the
+ * mesh and texture decoders (WebAssembly and its JavaScript glue) are embedded in the chunk
+ * that uses them. Import as `inline-text:<package path>` or `inline-binary:<package path>`.
+ * @type {import('esbuild').Plugin}
+ */
+const inlineFiles = {
+  name: 'inline-files',
+  setup(build) {
+    build.onResolve({ filter: /^inline-(text|binary):/ }, (args) => {
+      const [, kind, specifier] = /^inline-(text|binary):(.*)$/.exec(args.path);
+      return { path: require.resolve(specifier), namespace: `inline-${kind}` };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'inline-text' }, async (args) => {
+      const contents = await readFile(args.path, 'utf8');
+      const patch = PATCHES[basename(args.path)];
+      return { contents: patch ? patch(contents) : contents, loader: 'text' };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'inline-binary' }, async (args) => ({
+      contents: await readFile(args.path),
+      loader: 'binary',
+    }));
+  },
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const webview = {
   ...shared,
@@ -35,6 +68,7 @@ const webview = {
   splitting: true,
   target: 'chrome120',
   chunkNames: 'chunks/[name]-[hash]',
+  plugins: [inlineFiles],
 };
 
 if (watch) {

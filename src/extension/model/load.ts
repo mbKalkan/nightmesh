@@ -135,6 +135,7 @@ export async function* loadMessages(
       loadId,
       reload,
       json: JSON.stringify(plan.json),
+      extensions: json.extensionsUsed ?? [],
       parts: plan.parts.length,
       bytes: plan.bytes,
       notices,
