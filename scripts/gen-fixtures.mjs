@@ -248,6 +248,13 @@ const holes = () =>
     ((x >> 3) + (y >> 3)) % 2 === 0 ? [255, 255, 255, 255] : [255, 255, 255, 0],
   );
 
+/** Ambient occlusion, darker toward the edges. */
+const shade = () =>
+  png(64, 64, (x, y) => {
+    const value = Math.round(255 - Math.hypot(x - 31.5, y - 31.5) * 3);
+    return [value, value, value, 255];
+  });
+
 function texture(doc, name, bytes) {
   return doc.createTexture(name).setImage(bytes).setMimeType('image/png').setURI(`${name}.png`);
 }
@@ -406,6 +413,12 @@ function materials() {
   textured
     .getBaseColorTextureInfo()
     .setExtension('KHR_texture_transform', transform.createTransform().setScale([2, 2]));
+  // As some exporters write it: occlusion on the second UV set, with a transform saying so.
+  textured
+    .setOcclusionTexture(texture(doc, 'shade', shade()))
+    .getOcclusionTextureInfo()
+    .setTexCoord(1)
+    .setExtension('KHR_texture_transform', transform.createTransform().setTexCoord(1));
 
   const list = [
     textured,
@@ -455,6 +468,7 @@ function materials() {
 
   // All spheres share one set of vertex data; only the material differs.
   const shared = meshPrimitive(doc, sphere);
+  shared.setAttribute('TEXCOORD_1', accessor(doc, 'VEC2', new Float32Array(sphere.uvs)));
   const nodes = list.map((material, i) =>
     doc
       .createNode(material.getName())

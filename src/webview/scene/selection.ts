@@ -35,7 +35,8 @@ export class SelectionIndex {
       else if (!list.includes(object)) list.push(object);
     };
     for (const [owner, association] of associations) {
-      if ((owner as Texture).isTexture && association.textures !== undefined) {
+      // A texture the loader copied for a second UV set, then transformed, maps to nothing.
+      if ((owner as Texture).isTexture && association?.textures !== undefined) {
         this.textures.set(association.textures, owner as Texture);
       }
     }
