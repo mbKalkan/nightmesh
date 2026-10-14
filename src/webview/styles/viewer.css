@@ -576,8 +576,11 @@ body.vscode-high-contrast .nm-tree-description {
   width: 100%;
 }
 
+/* Counts keep their full width; the names give way. */
 .nm-table .nm-number {
+  max-width: none;
   padding: 0 0 0 8px;
+  overflow: visible;
   text-align: end;
 }
 
