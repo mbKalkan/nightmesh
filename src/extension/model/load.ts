@@ -63,6 +63,7 @@ export async function* loadMessages(
 
   let text: string;
   let bin: ResourceData | undefined;
+  let chunks: { json: number; bin?: number } | undefined;
   let truncated = false;
   if (kind === 'glb') {
     const layout = await readGlbLayout(source);
@@ -72,6 +73,7 @@ export async function* loadMessages(
       );
     }
     text = new TextDecoder().decode(await source.read(layout.json.offset, layout.json.length));
+    chunks = { json: layout.json.length, bin: layout.bin?.length };
     if (layout.bin) {
       bin = { source, offset: layout.bin.offset, available: layout.bin.available };
     }
@@ -81,9 +83,10 @@ export async function* loadMessages(
     text = new TextDecoder().decode(await source.read(0, source.size));
   }
 
+  text = withoutByteOrderMark(text);
   let json: Gltf;
   try {
-    json = JSON.parse(withoutByteOrderMark(text)) as Gltf;
+    json = JSON.parse(text) as Gltf;
   } catch {
     return yield failed(texts.damaged);
   }
@@ -91,6 +94,8 @@ export async function* loadMessages(
     return yield failed(texts.damaged);
   }
   if (!json.asset.version.startsWith('2.')) return yield failed(texts.version(json.asset.version));
+  // The structure shows right away, and stays when the model can't be drawn.
+  yield { type: 'structure', loadId, reload, json: text, fileSize: source.size, chunks };
   const missing = (json.extensionsRequired ?? []).filter((name) => !DRAWN_EXTENSIONS.has(name));
   if (missing.length > 0) return yield failed(texts.extensions(missing.join(', ')));
 

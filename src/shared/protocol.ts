@@ -2,6 +2,77 @@
 
 export type ModelFormat = 'glb' | 'gltf';
 
+/** Kinds of things in a model, as the structure tree and inspector name them. */
+export type StructureKind =
+  | 'model'
+  | 'scene'
+  | 'node'
+  | 'mesh'
+  | 'primitive'
+  | 'material'
+  | 'texture'
+  | 'image'
+  | 'sampler'
+  | 'animation'
+  | 'skin'
+  | 'camera'
+  | 'light';
+
+/** Groups in the structure tree. */
+export type StructureGroup =
+  | 'nodes'
+  | 'otherNodes'
+  | 'meshes'
+  | 'materials'
+  | 'textures'
+  | 'animations'
+  | 'skins'
+  | 'cameras'
+  | 'lights';
+
+/**
+ * Words for the structure tree and inspector. glTF's own property names (`baseColorFactor`,
+ * `translation`) are shown as they are, like the file and the specification spell them; these
+ * are the rest. `{0}` is filled in by the webview.
+ */
+export interface StructureStrings {
+  structure: string;
+  inspector: string;
+  structureWidth: string;
+  inspectorWidth: string;
+  kinds: Record<StructureKind, string>;
+  groups: Record<StructureGroup, string>;
+  sections: {
+    file: string;
+    contents: string;
+    transform: string;
+    extensions: string;
+    extras: string;
+    usedBy: string;
+    channels: string;
+    joints: string;
+  };
+  labels: {
+    container: string;
+    fileSize: string;
+    jsonChunk: string;
+    binaryChunk: string;
+    children: string;
+    nodes: string;
+    primitives: string;
+    vertices: string;
+    triangles: string;
+    lines: string;
+    points: string;
+    rotationDegrees: string;
+    duration: string;
+    size: string;
+    required: string;
+    /** `{0}` more, after a list cut short. */
+    more: string;
+  };
+}
+
 /** UI strings localized by the extension host and handed to the webview. */
 export interface ViewerStrings {
   loading: string;
@@ -12,6 +83,7 @@ export interface ViewerStrings {
   /** Title of the notice listing what couldn't be loaded. */
   partialTitle: string;
   close: string;
+  structure: StructureStrings;
 }
 
 /** Sent once the webview is ready: what file this is. */
@@ -19,7 +91,24 @@ export interface OpenMessage {
   type: 'open';
   fileName: string;
   format: ModelFormat;
+  /** VS Code's display language, for formatting numbers. */
+  locale: string;
   strings: ViewerStrings;
+}
+
+/**
+ * The model's glTF JSON as the file has it, sent as soon as it is read, before anything else is:
+ * the scene tree and inspector show it while the bytes to draw it are on their way, and when the
+ * model can't be drawn at all.
+ */
+export interface StructureMessage {
+  type: 'structure';
+  loadId: number;
+  reload: boolean;
+  json: string;
+  fileSize: number;
+  /** A GLB's chunk sizes in bytes, as its header gives them. */
+  chunks?: { json: number; bin?: number };
 }
 
 /**
@@ -71,7 +160,7 @@ export interface FailedMessage {
 }
 
 export type HostToWebviewMessage =
-  OpenMessage | ModelMessage | PartMessage | PartsMessage | FailedMessage;
+  OpenMessage | StructureMessage | ModelMessage | PartMessage | PartsMessage | FailedMessage;
 
 export type WebviewToHostMessage =
   | { type: 'ready' }

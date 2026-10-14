@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
@@ -11,7 +12,7 @@ const english: Translate = (message, ...args) =>
   message.replace(/\{(\d+)\}/g, (_, index: string) => String(args[Number(index)]));
 
 /** Loads a fixture as the extension host does, with the fixtures folder as the workspace. */
-async function load(name: string): Promise<HostToWebviewMessage[]> {
+async function loadAll(name: string): Promise<HostToWebviewMessage[]> {
   const source = await fileSource(join(FIXTURES, name));
   const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
     join(FIXTURES, path.slice('/fixtures'.length)),
@@ -26,6 +27,10 @@ async function load(name: string): Promise<HostToWebviewMessage[]> {
   return messages;
 }
 
+/** The messages after the structure, which is checked on its own. */
+const load = async (name: string) =>
+  (await loadAll(name)).filter((message) => message.type !== 'structure');
+
 const failure = async (name: string) => {
   const [message] = await load(name);
   if (message.type !== 'failed') throw new Error(`${name} loaded as ${message.type}`);
@@ -33,6 +38,39 @@ const failure = async (name: string) => {
 };
 
 describe('loadMessages', () => {
+  it('sends the structure first, as the file has it', async () => {
+    const [structure, model] = await loadAll('textured.gltf');
+    expect(structure).toMatchObject({
+      type: 'structure',
+      fileSize: statSync(join(FIXTURES, 'textured.gltf')).size,
+      chunks: undefined,
+    });
+    expect(structure.type === 'structure' && JSON.parse(structure.json).buffers).toEqual([
+      expect.objectContaining({ uri: 'textured.bin' }),
+    ]);
+    expect(model.type).toBe('model');
+
+    const [glb] = await loadAll('scene.glb');
+    const bytes = readFileSync(join(FIXTURES, 'scene.glb'));
+    expect(glb).toMatchObject({
+      type: 'structure',
+      fileSize: bytes.length,
+      chunks: {
+        json: bytes.readUInt32LE(12),
+        bin: bytes.readUInt32LE(20 + bytes.readUInt32LE(12)),
+      },
+    });
+  });
+
+  it('sends the structure of models it cannot draw', async () => {
+    for (const name of ['unsupported-extension.glb', 'missing-resource.gltf']) {
+      expect((await loadAll(name)).map((message) => message.type)).toEqual(['structure', 'failed']);
+    }
+    for (const name of ['empty.glb', 'not-a-model.glb', 'lfs-pointer.glb']) {
+      expect((await loadAll(name)).map((message) => message.type)).toEqual(['failed']);
+    }
+  });
+
   it('sends a model and then all of its parts, keyed for the loader', async () => {
     const messages = await load('scene.glb');
     const [model, ...rest] = messages;
@@ -146,8 +184,7 @@ describe('loadMessages', () => {
       texts: loadTexts(english),
     });
     for await (const message of messages) {
-      expect(message.type).toBe('model');
-      break;
+      if (message.type === 'model') break;
     }
     await source.close();
     expect(closed).toBe(2);

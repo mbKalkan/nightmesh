@@ -1,6 +1,6 @@
 // User-facing text. Every message goes through `t`: VS Code's `l10n.t` in the extension, a
 // plain formatter in the browser tests, so both show the same words.
-import type { ViewerStrings } from '../shared/protocol';
+import type { StructureStrings, ViewerStrings } from '../shared/protocol';
 import type { LoadTexts, ResourceProblem } from './model/load';
 
 export type Translate = (message: string, ...args: Array<string | number>) => string;
@@ -18,6 +18,70 @@ export function viewerStrings(t: Translate): ViewerStrings {
     errorRender: t('Something went wrong while drawing this model.'),
     partialTitle: t("Part of this model couldn't be loaded"),
     close: t('Close'),
+    structure: structureStrings(t),
+  };
+}
+
+function structureStrings(t: Translate): StructureStrings {
+  return {
+    structure: t('Structure'),
+    inspector: t('Inspector'),
+    structureWidth: t('Structure panel width'),
+    inspectorWidth: t('Inspector panel width'),
+    kinds: {
+      model: t('Model'),
+      scene: t('Scene'),
+      node: t('Node'),
+      mesh: t('Mesh'),
+      primitive: t('Primitive'),
+      material: t('Material'),
+      texture: t('Texture'),
+      image: t('Image'),
+      sampler: t('Sampler'),
+      animation: t('Animation'),
+      skin: t('Skin'),
+      camera: t('Camera'),
+      light: t('Light'),
+    },
+    groups: {
+      nodes: t('Nodes'),
+      otherNodes: t('Nodes outside scenes'),
+      meshes: t('Meshes'),
+      materials: t('Materials'),
+      textures: t('Textures'),
+      animations: t('Animations'),
+      skins: t('Skins'),
+      cameras: t('Cameras'),
+      lights: t('Lights'),
+    },
+    sections: {
+      file: t('File'),
+      contents: t('Contents'),
+      transform: t('Transform'),
+      extensions: t('Extensions'),
+      extras: t('Extras'),
+      usedBy: t('Used by'),
+      channels: t('Channels'),
+      joints: t('Joints'),
+    },
+    labels: {
+      container: t('Container'),
+      fileSize: t('File size'),
+      jsonChunk: t('JSON chunk'),
+      binaryChunk: t('Binary chunk'),
+      children: t('Children'),
+      nodes: t('Nodes'),
+      primitives: t('Primitives'),
+      vertices: t('Vertices'),
+      triangles: t('Triangles'),
+      lines: t('Lines'),
+      points: t('Points'),
+      rotationDegrees: t('Rotation (degrees)'),
+      duration: t('Duration'),
+      size: t('Size'),
+      required: t('Required'),
+      more: t('{0} more', '{0}'),
+    },
   };
 }
 

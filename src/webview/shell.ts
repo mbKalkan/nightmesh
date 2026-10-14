@@ -1,16 +1,37 @@
-import type { ModelFormat } from '../shared/protocol';
+import type { ModelFormat, ViewerStrings } from '../shared/protocol';
 import { icons } from './icons';
+import { SidePanel } from './panel';
 
-/** The static frame around a model: toolbar, progress, viewport and its overlays. */
+/** Which side panels show and how wide they are; kept with the webview's state. */
+export interface PanelLayout {
+  structure: boolean;
+  inspector: boolean;
+  structureWidth: number;
+  inspectorWidth: number;
+}
+
+/**
+ * The static frame around a model: toolbar, progress, the viewport and its overlays, and the
+ * structure and inspector panels on either side once there is a structure to show.
+ */
 export class Shell {
   readonly viewport: HTMLElement;
+  readonly structurePanel: SidePanel;
+  readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
+  private readonly toggles: HTMLElement;
   private readonly fileName: HTMLElement;
   private readonly progress: HTMLElement;
   private readonly error: HTMLElement;
   private readonly notice: HTMLElement;
 
-  constructor(container: HTMLElement) {
+  private panelsAvailable = false;
+
+  constructor(
+    container: HTMLElement,
+    private readonly layout: PanelLayout,
+    private readonly onLayout: (layout: PanelLayout) => void,
+  ) {
     container.innerHTML = `
       <div class="nm-shell">
         <header class="nm-toolbar">
@@ -18,26 +39,32 @@ export class Shell {
             <span class="nm-file-icon">${icons.model}</span>
             <span class="nm-file-name"></span>
           </div>
+          <div class="nm-actions" hidden>
+            <button class="nm-icon-button" data-panel="structure" type="button">${icons.panelLeft}</button>
+            <button class="nm-icon-button" data-panel="inspector" type="button">${icons.panelRight}</button>
+          </div>
         </header>
         <div class="nm-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
           <div class="nm-progress-bar"></div>
         </div>
-        <main class="nm-viewport" tabindex="0">
-          <section class="nm-notice" role="status" hidden>
-            <div class="nm-notice-header">
-              <span class="nm-notice-icon">${icons.warning}</span>
-              <h2 class="nm-notice-title"></h2>
-              <button class="nm-icon-button" data-action="close-notice" type="button">${icons.close}</button>
+        <div class="nm-body">
+          <main class="nm-viewport" tabindex="0">
+            <section class="nm-notice" role="status" hidden>
+              <div class="nm-notice-header">
+                <span class="nm-notice-icon">${icons.warning}</span>
+                <h2 class="nm-notice-title"></h2>
+                <button class="nm-icon-button" data-action="close-notice" type="button">${icons.close}</button>
+              </div>
+              <ul class="nm-notice-list"></ul>
+            </section>
+            <div class="nm-error" role="alert" hidden>
+              <div class="nm-error-icon">${icons.error}</div>
+              <h1 class="nm-error-title"></h1>
+              <p class="nm-error-message"></p>
+              <ul class="nm-error-details"></ul>
             </div>
-            <ul class="nm-notice-list"></ul>
-          </section>
-          <div class="nm-error" role="alert" hidden>
-            <div class="nm-error-icon">${icons.error}</div>
-            <h1 class="nm-error-title"></h1>
-            <p class="nm-error-message"></p>
-            <ul class="nm-error-details"></ul>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>`;
 
     const find = <T extends HTMLElement>(selector: string) =>
@@ -48,26 +75,66 @@ export class Shell {
     this.viewport = find('.nm-viewport');
     this.error = find('.nm-error');
     this.notice = find('.nm-notice');
+    this.toggles = find('.nm-actions');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
     });
+
+    const saveWidths = () => {
+      this.layout.structureWidth = this.structurePanel.width;
+      this.layout.inspectorWidth = this.inspectorPanel.width;
+      this.onLayout(this.layout);
+    };
+    this.structurePanel = new SidePanel('left', layout.structureWidth, saveWidths);
+    this.inspectorPanel = new SidePanel('right', layout.inspectorWidth, saveWidths);
+    this.viewport.before(this.structurePanel.element);
+    this.viewport.after(this.inspectorPanel.element);
+    this.toggles.addEventListener('click', (event) => {
+      const panel = (event.target as HTMLElement).closest<HTMLElement>('[data-panel]')?.dataset
+        .panel as 'structure' | 'inspector' | undefined;
+      if (!panel) return;
+      this.layout[panel] = !this.layout[panel];
+      this.onLayout(this.layout);
+      this.showPanels();
+    });
   }
 
-  setDocument(
-    fileName: string,
-    format: ModelFormat,
-    labels: { loading: string; close: string },
-  ): void {
+  setDocument(fileName: string, format: ModelFormat, strings: ViewerStrings): void {
     this.root.dataset.format = format;
     this.fileName.textContent = fileName;
     this.fileName.title = fileName;
     document.title = fileName;
     this.viewport.setAttribute('aria-label', fileName);
-    this.progress.setAttribute('aria-label', labels.loading);
+    this.progress.setAttribute('aria-label', strings.loading);
     const close = this.notice.querySelector('[data-action="close-notice"]') as HTMLElement;
-    close.title = labels.close;
-    close.setAttribute('aria-label', labels.close);
+    close.title = strings.close;
+    close.setAttribute('aria-label', strings.close);
+    const { structure } = strings;
+    this.structurePanel.setLabels(structure.structure, structure.structureWidth);
+    this.inspectorPanel.setLabels(structure.inspector, structure.inspectorWidth);
+    for (const button of this.toggles.querySelectorAll<HTMLElement>('[data-panel]')) {
+      const label =
+        button.dataset.panel === 'structure' ? structure.structure : structure.inspector;
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }
+  }
+
+  /** Shows the side panels, as the layout has them, once there is a structure to put in them. */
+  setPanelsAvailable(available: boolean): void {
+    this.panelsAvailable = available;
+    this.showPanels();
+  }
+
+  private showPanels(): void {
+    this.toggles.hidden = !this.panelsAvailable;
+    this.structurePanel.element.hidden = !(this.panelsAvailable && this.layout.structure);
+    this.inspectorPanel.element.hidden = !(this.panelsAvailable && this.layout.inspector);
+    for (const button of this.toggles.querySelectorAll<HTMLElement>('[data-panel]')) {
+      const panel = button.dataset.panel as 'structure' | 'inspector';
+      button.setAttribute('aria-pressed', String(this.layout[panel]));
+    }
   }
 
   /** Shows how much of the model has arrived, from 0 to 1; undefined hides the bar. */

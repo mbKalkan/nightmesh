@@ -88,11 +88,409 @@ body {
   transition: width 100ms linear;
 }
 
+/* Toolbar actions */
+
+.nm-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.nm-icon-button[aria-pressed='true'] {
+  background: var(--vscode-inputOption-activeBackground, var(--vscode-toolbar-activeBackground));
+  color: var(--vscode-inputOption-activeForeground, var(--vscode-icon-foreground));
+  outline: 1px solid var(--vscode-inputOption-activeBorder, transparent);
+  outline-offset: -1px;
+}
+
+/* Body: the viewport between the structure and inspector panels */
+
+.nm-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.nm-panel {
+  position: relative;
+  display: flex;
+  flex: 0 0 240px;
+  flex-direction: column;
+  min-width: 160px;
+  max-width: 45%;
+  box-sizing: border-box;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  color: var(--vscode-sideBar-foreground, var(--vscode-foreground));
+}
+
+.nm-panel-left {
+  border-right: 1px solid var(--vscode-sideBar-border, var(--nm-border));
+}
+
+.nm-panel-right {
+  border-left: 1px solid var(--vscode-sideBar-border, var(--nm-border));
+}
+
+/* Like the title of a VS Code view: small and uppercase. */
+.nm-panel-title {
+  flex: none;
+  margin: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 26px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+  user-select: none;
+}
+
+.nm-panel-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The sash on a panel's inner edge, lit on hover as VS Code's are. */
+.nm-sash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 4px;
+  outline: none;
+  cursor: ew-resize;
+  touch-action: none;
+  transition: background-color 0.1s ease-out;
+}
+
+.nm-panel-left .nm-sash {
+  right: -3px;
+}
+
+.nm-panel-right .nm-sash {
+  left: -3px;
+}
+
+.nm-sash:hover,
+.nm-sash:focus-visible,
+.nm-sash.nm-active {
+  background: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+  transition-delay: 0.3s;
+}
+
+.nm-sash:focus-visible,
+.nm-sash.nm-active {
+  transition-delay: 0s;
+}
+
+/* Structure tree, styled like VS Code's own trees */
+
+.nm-tree {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  user-select: none;
+}
+
+.nm-tree:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.nm-tree-rows {
+  position: relative;
+}
+
+.nm-tree-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px 0 calc(4px + var(--nm-level, 0) * 12px);
+  box-sizing: border-box;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nm-tree-row:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground, inherit);
+}
+
+.nm-tree-row[aria-selected='true'] {
+  background: var(
+    --vscode-list-inactiveSelectionBackground,
+    var(--vscode-toolbar-activeBackground, rgb(128 128 128 / 25%))
+  );
+  color: var(--vscode-list-inactiveSelectionForeground, inherit);
+}
+
+.nm-tree:focus .nm-tree-row[aria-selected='true'] {
+  background: var(--vscode-list-activeSelectionBackground, transparent);
+  color: var(--vscode-list-activeSelectionForeground, inherit);
+}
+
+/* High-contrast themes mark selection and focus with outlines instead of backgrounds. */
+.nm-tree-row[aria-selected='true'] {
+  outline: 1px dotted
+    var(--vscode-list-activeSelectionBorder, var(--vscode-contrastActiveBorder, transparent));
+  outline-offset: -1px;
+}
+
+.nm-tree:focus .nm-tree-row.nm-focused {
+  outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+  outline-offset: -1px;
+}
+
+.nm-twistie,
+.nm-tree-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.nm-tree-row[aria-expanded='true'] .nm-twistie svg {
+  transform: rotate(90deg);
+}
+
+.nm-tree-icon {
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+}
+
+.nm-icon-model {
+  color: var(--vscode-charts-blue, var(--vscode-icon-foreground));
+}
+
+.nm-icon-scene {
+  color: var(--vscode-symbolIcon-namespaceForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-node {
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-mesh {
+  color: var(--vscode-symbolIcon-classForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-material {
+  color: var(--vscode-symbolIcon-colorForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-texture {
+  color: var(--vscode-symbolIcon-fileForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-animation {
+  color: var(--vscode-symbolIcon-eventForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-skin {
+  color: var(--vscode-symbolIcon-structForeground, var(--vscode-icon-foreground));
+}
+
+.nm-icon-camera,
+.nm-icon-light {
+  color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-icon-foreground));
+}
+
+/* On a selected row icons take the selection's color, so they stay legible. */
+.nm-tree:focus .nm-tree-row[aria-selected='true'] .nm-tree-icon {
+  color: inherit;
+}
+
+.nm-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nm-tree-description {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
+body.vscode-high-contrast .nm-tree-description {
+  opacity: 1;
+}
+
+.nm-badge {
+  flex: none;
+  min-width: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 11px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Inspector */
+
+.nm-inspector-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nm-inspector-heading {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 12px 6px;
+  border-bottom: 1px solid var(--nm-border);
+  white-space: nowrap;
+}
+
+.nm-inspector-title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.nm-inspector-kind {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.nm-inspector-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 16px;
+  overflow: auto;
+  outline: none;
+  user-select: text;
+}
+
+.nm-inspector-body:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* Section titles are often glTF property names, which are case-sensitive: no uppercase. */
+.nm-section-title {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.nm-props {
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  line-height: 18px;
+}
+
+.nm-props dt {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nm-props dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nm-props .nm-prop-wide {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+
+.nm-mono,
+.nm-json {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+
+.nm-json {
+  margin: 0;
+  padding: 4px 6px;
+  overflow-x: auto;
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background, rgb(128 128 128 / 10%));
+  white-space: pre;
+}
+
+.nm-note {
+  margin-left: 8px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 1px solid var(--vscode-foreground);
+  border-radius: 2px;
+  background: var(--nm-swatch);
+  vertical-align: -1px;
+}
+
+.nm-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Without colors to tell them apart, high-contrast themes underline links. */
+body.vscode-high-contrast .nm-link {
+  text-decoration: underline;
+}
+
+.nm-link:hover {
+  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+  text-decoration: underline;
+}
+
+.nm-link:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
 /* Viewport */
 
 .nm-viewport {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   outline: none;

@@ -82,6 +82,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
             type: 'open',
             fileName: uri.path.slice(uri.path.lastIndexOf('/') + 1),
             format,
+            locale: vscode.env.language,
             strings: viewerStrings(vscode.l10n.t),
           });
           void load(false);

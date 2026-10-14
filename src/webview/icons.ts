@@ -12,4 +12,23 @@ export const icons = {
   ),
   warning: svg('<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.5M8 11.75v.25"/>'),
   close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+  chevron: svg('<path d="M6 4l4 4-4 4"/>'),
+  panelLeft: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/>'),
+  panelRight: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10 2.5v11"/>'),
+  // Structure tree entries.
+  scene: svg('<path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.5l6 3 6-3"/><path d="M2 11l6 3 6-3"/>'),
+  node: svg('<circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v3.5M8 11v3.5M1.5 8H5M11 8h3.5"/>'),
+  mesh: svg('<path d="M8 2 14 13H2z"/><path d="M5 7.5h6M8 13 5 7.5M8 13l3-5.5"/>'),
+  material: svg('<circle cx="8" cy="8" r="5.75"/><path d="M5 6.75A3.25 3.25 0 0 1 8 4.5"/>'),
+  texture: svg(
+    '<rect x="2" y="2" width="12" height="12" rx="1.5"/><circle cx="5.75" cy="5.75" r="1.25"/><path d="M2 11.5 6.5 7.5l3.25 3 1.75-1.5L14 11"/>',
+  ),
+  animation: svg('<circle cx="8" cy="8" r="5.75"/><path d="M6.75 5.5v5L10.75 8z"/>'),
+  skin: svg(
+    '<path d="M5 11l6-6"/><circle cx="3.75" cy="12.25" r="1.5"/><circle cx="12.25" cy="3.75" r="1.5"/>',
+  ),
+  camera: svg('<rect x="1.5" y="4.5" width="9" height="7" rx="1"/><path d="M10.5 7l4-2v6l-4-2"/>'),
+  light: svg(
+    '<path d="M6 12.5h4M6.5 14.25h3"/><path d="M5.75 10.75C4.75 9.75 4 8.75 4 7.25a4 4 0 0 1 8 0c0 1.5-.75 2.5-1.75 3.5z"/>',
+  ),
 } as const;
