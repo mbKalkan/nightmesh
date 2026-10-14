@@ -84,7 +84,7 @@ export class StatisticsView {
     }
     if (statistics.bounds) {
       const { min, max } = statistics.bounds;
-      add(labels.dimensions, `${format.vector(max.map((value, axis) => value - min[axis]))} m`);
+      add(labels.dimensions, format.dimensions(max.map((value, axis) => value - min[axis])));
     }
 
     const parts: HTMLElement[] = [note, totals];
