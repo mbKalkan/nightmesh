@@ -1,3 +1,5 @@
+<img src="assets/icon.png" alt="" width="96" align="right">
+
 # Nightmesh
 
 [![Visual Studio Marketplace](https://vsmarketplacebadges.dev/version-short/MBKDevStudio.nightmesh.svg?label=Marketplace&color=007ec6)](https://marketplace.visualstudio.com/items?itemName=MBKDevStudio.nightmesh)

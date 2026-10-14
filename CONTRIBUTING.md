@@ -64,6 +64,8 @@ Other useful scripts:
 - `npm run fixtures:large` writes a model of about two million triangles for performance checks.
 - `npm run screenshots` retakes the README's pictures in `docs/images`. It downloads the
   sample models they show into `.cache/samples` the first time.
+- `npm run icon` renders `assets/icon.svg`, the icon's source, to `assets/icon.png`; commit
+  both.
 - `npm run demo` records the README's animated demo, `docs/images/demo.gif` (needs
   [ffmpeg](https://ffmpeg.org) on the `PATH`).
 

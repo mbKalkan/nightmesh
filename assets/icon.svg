@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6b3a74"/>
+      <stop offset="1" stop-color="#22122b"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="128" height="128" fill="#fff"/>
+      <circle cx="104" cy="27" r="15" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
+  <!-- A cube seen from above and the side: a 3D model, dark faces with light edges. -->
+  <path d="M58 40 88 57 58 74 28 57z" fill="#4a2b56" stroke="#f0d9f2" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M28 57 58 74v33L28 90z" fill="#2a1832" stroke="#f0d9f2" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M58 74 88 57v33l-30 17z" fill="#371f42" stroke="#f0d9f2" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M28 57v33M58 74v33M88 57v33" fill="none" stroke="#f0d9f2" stroke-width="4" stroke-linecap="round"/>
+  <!-- Crescent moon, as on Nightdocs and Nightlite. -->
+  <circle cx="96" cy="34" r="17" fill="#ffd27a" mask="url(#crescent)"/>
+</svg>

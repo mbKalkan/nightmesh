@@ -4,6 +4,7 @@
   "description": "%description%",
   "version": "0.0.1",
   "publisher": "MBKDevStudio",
+  "icon": "assets/icon.png",
   "license": "MIT",
   "private": true,
   "repository": {
@@ -144,6 +145,7 @@
   },
   "files": [
     "dist/**",
+    "assets/icon.png",
     "l10n/**",
     "package.nls*.json",
     "LICENSE",
@@ -165,6 +167,7 @@
     "fixtures:large": "node scripts/gen-fixtures.mjs --large",
     "screenshots": "node scripts/screenshots.mjs",
     "demo": "node scripts/demo.mjs",
+    "icon": "node scripts/render-icon.mjs",
     "package": "vsce package --no-dependencies",
     "vscode:prepublish": "node scripts/build.mjs --production"
   },
