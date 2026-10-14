@@ -44,6 +44,11 @@ export class Formatter {
     return `[${values.map((value) => this.value(value)).join(', ')}]`;
   }
 
+  /** A size along X, Y and Z, to four significant digits as the size in the view gives it. */
+  dimensions(values: readonly number[]): string {
+    return `${this.vector(values.map((value) => Number(value.toPrecision(4))))} m`;
+  }
+
   degrees(radians: number): string {
     return `${this.value(Number(((radians * 180) / Math.PI).toFixed(3)))}°`;
   }

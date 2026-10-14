@@ -236,6 +236,8 @@ test('counts the scene in a statistics tab beside the inspector', async ({ page 
   await expect(tab('Statistics')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.nm-inspector-content')).toBeHidden();
   await expect(page.locator('.nm-statistics dl')).toContainText('Triangles984');
+  // As the inspector and the size in the view give it.
+  await expect(page.locator('.nm-statistics dl')).toContainText('Dimensions[4.1, 1.781, 1.849] m');
   // Most triangles on screen first; ties in the file's order.
   await expect(meshes).toHaveText(['Sphere', 'Box', 'Axes', 'Cloud']);
   await page.locator('.nm-sort', { hasText: 'Instances' }).click();

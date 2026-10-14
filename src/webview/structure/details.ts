@@ -277,11 +277,10 @@ function dimensionRows(context: InspectContext, nodes: readonly number[], own = 
   const bounds = own ? undefined : nodesBounds(context.model, nodes);
   const measured = own ? nodeSize(context.model, nodes[0]) : bounds && sizeOf(bounds);
   if (!measured) return [];
-  const size = measured.map((value) => Number(value.toPrecision(4)));
   return [
     {
       label: context.strings.labels.dimensions,
-      text: `${context.format.vector(size)} m`,
+      text: context.format.dimensions(measured),
       mono: true,
     },
   ];
