@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is
   drawn and a note lists what was left out.
+- Earlier versions from Git (the Timeline, Source Control, a comparison) open as committed, also
+  where git is set up to convert the file to text and for models kept in Git LFS, whose objects
+  are read from the local store; a `.gltf`'s `.bin` and textures come from the same version.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
