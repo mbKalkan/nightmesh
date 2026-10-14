@@ -33,7 +33,15 @@ export interface LoadOptions {
   loadId: number;
   reload: boolean;
   texts: LoadTexts;
+  /** A model that sends more bytes than this asks first; the default is `LARGE_MODEL_BYTES`. */
+  largeBytes?: number;
 }
+
+/**
+ * Past this, drawing waits for the user: the webview holds the bytes until the GPU has them, and
+ * a model of several gigabytes could run it out of memory.
+ */
+export const LARGE_MODEL_BYTES = 1024 ** 3;
 
 /** Parts at least this big travel alone; smaller ones are packed together. */
 const SMALL_PART = 1024 * 1024;
@@ -47,7 +55,7 @@ const MESSAGE_BYTES = 16 * 1024 * 1024;
 export async function* loadMessages(
   source: ByteSource,
   openResource: ResourceOpener,
-  { loadId, reload, texts }: LoadOptions,
+  { loadId, reload, texts, largeBytes = LARGE_MODEL_BYTES }: LoadOptions,
 ): AsyncGenerator<HostToWebviewMessage> {
   const failed = (message: string, details: string[] = []): HostToWebviewMessage => ({
     type: 'failed',
@@ -141,6 +149,8 @@ export async function* loadMessages(
       if (plan.dropped[kind] > 0) notices.push(texts.dropped(kind, plan.dropped[kind]));
     }
 
+    // The caller waits for the user's word before it asks for the next message.
+    if (plan.bytes > largeBytes) yield { type: 'large', loadId, bytes: plan.bytes };
     yield {
       type: 'model',
       loadId,

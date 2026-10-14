@@ -2,6 +2,9 @@ import type { ModelFormat, PanelLayout, ViewerStrings } from '../shared/protocol
 import { icons } from './icons';
 import { SidePanel } from './panel';
 
+/** Loading that takes longer than this, in milliseconds, is said in the view. */
+const LOADING_DELAY = 250;
+
 /**
  * The static frame around a model: toolbar, progress, the viewport and its overlays, and the
  * structure and inspector panels on either side once there is a structure to show.
@@ -23,6 +26,10 @@ export class Shell {
   private readonly progress: HTMLElement;
   private readonly error: HTMLElement;
   private readonly notice: HTMLElement;
+  private readonly loading: HTMLElement;
+  private readonly large: HTMLElement;
+  private loadingTimer: ReturnType<typeof setTimeout> | undefined;
+  private onDraw: (() => void) | undefined;
 
   private panelsAvailable = false;
 
@@ -62,6 +69,15 @@ export class Shell {
                 <ul class="nm-notice-list"></ul>
               </section>
               <div class="nm-measure" role="status" hidden></div>
+              <div class="nm-loading" role="status" hidden>
+                <div class="nm-loading-title"></div>
+                <div class="nm-loading-detail"></div>
+              </div>
+              <section class="nm-large" hidden>
+                <h2 class="nm-large-title"></h2>
+                <p class="nm-large-message"></p>
+                <button class="nm-button" data-action="draw" type="button"></button>
+              </section>
               <div class="nm-error" role="alert" hidden>
                 <div class="nm-error-icon">${icons.error}</div>
                 <h1 class="nm-error-title"></h1>
@@ -83,6 +99,12 @@ export class Shell {
     this.notice = find('.nm-notice');
     this.toggles = find('.nm-actions');
     this.measureBadge = find('.nm-measure');
+    this.loading = find('.nm-loading');
+    this.large = find('.nm-large');
+    find('[data-action="draw"]').addEventListener('click', () => {
+      this.large.hidden = true;
+      this.onDraw?.();
+    });
     this.viewButton = find('[data-action="view"]');
     this.shadingButton = find('[data-action="shading"]');
     find('[data-action="close-notice"]').addEventListener('click', () => {
@@ -220,6 +242,37 @@ export class Shell {
     this.progress.style.setProperty('--nm-progress', `${percent}%`);
   }
 
+  /**
+   * Says the model is loading, in the middle of the view: only once loading has taken a quarter of
+   * a second, so a small model just appears.
+   */
+  startLoading(title: string): void {
+    clearTimeout(this.loadingTimer);
+    (this.loading.querySelector('.nm-loading-title') as HTMLElement).textContent = title;
+    this.setLoadingDetail('');
+    this.loadingTimer = setTimeout(() => (this.loading.hidden = false), LOADING_DELAY);
+  }
+
+  /** How far it has come: bytes received, or that the model is being built. */
+  setLoadingDetail(detail: string): void {
+    (this.loading.querySelector('.nm-loading-detail') as HTMLElement).textContent = detail;
+  }
+
+  stopLoading(): void {
+    clearTimeout(this.loadingTimer);
+    this.loading.hidden = true;
+  }
+
+  /** Asks before drawing a large model; `draw` runs when the user agrees. */
+  askToDraw(title: string, message: string, button: string, draw: () => void): void {
+    this.stopLoading();
+    (this.large.querySelector('.nm-large-title') as HTMLElement).textContent = title;
+    (this.large.querySelector('.nm-large-message') as HTMLElement).textContent = message;
+    (this.large.querySelector('[data-action="draw"]') as HTMLElement).textContent = button;
+    this.onDraw = draw;
+    this.large.hidden = false;
+  }
+
   /** Marks whether a model is on screen or an error is, for tests and assistive tech. */
   setState(state: 'shown' | 'failed'): void {
     this.viewport.dataset.state = state;
@@ -233,6 +286,8 @@ export class Shell {
     this.error.hidden = false;
     this.notice.hidden = true;
     this.measureBadge.hidden = true;
+    this.large.hidden = true;
+    this.stopLoading();
     this.setState('failed');
   }
 

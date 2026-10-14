@@ -159,14 +159,17 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       preferences: {},
     }),
     /** The messages the host sends for one load of a fixture, to post some or all of them. */
-    async messages(fixture: string, { reload = false } = {}) {
+    async messages(
+      fixture: string,
+      { reload = false, largeBytes = undefined as number | undefined } = {},
+    ) {
       const source = await fileSource(join(FIXTURES, fixture));
       const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
         join(FIXTURES, path.slice('/fixtures'.length)),
       );
       const messages: HostToWebviewMessage[] = [];
       try {
-        const options = { loadId: ++loadId, reload, texts: loadTexts(english) };
+        const options = { loadId: ++loadId, reload, texts: loadTexts(english), largeBytes };
         for await (const message of loadMessages(source, opener, options)) messages.push(message);
       } finally {
         await source.close();

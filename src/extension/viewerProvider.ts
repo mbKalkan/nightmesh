@@ -79,8 +79,14 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     const post = (message: HostToWebviewMessage) => panel.webview.postMessage(message);
     let loadId = 0;
     let disposed = false;
+    /** Once the user drew a large model here, its next loads don't ask again. */
+    let largeApproved = false;
+    /** Lets a load waiting for the user's word on a large model go on. */
+    let drawRequest: (() => void) | undefined;
     const load = async (reload: boolean) => {
       const id = ++loadId;
+      // A load still waiting gives way to this one: it ends, and closes its file.
+      drawRequest?.();
       const current = () => id === loadId && !disposed;
       let source: ByteSource;
       try {
@@ -95,10 +101,16 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           loadId: id,
           reload,
           texts: loadTexts(vscode.l10n.t),
+          largeBytes: largeApproved ? Infinity : undefined,
         });
         for await (const message of messages) {
           if (!current()) break;
           await post(message);
+          if (message.type === 'large') {
+            await new Promise<void>((resolve) => (drawRequest = resolve));
+            drawRequest = undefined;
+            if (!current()) break;
+          }
         }
       } catch {
         if (current()) await post(readFailure(id, reload));
@@ -121,6 +133,9 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           void load(false);
         } else if (message.type === 'reload') {
           void load(true);
+        } else if (message.type === 'draw') {
+          largeApproved = true;
+          drawRequest?.();
         } else if (message.type === 'preferences') {
           void this.globalState.update(PREFERENCES, message.preferences);
         } else if (message.type === 'reference') {
@@ -143,6 +158,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     this.track(panel);
     panel.onDidDispose(() => {
       disposed = true;
+      drawRequest?.();
       if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });
