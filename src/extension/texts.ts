@@ -27,6 +27,8 @@ function structureStrings(t: Translate): StructureStrings {
   return {
     structure: t('Structure'),
     inspector: t('Inspector'),
+    statistics: t('Statistics'),
+    statisticsNote: t('For the scene shown, with each mesh counted every time it is drawn.'),
     structureWidth: t('Structure panel width'),
     inspectorWidth: t('Inspector panel width'),
     kinds: {
@@ -78,6 +80,10 @@ function structureStrings(t: Translate): StructureStrings {
       lines: t('Lines'),
       points: t('Points'),
       rotationDegrees: t('Rotation (degrees)'),
+      instances: t('Instances'),
+      drawCalls: t('Draw calls'),
+      dimensions: t('Dimensions'),
+      total: t('Total'),
       duration: t('Duration'),
       size: t('Size'),
       required: t('Required'),

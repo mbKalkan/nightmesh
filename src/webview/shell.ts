@@ -8,6 +8,8 @@ export interface PanelLayout {
   inspector: boolean;
   structureWidth: number;
   inspectorWidth: number;
+  /** The right panel's tab: `inspector` or `statistics`. */
+  inspectorTab: string;
 }
 
 /**
@@ -126,6 +128,15 @@ export class Shell {
       button.title = label;
       button.setAttribute('aria-label', label);
     }
+  }
+
+  get inspectorTab(): string {
+    return this.layout.inspectorTab;
+  }
+
+  set inspectorTab(tab: string) {
+    this.layout.inspectorTab = tab;
+    this.events.layoutChanged(this.layout);
   }
 
   /** Shows the side panels, as the layout has them, once there is a structure to put in them. */

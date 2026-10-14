@@ -104,7 +104,14 @@ function open(message: OpenMessage): void {
 /** The panels' layout as the user left it in this editor, or the default. */
 function savedLayout(): PanelLayout {
   const saved = (vscode.getState() as { layout?: Partial<PanelLayout> } | undefined)?.layout;
-  return { structure: true, inspector: true, structureWidth: 240, inspectorWidth: 300, ...saved };
+  return {
+    structure: true,
+    inspector: true,
+    structureWidth: 240,
+    inspectorWidth: 300,
+    inspectorTab: 'inspector',
+    ...saved,
+  };
 }
 
 function receiveStructure(message: StructureMessage): void {

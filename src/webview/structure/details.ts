@@ -11,7 +11,9 @@ import {
   type GltfModel,
   type JsonObject,
 } from './gltf';
+import { meshCounts, primitiveCounts } from './counts';
 import { entryKey, parseKey, type EntryKey } from './outline';
+import { positionBounds } from './statistics';
 
 /** Something the inspector shows a link to; following it selects that entry. */
 export interface Link {
@@ -356,54 +358,12 @@ function eulerDegrees([x, y, z, w]: number[]): number[] {
   });
 }
 
-interface PrimitiveCounts {
-  vertices: number;
-  elements: number;
-  shape: 'triangles' | 'lines' | 'points';
-}
-
-function primitiveCounts(context: InspectContext, primitive: JsonObject): PrimitiveCounts {
-  const { model } = context;
-  const attributes = isObject(primitive.attributes) ? primitive.attributes : {};
-  const vertices = accessorCount(model, attributes.POSITION);
-  const indices = model.ref('accessors', primitive.indices);
-  const count = indices !== undefined ? accessorCount(model, indices) : vertices;
-  const mode = num(primitive.mode) ?? 4;
-  const elements = [
-    count,
-    Math.floor(count / 2),
-    count,
-    Math.max(0, count - 1),
-    Math.floor(count / 3),
-    Math.max(0, count - 2),
-    Math.max(0, count - 2),
-  ][mode];
-  return {
-    vertices,
-    elements: elements ?? 0,
-    shape: mode >= 4 ? 'triangles' : mode >= 1 ? 'lines' : 'points',
-  };
-}
-
-function accessorCount(model: GltfModel, ref: unknown): number {
-  return num(model.item('accessors', model.ref('accessors', ref))?.count) ?? 0;
-}
-
 /** Vertex and element totals for a mesh, as rows. */
 function meshSummary(context: InspectContext, mesh: number): Row[] {
   const { model, strings, format } = context;
-  const primitives = objects(model.items('meshes')[mesh].primitives);
-  const totals = { vertices: 0, triangles: 0, lines: 0, points: 0 };
-  const materials: number[] = [];
-  for (const primitive of primitives) {
-    const counts = primitiveCounts(context, primitive);
-    totals.vertices += counts.vertices;
-    totals[counts.shape] += counts.elements;
-    const material = model.ref('materials', primitive.material);
-    if (material !== undefined && !materials.includes(material)) materials.push(material);
-  }
+  const totals = meshCounts(model, mesh);
   const rows: Row[] = [
-    { label: strings.labels.primitives, text: format.count(primitives.length), mono: true },
+    { label: strings.labels.primitives, text: format.count(totals.primitives), mono: true },
     { label: strings.labels.vertices, text: format.count(totals.vertices), mono: true },
   ];
   for (const shape of ['triangles', 'lines', 'points'] as const) {
@@ -411,7 +371,7 @@ function meshSummary(context: InspectContext, mesh: number): Row[] {
       rows.push({ label: strings.labels[shape], text: format.count(totals[shape]), mono: true });
     }
   }
-  rows.push(...linkRows(context, strings.groups.materials, 'material', materials));
+  rows.push(...linkRows(context, strings.groups.materials, 'material', totals.materials));
   return rows;
 }
 
@@ -450,7 +410,7 @@ function inspectMesh(context: InspectContext, index: number): Section[] {
 
 function primitiveRows(context: InspectContext, primitive: JsonObject): Row[] {
   const { model, strings, format } = context;
-  const counts = primitiveCounts(context, primitive);
+  const counts = primitiveCounts(context.model, primitive);
   const mode = num(primitive.mode) ?? 4;
   const rows: Row[] = [{ label: 'mode', text: MODES[mode] ?? String(mode), mono: true }];
   const material = model.ref('materials', primitive.material);
@@ -483,12 +443,14 @@ function primitiveRows(context: InspectContext, primitive: JsonObject): Row[] {
     if (name === 'POSITION') {
       const min = numbers(accessor.min, 3);
       const max = numbers(accessor.max, 3);
-      if (min && max) {
+      const bounds = positionBounds(model, primitive);
+      if (min && max && bounds) {
         rows.push({ label: 'min', text: format.vector(min), mono: true });
         rows.push({ label: 'max', text: format.vector(max), mono: true });
+        // Quantized positions keep raw integers in min and max; the size is in mesh units.
         rows.push({
           label: strings.labels.size,
-          text: format.vector(max.map((value, axis) => value - min[axis])),
+          text: format.vector(bounds.max.map((value, axis) => value - bounds.min[axis])),
           mono: true,
         });
       }

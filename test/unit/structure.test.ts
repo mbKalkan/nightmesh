@@ -5,6 +5,7 @@ import { viewerStrings, type Translate } from '../../src/extension/texts';
 import { inspect, type Inspection, type Row } from '../../src/webview/structure/details';
 import { Formatter } from '../../src/webview/structure/format';
 import { GltfModel } from '../../src/webview/structure/gltf';
+import { statistics } from '../../src/webview/structure/statistics';
 import {
   ancestors,
   initiallyExpanded,
@@ -282,5 +283,67 @@ describe('inspector', () => {
   it('has nothing to show for entries the model does not have', () => {
     expect(inspectFixture('scene.glb', 'node:99')).toBeUndefined();
     expect(inspectFixture('scene.glb', 'group:meshes')).toBeUndefined();
+  });
+});
+
+describe('statistics', () => {
+  it('counts the scene shown, each mesh every time it is drawn', () => {
+    const stats = statistics(new GltfModel(fixture('scene.glb')));
+    expect(stats).toMatchObject({
+      scene: 0,
+      nodes: 12,
+      instances: 5,
+      drawCalls: 5,
+      triangles: 984,
+      lines: 3,
+      points: 64,
+      materials: 1,
+      textures: 0,
+    });
+    expect(stats.meshes.find((row) => row.mesh === 0)).toMatchObject({
+      instances: 2,
+      triangles: 12,
+    });
+  });
+
+  it('measures the scene in metres, through node transforms and quantized positions', () => {
+    const size = (name: string) => {
+      const { bounds } = statistics(new GltfModel(fixture(name)));
+      return bounds!.max.map((value, axis) => Number((value - bounds!.min[axis]).toFixed(4)));
+    };
+    expect(size('dense.glb')).toEqual([1, 1, 1]);
+    // Positions stored as normalized shorts, scaled back by the node.
+    expect(size('quantized.glb')).toEqual([1, 1, 1]);
+    const model = new GltfModel({
+      scenes: [{ nodes: [0] }],
+      nodes: [
+        { children: [1], scale: [2, 2, 2] },
+        { mesh: 0, matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 0, 0, 1] },
+      ],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [{ count: 3, type: 'VEC3', componentType: 5126, min: [0, 0, 0], max: [1, 2, 3] }],
+    });
+    expect(statistics(model).bounds).toEqual({ min: [20, 0, 0], max: [22, 4, 6] });
+  });
+
+  it('counts GPU instances and draws them in one call per primitive', () => {
+    const model = new GltfModel({
+      scenes: [{ nodes: [0] }],
+      nodes: [
+        { mesh: 0, extensions: { EXT_mesh_gpu_instancing: { attributes: { TRANSLATION: 1 } } } },
+      ],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }, { attributes: { POSITION: 0 } }] }],
+      accessors: [
+        { count: 3, type: 'VEC3', componentType: 5126 },
+        { count: 50, type: 'VEC3', componentType: 5126 },
+      ],
+    });
+    expect(statistics(model)).toMatchObject({ instances: 50, drawCalls: 2, triangles: 100 });
+  });
+
+  it('has no bounds, and no trouble, for a model without geometry', () => {
+    const stats = statistics(new GltfModel({ asset: { version: '2.0' } }));
+    expect(stats).toMatchObject({ scene: undefined, nodes: 0, meshes: [] });
+    expect(stats.bounds).toBeUndefined();
   });
 });
