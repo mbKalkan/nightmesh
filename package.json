@@ -2,7 +2,7 @@
   "name": "nightmesh",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "MBKDevStudio",
   "icon": "assets/icon.png",
   "license": "MIT",
