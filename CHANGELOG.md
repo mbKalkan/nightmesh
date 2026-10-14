@@ -24,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both panels can be hidden from the toolbar and resized; the tree works with the keyboard
   (arrow keys, Home/End, type to find) and stays fast with tens of thousands of nodes.
 - What is selected in the structure is outlined in the 3D view: a node, every node using a
-  mesh, every part drawn with a material. Click the model to select what is under the pointer;
-  click empty space or press Escape to let go.
+  mesh, every part drawn with a material. Click the model to select what is under the pointer,
+  and the tree opens to it and brings it to the middle; click empty space or press Escape to let
+  go.
 - Frame Selection (F, the toolbar button, or a double-click in the view or the tree) brings the
   selection into view from the direction you look at it, so a small part next to a large ground
   plane is easy to look at.
