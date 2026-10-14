@@ -18,3 +18,4 @@ test/fixtures/generated/
 *.log
 .DS_Store
 Thumbs.db
+.cache/

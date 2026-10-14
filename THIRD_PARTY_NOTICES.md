@@ -10,6 +10,22 @@ This extension bundles the following open-source components.
 | Basis Universal transcoder (WebAssembly build shipped with three.js; see the note below) | Apache-2.0 | https://github.com/BinomialLLC/basis_universal |
 | zstddec, with the Zstandard decoder (shipped with three.js, unmodified) | MIT, BSD-3-Clause | https://github.com/donmccurdy/zstddec |
 
+## Models in the screenshots
+
+The pictures in `docs/images`, which the README shows, are of models from the
+[Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) at commit
+`edc7c9e`. `npm run screenshots` downloads them; they aren't part of the extension or of this
+repository.
+
+| Model | Credit | License |
+|---|---|---|
+| Car Concept | Eric Chadwick of Darmstadt Graphics Group GmbH, 2024. Khronos logo © 2015 and 3D Commerce logo © 2017, Khronos Group | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| Sheen Chair | Eric Chadwick, for Wayfair LLC, 2020 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| Toy Car | Guido Odendahl (model) and Eric Chadwick (extensions and scene), 2020 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| Fox | PixelMannen (model, CC0 1.0), tomkranis (rigging and animation, CC BY 4.0), @AsoboStudio and @scurest (conversion to glTF, CC BY 4.0) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+
+The models are shown as they are, rendered by Nightmesh.
+
 ## three.js
 
 The MIT License

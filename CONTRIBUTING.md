@@ -62,6 +62,10 @@ Other useful scripts:
 
 - `npm run fixtures` regenerates the sample models in `test/fixtures` from code.
 - `npm run fixtures:large` writes a model of about two million triangles for performance checks.
+- `npm run screenshots` retakes the README's pictures in `docs/images`. It downloads the
+  sample models they show into `.cache/samples` the first time.
+- `npm run demo` records the README's animated demo, `docs/images/demo.gif` (needs
+  [ffmpeg](https://ffmpeg.org) on the `PATH`).
 
 If you change the UI, look at the screenshots the browser tests save in `test-results/screens`,
 in both the dark and the light theme.
