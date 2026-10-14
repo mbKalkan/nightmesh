@@ -72,6 +72,12 @@ export interface StructureStrings {
     drawCalls: string;
     dimensions: string;
     total: string;
+    mipLevels: string;
+    /** Estimates: values show with ≈. */
+    gpuMemory: string;
+    textureMemory: string;
+    /** Why a KTX2 texture has no preview. */
+    noPreview: string;
     duration: string;
     size: string;
     required: string;
@@ -118,6 +124,22 @@ export interface StructureMessage {
   fileSize: number;
   /** A GLB's chunk sizes in bytes, as its header gives them. */
   chunks?: { json: number; bin?: number };
+}
+
+/** An image's size and format, as its file's header gives them. */
+export interface ImageInfo {
+  format: 'png' | 'jpeg' | 'webp' | 'ktx2' | 'avif' | 'gif';
+  width: number;
+  height: number;
+  /** Mipmap levels stored in the file (KTX2); others are generated on the GPU. */
+  levels?: number;
+}
+
+/** The model's images, by index: null where an image's size couldn't be read. */
+export interface ImagesMessage {
+  type: 'images';
+  loadId: number;
+  images: (ImageInfo | null)[];
 }
 
 /**
@@ -169,7 +191,13 @@ export interface FailedMessage {
 }
 
 export type HostToWebviewMessage =
-  OpenMessage | StructureMessage | ModelMessage | PartMessage | PartsMessage | FailedMessage;
+  | OpenMessage
+  | StructureMessage
+  | ImagesMessage
+  | ModelMessage
+  | PartMessage
+  | PartsMessage
+  | FailedMessage;
 
 export type WebviewToHostMessage =
   | { type: 'ready' }

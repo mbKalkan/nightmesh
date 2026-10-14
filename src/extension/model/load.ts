@@ -1,9 +1,10 @@
 // Turns a model file into the messages that bring it to the webview. Free of VS Code APIs, so
 // the browser tests can feed the webview exactly what the extension host would.
 import { DRAWN_EXTENSIONS } from '../../shared/gltfExtensions';
-import type { HostToWebviewMessage } from '../../shared/protocol';
+import type { HostToWebviewMessage, ImageInfo } from '../../shared/protocol';
 import { MAX_JSON_BYTES, readGlbLayout, sniff, withoutByteOrderMark } from './container';
-import { planRender, type Gltf, type Part, type ResourceData } from './plan';
+import { IMAGE_HEADER_BYTES, readImageInfo } from './imageInfo';
+import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
 import type { ByteSource } from './sources';
 
@@ -127,6 +128,7 @@ export async function* loadMessages(
       ),
     );
     const plan = planRender(json, buffers, images);
+    yield { type: 'images', loadId, images: await imageInfos(plan) };
 
     const notices = [...problems.values()];
     if (truncated) notices.push(texts.truncated);
@@ -152,6 +154,19 @@ export async function* loadMessages(
       if (typeof value !== 'string') await value.close();
     }
   }
+}
+
+/** Sizes of the images the plan sends, read from the start of each one's bytes. */
+async function imageInfos(plan: RenderPlan): Promise<(ImageInfo | null)[]> {
+  const parts = new Map(plan.parts.map((part) => [part.key, part]));
+  return Promise.all(
+    (plan.json.images ?? []).map(async (image) => {
+      const part = parts.get(`bufferView:${image.bufferView}`);
+      if (image.bufferView === undefined || !part) return null;
+      const head = await part.source.read(part.offset, Math.min(part.length, IMAGE_HEADER_BYTES));
+      return readImageInfo(head) ?? null;
+    }),
+  );
 }
 
 async function* partMessages(parts: Part[], loadId: number): AsyncGenerator<HostToWebviewMessage> {

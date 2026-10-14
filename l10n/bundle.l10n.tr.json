@@ -78,5 +78,9 @@
   "Instances": "Örnekler",
   "Draw calls": "Çizim çağrıları",
   "Dimensions": "Boyutlar",
-  "Total": "Toplam"
+  "Total": "Toplam",
+  "Mip levels": "Mip seviyeleri",
+  "No preview: this texture stays compressed on the GPU.": "Önizleme yok: bu doku GPU'da sıkıştırılmış kalır.",
+  "GPU memory": "GPU belleği",
+  "Texture memory": "Doku belleği"
 }

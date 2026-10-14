@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles
   they put on screen. Mesh names select the mesh and outline where it is drawn.
+- Textures show their size in pixels, mip levels and estimated GPU memory, read from each
+  image's header as the model opens, and a preview of the image once the model is drawn. The
+  Statistics tab adds up the texture memory of the scene.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

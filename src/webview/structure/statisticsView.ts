@@ -79,6 +79,9 @@ export class StatisticsView {
     }
     add(strings.groups.materials, format.count(statistics.materials));
     add(strings.groups.textures, format.count(statistics.textures));
+    if (statistics.textureMemory !== undefined) {
+      add(labels.textureMemory, `≈ ${format.bytes(statistics.textureMemory)}`);
+    }
     if (statistics.bounds) {
       const { min, max } = statistics.bounds;
       add(labels.dimensions, `${format.vector(max.map((value, axis) => value - min[axis]))} m`);
@@ -107,8 +110,9 @@ export class StatisticsView {
     const { column, descending } = this.sort;
     const sorted = [...meshes].sort((a, b) => {
       const [x, y] = [value(a, column), value(b, column)];
-      const order = x < y ? -1 : x > y ? 1 : a.mesh - b.mesh;
-      return descending ? -order : order;
+      const order = x < y ? -1 : x > y ? 1 : 0;
+      // Ties keep the file's order whichever way the column sorts.
+      return order === 0 ? a.mesh - b.mesh : descending ? -order : order;
     });
 
     const table = document.createElement('table');

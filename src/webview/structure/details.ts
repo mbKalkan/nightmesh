@@ -1,4 +1,4 @@
-import type { StructureKind, StructureStrings } from '../../shared/protocol';
+import type { ImageInfo, StructureKind, StructureStrings } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import {
   fileName,
@@ -14,6 +14,7 @@ import {
 import { meshCounts, primitiveCounts } from './counts';
 import { entryKey, parseKey, type EntryKey } from './outline';
 import { positionBounds } from './statistics';
+import { drawnImage, textureMemory } from './textures';
 
 /** Something the inspector shows a link to; following it selects that entry. */
 export interface Link {
@@ -48,6 +49,8 @@ export interface Inspection {
   /** What the entry is, and its index: "Node 12". */
   kind: string;
   sections: Section[];
+  /** A texture whose image the inspector shows above its sections, once the view has it. */
+  preview?: number;
 }
 
 export interface FileFacts {
@@ -62,6 +65,8 @@ export interface InspectContext {
   strings: StructureStrings;
   format: Formatter;
   file: FileFacts;
+  /** Image sizes by index, once the host has read them. */
+  images?: readonly (ImageInfo | null)[];
 }
 
 /** Lists longer than this are cut short, with a count of the rest. */
@@ -119,6 +124,7 @@ export function inspect(context: InspectContext, key: EntryKey): Inspection | un
     title: nameOf(context, parsed.kind, parsed.index),
     kind: `${context.strings.kinds[parsed.kind]} ${parsed.index}`,
     sections: inspector(context, parsed.index).filter((section) => section.rows.length > 0),
+    preview: parsed.kind === 'texture' ? parsed.index : undefined,
   };
 }
 
@@ -527,6 +533,26 @@ function inspectTexture(context: InspectContext, index: number): Section[] {
         ? { label: name, text: imageText(context, image) }
         : { label: name, json: json(extension) },
     );
+  }
+  const drawn = drawnImage(model, index);
+  const info = drawn === undefined ? undefined : context.images?.[drawn];
+  if (info) {
+    rows.push({
+      label: strings.labels.dimensions,
+      text: `${info.width} × ${info.height} px`,
+      mono: true,
+    });
+    if (info.levels !== undefined) {
+      rows.push({ label: strings.labels.mipLevels, text: String(info.levels), mono: true });
+    }
+    const memory = textureMemory(model, context.images, index);
+    if (memory !== undefined) {
+      rows.push({
+        label: strings.labels.gpuMemory,
+        text: `≈ ${context.format.bytes(memory)}`,
+        mono: true,
+      });
+    }
   }
 
   const sampler = model.item('samplers', model.ref('samplers', texture.sampler)) ?? {};
