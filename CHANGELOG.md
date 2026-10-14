@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by default; the axes when you ask.
 - The panels, their widths and the grid and axes stay as you left them, for every model you open
   next.
+- A Shading menu draws the model lit as its materials say, unlit in their base colors and
+  textures, or colored by the direction its surfaces face, to check normals; a wireframe can be
+  drawn over any of them.
 - A Statistics tab beside the Inspector counts the scene shown, before its geometry loads:
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles

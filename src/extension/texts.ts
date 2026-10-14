@@ -46,6 +46,11 @@ export function viewerStrings(t: Translate): ViewerStrings {
       gridCell: t('Grid ({0} squares)', '{0}'),
       axes: t('Origin Axes'),
     },
+    shading: {
+      menu: t('Shading'),
+      modes: { lit: t('Lit'), unlit: t('Unlit'), normals: t('Normals') },
+      wireframe: t('Wireframe'),
+    },
   };
 }
 

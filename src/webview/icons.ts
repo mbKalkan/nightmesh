@@ -15,6 +15,9 @@ export const icons = {
   chevron: svg('<path d="M6 4l4 4-4 4"/>'),
   play: svg('<path d="M5 3.5v9l7.5-4.5z" fill="currentColor"/>'),
   pause: svg('<path d="M5.5 3.5v9M10.5 3.5v9" stroke-width="2"/>'),
+  shading: svg(
+    '<circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor" stroke="none"/>',
+  ),
   view: svg(
     '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
   ),

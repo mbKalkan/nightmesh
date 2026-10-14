@@ -64,6 +64,7 @@ let view: Promise<View | undefined> | undefined;
 /** The 3D view once it is made, for what has to know its state right away, as the View menu. */
 let shownView: View | undefined;
 let viewOptions: MenuButton | undefined;
+let shadingOptions: MenuButton | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
 let hasModel = false;
@@ -193,6 +194,11 @@ function open(message: OpenMessage): void {
   metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
   viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
+  shadingOptions ??= new MenuButton(
+    shell.shadingButton,
+    document.getElementById('app')!,
+    shadingMenuItems,
+  );
   if (!animationBar) {
     animationBar = new AnimationBar(strings.animation, strings.structure.motion, message.locale, {
       clip: (index) => void view?.then((target) => target?.setClip(index)),
@@ -215,6 +221,28 @@ function open(message: OpenMessage): void {
     activated: () => void view?.then((target) => target?.frameSelection()),
     preview: async (texture) => (await view)?.textureImage(texture),
   });
+}
+
+/** The Shading menu: how the model is drawn, then the wireframe over it. */
+function shadingMenuItems(): MenuItem[] {
+  const current = shownView;
+  const text = strings?.shading;
+  if (!current || !text) return [];
+  return [
+    ...(['lit', 'unlit', 'normals'] as const).map((mode) => ({
+      label: text.modes[mode],
+      kind: 'radio' as const,
+      checked: current.shadingMode === mode,
+      run: () => current.setShadingMode(mode),
+    })),
+    'separator',
+    {
+      label: text.wireframe,
+      kind: 'check',
+      checked: current.wireframe,
+      run: () => current.setWireframe(!current.wireframe),
+    },
+  ];
 }
 
 /** The View menu: the standard views, the projection, then the grid and axes. */
@@ -346,6 +374,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   });
   shownView = created;
   shell.viewButton.hidden = false;
+  shell.shadingButton.hidden = false;
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());
   created.setHelperColors(helperColors(shell.viewport));

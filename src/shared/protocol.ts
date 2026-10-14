@@ -108,6 +108,16 @@ export type StandardView = 'front' | 'back' | 'right' | 'left' | 'top' | 'bottom
 
 export type Projection = 'perspective' | 'orthographic';
 
+/** How the model is drawn: lit as its materials say, unlit, or colored by its normals. */
+export type ShadingMode = 'lit' | 'unlit' | 'normals';
+
+/** The Shading menu. */
+export interface ShadingStrings {
+  menu: string;
+  modes: Record<ShadingMode, string>;
+  wireframe: string;
+}
+
 /** The View menu, and the axes gizmo's tooltips. */
 export interface ViewStrings {
   menu: string;
@@ -157,6 +167,7 @@ export interface ViewerStrings {
   structure: StructureStrings;
   animation: AnimationStrings;
   view: ViewStrings;
+  shading: ShadingStrings;
 }
 
 /** Sent once the webview is ready: what file this is. */
