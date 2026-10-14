@@ -27,7 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mesh, every part drawn with a material. Click the model to select what is under the pointer;
   click empty space or press Escape to let go.
 - Frame Selection (F, the toolbar button, or a double-click in the view or the tree) brings the
-  selection into view, so a small part next to a large ground plane is easy to look at.
+  selection into view from the direction you look at it, so a small part next to a large ground
+  plane is easy to look at.
+- Look from the front, right or top with the View menu or the number keys 1, 3 and 7, and from
+  the opposite side with Shift; 9 turns to the other side. 5 switches between perspective and
+  orthographic, keeping what you see the same size. An axes gizmo in the corner of the view shows
+  which way X, Y and Z point; click an axis to look along it. In the view, the arrow keys orbit
+  and + and - zoom.
 - A Statistics tab beside the Inspector counts the scene shown, before its geometry loads:
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles

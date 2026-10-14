@@ -98,5 +98,14 @@
   "Moves nothing": "Hiçbir şeyi hareket ettirmiyor",
   "under {0}": "{0} altında",
   "Copied reference": "Referans kopyalandı",
-  "Copied reference with details": "Referans ayrıntılarıyla kopyalandı"
+  "Copied reference with details": "Referans ayrıntılarıyla kopyalandı",
+  "View": "Görünüm",
+  "Front": "Ön",
+  "Back": "Arka",
+  "Right": "Sağ",
+  "Left": "Sol",
+  "Top": "Üst",
+  "Bottom": "Alt",
+  "Perspective": "Perspektif",
+  "Orthographic": "Ortografik"
 }

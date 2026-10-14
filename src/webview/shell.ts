@@ -18,6 +18,8 @@ export interface PanelLayout {
  */
 export class Shell {
   readonly viewport: HTMLElement;
+  /** Opens the View menu, once there is a 3D view. */
+  readonly viewButton: HTMLButtonElement;
   readonly structurePanel: SidePanel;
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
@@ -46,6 +48,7 @@ export class Shell {
             <span class="nm-file-name"></span>
           </div>
           <div class="nm-actions" hidden>
+            <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
             <span class="nm-separator"></span>
             <button class="nm-icon-button" data-panel="structure" type="button">${icons.panelLeft}</button>
@@ -88,6 +91,7 @@ export class Shell {
     this.notice = find('.nm-notice');
     this.toggles = find('.nm-actions');
     this.measureBadge = find('.nm-measure');
+    this.viewButton = find('[data-action="view"]');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -130,11 +134,13 @@ export class Shell {
     this.inspectorPanel.setLabels(structure.inspector, structure.inspectorWidth);
     for (const button of this.toggles.querySelectorAll<HTMLElement>('button')) {
       const label =
-        button.dataset.action === 'frame'
-          ? strings.frame
-          : button.dataset.panel === 'structure'
-            ? structure.structure
-            : structure.inspector;
+        button.dataset.action === 'view'
+          ? strings.view.menu
+          : button.dataset.action === 'frame'
+            ? strings.frame
+            : button.dataset.panel === 'structure'
+              ? structure.structure
+              : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }
