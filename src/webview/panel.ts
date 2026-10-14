@@ -12,7 +12,8 @@ const KEY_STEP = 20;
 export class SidePanel {
   readonly element: HTMLElement;
   readonly body: HTMLElement;
-  private readonly title: HTMLElement;
+  private title: HTMLElement;
+  private tabbed = false;
   private readonly sash: HTMLElement;
 
   constructor(
@@ -35,9 +36,76 @@ export class SidePanel {
   }
 
   setLabels(title: string, sashLabel: string): void {
-    this.title.textContent = title;
+    if (!this.tabbed) this.title.textContent = title;
     this.element.setAttribute('aria-label', title);
     this.sash.setAttribute('aria-label', sashLabel);
+  }
+
+  /**
+   * Turns the title into tabs, as VS Code's panel has them, each showing one of `contents` in the
+   * body. Arrow keys move between tabs; `onChange` hears which one the user picked.
+   */
+  setTabs(
+    tabs: { id: string; label: string; content: HTMLElement }[],
+    active: string,
+    onChange: (id: string) => void,
+  ): void {
+    const list = document.createElement('div');
+    list.className = 'nm-panel-tabs';
+    list.setAttribute('role', 'tablist');
+    const buttons = tabs.map(({ id, label, content }) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'nm-panel-tab';
+      button.id = `nm-tab-${id}`;
+      button.dataset.tab = id;
+      button.textContent = label;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-controls', `nm-tabpanel-${id}`);
+      content.id = `nm-tabpanel-${id}`;
+      content.setAttribute('role', 'tabpanel');
+      content.setAttribute('aria-labelledby', button.id);
+      return button;
+    });
+    const select = (id: string, focus = false) => {
+      buttons.forEach((button, index) => {
+        const selected = button.dataset.tab === id;
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+        tabs[index].content.hidden = !selected;
+        if (selected && focus) button.focus();
+      });
+    };
+    list.addEventListener('click', (event) => {
+      const id = (event.target as HTMLElement).closest<HTMLElement>('[data-tab]')?.dataset.tab;
+      if (id === undefined) return;
+      select(id);
+      onChange(id);
+    });
+    list.addEventListener('keydown', (event) => {
+      const at = buttons.findIndex((button) => button === document.activeElement);
+      const next =
+        event.key === 'ArrowRight'
+          ? (at + 1) % buttons.length
+          : event.key === 'ArrowLeft'
+            ? (at - 1 + buttons.length) % buttons.length
+            : event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? buttons.length - 1
+                : -1;
+      if (at < 0 || next < 0) return;
+      event.preventDefault();
+      const id = buttons[next].dataset.tab!;
+      select(id, true);
+      onChange(id);
+    });
+    list.append(...buttons);
+    this.title.replaceWith(list);
+    this.title = list;
+    this.tabbed = true;
+    this.body.replaceChildren(...tabs.map((tab) => tab.content));
+    select(active);
   }
 
   get width(): number {

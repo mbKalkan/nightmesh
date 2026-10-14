@@ -72,5 +72,11 @@
   "Duration": "Süre",
   "Size": "Boyut",
   "Required": "Zorunlu",
-  "{0} more": "{0} tane daha"
+  "{0} more": "{0} tane daha",
+  "Statistics": "İstatistik",
+  "For the scene shown, with each mesh counted every time it is drawn.": "Gösterilen sahne için; her mesh çizildiği her yerde sayılır.",
+  "Instances": "Örnekler",
+  "Draw calls": "Çizim çağrıları",
+  "Dimensions": "Boyutlar",
+  "Total": "Toplam"
 }

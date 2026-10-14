@@ -38,6 +38,9 @@ export type StructureGroup =
 export interface StructureStrings {
   structure: string;
   inspector: string;
+  statistics: string;
+  /** What the statistics count, above them. */
+  statisticsNote: string;
   structureWidth: string;
   inspectorWidth: string;
   kinds: Record<StructureKind, string>;
@@ -65,6 +68,10 @@ export interface StructureStrings {
     lines: string;
     points: string;
     rotationDegrees: string;
+    instances: string;
+    drawCalls: string;
+    dimensions: string;
+    total: string;
     duration: string;
     size: string;
     required: string;

@@ -5,6 +5,8 @@ import { Formatter } from './format';
 import { GltfModel } from './gltf';
 import { InspectorView } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
+import { statistics } from './statistics';
+import { StatisticsView } from './statisticsView';
 import { StructureTree } from './tree';
 
 export interface StructureEvents {
@@ -15,13 +17,14 @@ export interface StructureEvents {
 }
 
 /**
- * The structure tree on the left and the inspector on the right, filled from the model's JSON as
- * soon as it arrives. Selecting in the tree, or following a link in the inspector, shows that
+ * The structure tree on the left, and on the right the inspector and the statistics, filled from
+ * the model's JSON as soon as it arrives. Selecting in the tree, or following a link, shows that
  * entry's details.
  */
 export class StructureView {
   private readonly tree: StructureTree;
   private readonly inspector: InspectorView;
+  private readonly statistics: StatisticsView;
   private readonly format: Formatter;
   private context: InspectContext | undefined;
   private json: string | undefined;
@@ -40,8 +43,16 @@ export class StructureView {
       (key) => events.activated(key),
     );
     this.inspector = new InspectorView((key) => this.select(key));
+    this.statistics = new StatisticsView(strings.structure, this.format, (key) => this.select(key));
     shell.structurePanel.body.replaceChildren(this.tree.element);
-    shell.inspectorPanel.body.replaceChildren(this.inspector.element);
+    shell.inspectorPanel.setTabs(
+      [
+        { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
+        { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
+      ],
+      shell.inspectorTab,
+      (tab) => (shell.inspectorTab = tab),
+    );
   }
 
   /**
@@ -68,6 +79,7 @@ export class StructureView {
     if (!keep || !inspect(this.context, this.selected)) this.selected = 'model';
     const expanded = keep ? this.tree.expandedKeys() : initiallyExpanded(model);
     this.tree.setEntries(outline(model, this.strings.structure), expanded, this.selected, keep);
+    this.statistics.show(statistics(model), model);
     this.show(this.selected, keep);
   }
 

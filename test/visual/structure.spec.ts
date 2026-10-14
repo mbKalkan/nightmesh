@@ -24,7 +24,9 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
     await viewer.open('scene.glb');
 
     await expect(page.locator('.nm-panel-left .nm-panel-title')).toHaveText('Structure');
-    await expect(page.locator('.nm-panel-right .nm-panel-title')).toHaveText('Inspector');
+    await expect(page.locator('.nm-panel-right [role="tab"][aria-selected="true"]')).toHaveText(
+      'Inspector',
+    );
     await expect(heading(page)).toHaveText(/scene\.glb\s*Model/);
     await row(page, 'Sphere').click();
     await expect(row(page, 'Sphere')).toHaveAttribute('aria-selected', 'true');
@@ -32,6 +34,11 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
     await expect(section(page, 'Transform')).toContainText(['translation', '[0, 0.5, 0]']);
     expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `${SCREENS}/structure-${theme}.png` });
+
+    await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+    await expect(page.locator('.nm-table')).toBeVisible();
+    expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `${SCREENS}/statistics-${theme}.png` });
     expect(viewer.problems).toEqual([]);
   });
 }
@@ -177,5 +184,37 @@ test('lists thousands of nodes without drawing them all', async ({ page }) => {
   await expect(heading(page)).toHaveText(/Part 19999\s*Node 20000/);
   await expect(row(page, 'Part 19999')).toBeVisible();
   expect(await page.locator('.nm-tree-row').count()).toBeLessThan(100);
+  expect(viewer.problems).toEqual([]);
+});
+
+test('counts the scene in a statistics tab beside the inspector', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.open('scene.glb');
+  const tab = (label: string) => page.locator('.nm-panel-tab', { hasText: label });
+  const meshes = page.locator('.nm-table tbody tr td:first-child');
+
+  await expect(tab('Inspector')).toHaveAttribute('aria-selected', 'true');
+  await tab('Statistics').click();
+  await expect(tab('Statistics')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.nm-inspector-content')).toBeHidden();
+  await expect(page.locator('.nm-statistics dl')).toContainText('Triangles984');
+  // Most triangles on screen first; then by how often each is drawn.
+  await expect(meshes).toHaveText(['Sphere', 'Box', 'Cloud', 'Axes']);
+  await page.locator('.nm-sort', { hasText: 'Instances' }).click();
+  await expect(meshes.first()).toHaveText('Box');
+  await expect(page.locator('th[aria-sort]')).toHaveAttribute('aria-sort', 'descending');
+
+  // A mesh's name selects it, and the tab stays open.
+  await page.locator('.nm-statistics .nm-link', { hasText: 'Box' }).click();
+  await expect(row(page, 'Meshes')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.nm-tree-row[aria-selected="true"]')).toHaveText('Box');
+  await expect(tab('Statistics')).toHaveAttribute('aria-selected', 'true');
+
+  // Arrow keys move between tabs.
+  await tab('Statistics').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(tab('Inspector')).toHaveAttribute('aria-selected', 'true');
+  await expect(tab('Inspector')).toBeFocused();
+  await expect(heading(page)).toHaveText(/Box\s*Mesh 0/);
   expect(viewer.problems).toEqual([]);
 });
