@@ -5,6 +5,8 @@ import {
   LineBasicMaterial,
   SRGBColorSpace,
   Vector3,
+  Matrix4,
+  type BufferGeometry,
   type Material,
   type Mesh,
   type Object3D,
@@ -97,6 +99,8 @@ export class Highlight {
     depthTest: false,
     depthWrite: false,
   });
+  /** Each box sits in a frame that follows its object, so it turns and moves with it. */
+  private frames: { frame: Group; object?: Object3D }[] = [];
 
   constructor() {
     this.group.name = 'Nightmesh selection';
@@ -109,32 +113,30 @@ export class Highlight {
       material.color.setRGB(r, g, b, SRGBColorSpace);
   }
 
+  /** Boxes each object along its own axes; past a few hundred, one box around them all. */
   show(objects: readonly Object3D[]): void {
     this.clear();
-    const boxes =
-      objects.length > BOX_LIMIT
-        ? [boundsOf(objects)]
-        : objects.map((object) => new Box3().setFromObject(object));
-    for (const box of boxes) {
-      if (box.isEmpty()) continue;
-      // A little larger than the bounds, so edges don't fight the faces they'd lie on.
-      box.expandByScalar(Math.max(box.getSize(new Vector3()).length() * 0.005, 1e-5));
-      for (const material of [this.front, this.behind]) {
-        const helper = new Box3Helper(box);
-        (helper.material as Material).dispose();
-        helper.material = material;
-        // Drawn after the model: Infinity would make the renderer's sort compare NaN.
-        helper.renderOrder = 1e9;
-        this.group.add(helper);
-      }
+    if (objects.length > BOX_LIMIT) return this.add(boundsOf(objects));
+    for (const object of objects) {
+      const box = localBox(object);
+      if (box) this.add(box, object);
+      else this.add(new Box3().setFromObject(object));
+    }
+  }
+
+  /** Moves the boxes with their objects, after an animation moved them. */
+  update(): void {
+    for (const { frame, object } of this.frames) {
+      if (object) frame.matrix.copy(object.matrixWorld);
     }
   }
 
   clear(): void {
-    for (const child of [...this.group.children]) {
-      (child as Box3Helper).geometry.dispose();
-      this.group.remove(child);
+    for (const { frame } of this.frames) {
+      for (const child of frame.children) (child as Box3Helper).geometry.dispose();
+      this.group.remove(frame);
     }
+    this.frames = [];
   }
 
   dispose(): void {
@@ -142,6 +144,48 @@ export class Highlight {
     this.front.dispose();
     this.behind.dispose();
   }
+
+  private add(box: Box3, object?: Object3D): void {
+    if (box.isEmpty()) return;
+    // A little larger than the bounds, so edges don't fight the faces they'd lie on.
+    box.expandByScalar(Math.max(box.getSize(new Vector3()).length() * 0.005, 1e-5));
+    const frame = new Group();
+    frame.matrixAutoUpdate = false;
+    if (object) frame.matrix.copy(object.matrixWorld);
+    for (const material of [this.front, this.behind]) {
+      const helper = new Box3Helper(box);
+      (helper.material as Material).dispose();
+      helper.material = material;
+      // Drawn after the model: Infinity would make the renderer's sort compare NaN.
+      helper.renderOrder = 1e9;
+      frame.add(helper);
+    }
+    this.group.add(frame);
+    this.frames.push({ frame, object });
+  }
+}
+
+/**
+ * An object's bounds along its own axes: everything below it, in its local space. Undefined when
+ * it draws nothing, or is scaled flat so its space can't be inverted.
+ */
+export function localBox(object: Object3D): Box3 | undefined {
+  object.updateWorldMatrix(true, true);
+  if (object.matrixWorld.determinant() === 0) return undefined;
+  const toLocal = object.matrixWorld.clone().invert();
+  const box = new Box3();
+  const part = new Box3();
+  const placed = new Matrix4();
+  object.traverse((child) => {
+    const geometry = (child as Partial<Mesh>).geometry as BufferGeometry | undefined;
+    if (!geometry?.boundingBox) return;
+    box.union(
+      part
+        .copy(geometry.boundingBox)
+        .applyMatrix4(placed.multiplyMatrices(toLocal, child.matrixWorld)),
+    );
+  });
+  return box.isEmpty() ? undefined : box;
 }
 
 /** Bounds for framing `objects`; ones with nothing to draw count as a small box where they are. */

@@ -8,6 +8,7 @@ import type {
   ViewerStrings,
 } from '../shared/protocol';
 import { Shell, type PanelLayout } from './shell';
+import { Formatter } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { highlightColor, viewportBackground, watchTheme } from './theme';
 import { vscode } from './vscodeApi';
@@ -29,6 +30,8 @@ const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayo
 let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
 let structure: StructureView | undefined;
+/** Formats lengths in the user's language, once it is known. */
+let metres = new Formatter('en');
 /** The load whose structure the panels show. */
 let structureLoad = -1;
 /** The structure entry selected, which the 3D view highlights once it has a model. */
@@ -94,6 +97,7 @@ vscode.postMessage({ type: 'ready' });
 function open(message: OpenMessage): void {
   opened = message;
   strings = message.strings;
+  metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
   structure ??= new StructureView(shell, strings, message.locale, {
     selected: (key) => {
@@ -156,6 +160,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       structure?.select(node === undefined ? 'model' : `node:${node}`);
       if (frame) created.frameSelection();
     },
+    measured: (size, selection) => shell.setSize(size, selection, (value) => metres.metres(value)),
   });
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());

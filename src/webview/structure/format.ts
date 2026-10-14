@@ -5,14 +5,21 @@
 export class Formatter {
   private readonly integer: Intl.NumberFormat;
   private readonly decimal: Intl.NumberFormat;
+  private readonly length: Intl.NumberFormat;
 
   constructor(locale: string) {
     this.integer = numberFormat(locale, { maximumFractionDigits: 0 });
     this.decimal = numberFormat(locale, { maximumFractionDigits: 1 });
+    this.length = numberFormat(locale, { maximumSignificantDigits: 4 });
   }
 
   count(value: number): string {
     return this.integer.format(value);
+  }
+
+  /** A length in metres for reading, not copying: four significant digits, the user's decimals. */
+  metres(value: number): string {
+    return `${this.length.format(Number(value.toPrecision(4)))} m`;
   }
 
   bytes(value: number): string {

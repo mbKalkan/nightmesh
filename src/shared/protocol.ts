@@ -98,6 +98,9 @@ export interface ViewerStrings {
   close: string;
   /** The toolbar button that frames the selection, with its shortcut. */
   frame: string;
+  /** What the size in the corner of the view measures. */
+  modelSize: string;
+  selectionSize: string;
   structure: StructureStrings;
 }
 

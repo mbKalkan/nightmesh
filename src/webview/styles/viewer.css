@@ -670,6 +670,84 @@ body.vscode-high-contrast-light .nm-viewport {
   height: 100%;
 }
 
+/* The size of the model or the selection, in the top right corner of the view */
+
+.nm-measure {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-editorWidget-border, var(--nm-border));
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  user-select: text;
+}
+
+/* A selection's size is drawn with the selection's color around it. */
+.nm-measure-selection {
+  border-color: var(--vscode-focusBorder);
+}
+
+.nm-axis {
+  font-weight: 700;
+}
+
+/* Axis colors as three.js and Blender draw them, dark enough to read on light themes. */
+.nm-measure {
+  --nm-axis-x: #f14c4c;
+  --nm-axis-y: #89d185;
+  --nm-axis-z: #3794ff;
+}
+
+body.vscode-light .nm-measure {
+  --nm-axis-x: #c62828;
+  --nm-axis-y: #2e7d32;
+  --nm-axis-z: #1565c0;
+}
+
+.nm-axis-x {
+  color: var(--nm-axis-x);
+}
+
+.nm-axis-y {
+  color: var(--nm-axis-y);
+}
+
+.nm-axis-z {
+  color: var(--nm-axis-z);
+}
+
+/* High-contrast themes keep text in their own color; the axis color underlines the letter. */
+body.vscode-high-contrast .nm-axis {
+  color: inherit;
+  text-decoration: underline 2px;
+}
+
+body.vscode-high-contrast .nm-axis-x {
+  text-decoration-color: var(--nm-axis-x);
+}
+
+body.vscode-high-contrast .nm-axis-y {
+  text-decoration-color: var(--nm-axis-y);
+}
+
+body.vscode-high-contrast .nm-axis-z {
+  text-decoration-color: var(--nm-axis-z);
+}
+
+.nm-measure-value + .nm-axis {
+  margin-left: 6px;
+}
+
 /* Error state, drawn over the viewport */
 
 .nm-error {
