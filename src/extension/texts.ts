@@ -18,6 +18,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
     errorRender: t('Something went wrong while drawing this model.'),
     partialTitle: t("Part of this model couldn't be loaded"),
     close: t('Close'),
+    frame: t('Frame Selection (F)'),
     structure: structureStrings(t),
   };
 }

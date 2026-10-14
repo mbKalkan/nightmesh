@@ -6,6 +6,7 @@
   "Something went wrong while drawing this model.": "Model çizilirken bir sorun oluştu.",
   "Part of this model couldn't be loaded": "Modelin bir kısmı yüklenemedi",
   "Close": "Kapat",
+  "Frame Selection (F)": "Seçime Odaklan (F)",
   "{0} wasn't found next to the model.": "{0} modelin yanında bulunamadı.",
   "{0} wasn't loaded: Nightmesh doesn't use the network.": "{0} yüklenmedi: Nightmesh ağ kullanmaz.",
   "{0} wasn't loaded: only paths relative to the model are followed.": "{0} yüklenmedi: yalnızca modele göre göreli yollar izlenir.",

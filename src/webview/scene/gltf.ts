@@ -1,4 +1,4 @@
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF, type GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Decoders } from './modelView';
 
@@ -15,7 +15,24 @@ export function parseModel(
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   if (decoders.draco) loader.setDRACOLoader(decoders.draco);
   if (decoders.ktx2) loader.setKTX2Loader(decoders.ktx2);
-  loader.register((parser) => ({
+  loader.register((parser) => {
+    // The loader maps its objects to glTF indices in `associations`, then cuts that map down to
+    // one scene each time a scene finishes loading: with two scenes, one loses its nodes. Keep
+    // the full map; selection needs every node of the scene shown.
+    const associations = parser.associations;
+    Object.defineProperty(parser, 'associations', {
+      get: () => associations,
+      set: () => {},
+      configurable: true,
+    });
+    return partsPlugin(parser, parts);
+  });
+  return loader.parseAsync(json, '');
+}
+
+/** Hands the host's parts to the loader through its cache. */
+function partsPlugin(parser: GLTFParser, parts: ReadonlyMap<string, ArrayBuffer>) {
+  return {
     name: 'nightmesh_parts',
     // The parser empties its cache when it starts; this runs right after.
     beforeRoot: async () => {
@@ -23,6 +40,5 @@ export function parseModel(
         .cache;
       for (const [key, data] of parts) cache.add(key, Promise.resolve(data));
     },
-  }));
-  return loader.parseAsync(json, '');
+  };
 }
