@@ -8,6 +8,7 @@ const BASE = `https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/
 export const SAMPLES = '.cache/samples';
 
 const FILES = {
+  'CarConcept.glb': 'CarConcept/glTF-Binary/CarConcept.glb',
   'ToyCar.glb': 'ToyCar/glTF-Binary/ToyCar.glb',
   'SheenChair.glb': 'SheenChair/glTF-Binary/SheenChair.glb',
   'Fox.glb': 'Fox/glTF-Binary/Fox.glb',
