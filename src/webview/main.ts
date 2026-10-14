@@ -433,7 +433,10 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   const created = new scene.ModelView(shell.viewport, canvas, context, {
     picked: (node, frame) => {
       // The structure shows what was picked, and tells the view to highlight it.
-      structure?.select(node === undefined ? 'model' : `node:${node}`);
+      const key = node === undefined ? 'model' : `node:${node}`;
+      structure?.select(key);
+      const said = structure?.describe(key);
+      if (said) shell.announce(said);
       if (frame) created.frameSelection();
     },
     animation: (state) =>

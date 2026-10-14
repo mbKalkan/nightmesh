@@ -75,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A model that takes a moment to load says so in the middle of the view, with how much has
   arrived, while its structure and statistics already show in the panels. A model of more than
   1 GB waits for **Draw Model** before it is loaded into the view.
+- Screen readers hear what the view's keys do when it takes the focus, and what a click in the
+  view picked; the size in its corner and the loading progress don't repeat themselves while a
+  clip plays or bytes arrive.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

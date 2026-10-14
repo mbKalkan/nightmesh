@@ -59,7 +59,7 @@ export class Shell {
         </div>
         <div class="nm-body">
           <div class="nm-center">
-            <main class="nm-viewport" tabindex="0">
+            <main class="nm-viewport" tabindex="0" aria-describedby="nm-view-keys">
               <section class="nm-notice" role="status" hidden>
                 <div class="nm-notice-header">
                   <span class="nm-notice-icon">${icons.warning}</span>
@@ -68,10 +68,12 @@ export class Shell {
                 </div>
                 <ul class="nm-notice-list"></ul>
               </section>
-              <div class="nm-measure" role="status" hidden></div>
+              <div class="nm-measure" role="note" hidden></div>
+              <p class="nm-sr-only" id="nm-view-keys"></p>
+              <div class="nm-sr-only" role="status" aria-live="polite" data-announcer></div>
               <div class="nm-loading" role="status" hidden>
                 <div class="nm-loading-title"></div>
-                <div class="nm-loading-detail"></div>
+                <div class="nm-loading-detail" aria-hidden="true"></div>
               </div>
               <section class="nm-large" hidden>
                 <h2 class="nm-large-title"></h2>
@@ -140,6 +142,7 @@ export class Shell {
     this.fileName.title = fileName;
     document.title = fileName;
     this.viewport.setAttribute('aria-label', fileName);
+    (this.viewport.querySelector('#nm-view-keys') as HTMLElement).textContent = strings.viewKeys;
     this.progress.setAttribute('aria-label', strings.loading);
     const close = this.notice.querySelector('[data-action="close-notice"]') as HTMLElement;
     close.title = strings.close;
@@ -271,6 +274,17 @@ export class Shell {
     (this.large.querySelector('[data-action="draw"]') as HTMLElement).textContent = button;
     this.onDraw = draw;
     this.large.hidden = false;
+  }
+
+  /**
+   * Tells screen readers what was picked in the view: the tree, which they would read it from,
+   * doesn't have the focus then.
+   */
+  announce(text: string): void {
+    const announcer = this.viewport.querySelector('[data-announcer]') as HTMLElement;
+    // The same words twice in a row are said again only if the region changes in between.
+    announcer.textContent = '';
+    requestAnimationFrame(() => (announcer.textContent = text));
   }
 
   /** Marks whether a model is on screen or an error is, for tests and assistive tech. */

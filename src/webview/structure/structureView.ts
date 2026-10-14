@@ -156,6 +156,12 @@ export class StructureView {
     this.show(key);
   }
 
+  /** An entry as screen readers say it: its name, then its kind and index. */
+  describe(key: EntryKey): string | undefined {
+    const inspection = this.context && inspect(this.context, key);
+    return inspection && `${inspection.title}, ${inspection.kind}`;
+  }
+
   private show(key: EntryKey, sameEntry = false): void {
     if (!this.context) return;
     this.selected = key;
