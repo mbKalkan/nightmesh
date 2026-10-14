@@ -113,6 +113,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'failed':
       fail(message);
       break;
+    case 'large':
+      askToDraw(message.loadId, message.bytes);
+      break;
     case 'copyReference': {
       const key = message.atPointer ? (menuKey ?? selectedKey) : selectedKey;
       vscode.postMessage({ type: 'reference', ...structure?.reference(key, message.details) });
@@ -185,6 +188,16 @@ document.addEventListener('keydown', (event) => {
 
 vscode.postMessage({ type: 'ready' });
 
+/** A large model waits for the user's word; meanwhile the panels show its structure. */
+function askToDraw(loadId: number, bytes: number): void {
+  if (loadId < latestLoad || !strings) return;
+  const text = strings;
+  shell.askToDraw(text.largeTitle, fill(text.largeMessage, metres.bytes(bytes)), text.draw, () => {
+    shell.startLoading(text.loading);
+    vscode.postMessage({ type: 'draw' });
+  });
+}
+
 function open(message: OpenMessage): void {
   // The host sends this once per viewer; the preferences then are the ones it starts with.
   if (!opened) {
@@ -196,6 +209,7 @@ function open(message: OpenMessage): void {
   strings = message.strings;
   metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
+  if (!hasModel) shell.startLoading(strings.loading);
   viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
   shadingOptions ??= new MenuButton(
     shell.shadingButton,
@@ -456,7 +470,10 @@ function receiveModel(message: ModelMessage): void {
   arrival = { message, parts: new Map(), received: 0 };
   // The 3D view starts once there is a model to draw: a file that isn't one needs no GPU.
   view ??= createView(strings!);
-  if (!(message.reload && hasModel)) shell.setProgress(message.bytes > 0 ? 0 : undefined);
+  if (!(message.reload && hasModel)) {
+    shell.setProgress(message.bytes > 0 ? 0 : undefined);
+    showReceived(arrival);
+  }
   // Decoders load while the bytes arrive; build() finds them ready.
   void view?.then((target) => target?.decoders(message.extensions));
   if (message.parts === 0) void build(arrival);
@@ -469,8 +486,23 @@ function receivePart(loadId: number, key: string, data: ArrayBuffer): void {
   current.received += data.byteLength;
   if (!(current.message.reload && hasModel)) {
     shell.setProgress(current.received / current.message.bytes);
+    showReceived(current);
   }
   if (current.parts.size === current.message.parts) void build(current);
+}
+
+/** In the middle of the view: how much has arrived, then that the model is being built. */
+function showReceived(current: Arrival): void {
+  const text = strings!;
+  shell.setLoadingDetail(
+    current.parts.size === current.message.parts
+      ? text.preparing
+      : fill(
+          text.loadingBytes,
+          metres.bytes(current.received),
+          metres.bytes(current.message.bytes),
+        ),
+  );
 }
 
 async function build(current: Arrival): Promise<void> {
@@ -487,6 +519,7 @@ async function build(current: Arrival): Promise<void> {
     const gltf = await parseModel(current.message.json, current.parts, decoders);
     if (current !== arrival) return;
     target.show(gltf, current.message.reload && hasModel);
+    shell.stopLoading();
     // A texture selected before the model was drawn can show its image now.
     structure?.refresh();
     hasModel = true;
@@ -501,6 +534,7 @@ async function build(current: Arrival): Promise<void> {
   } finally {
     if (current === arrival) {
       shell.setProgress(undefined);
+      shell.stopLoading();
       arrival = undefined;
     }
   }
@@ -511,6 +545,7 @@ function fail(message: FailedMessage): void {
   latestLoad = message.loadId;
   arrival = undefined;
   shell.setProgress(undefined);
+  shell.stopLoading();
   if (message.reload && hasModel) return;
   // A file that isn't a model has no structure to show either.
   if (structureLoad !== message.loadId) shell.setPanelsAvailable(false);

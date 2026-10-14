@@ -8,6 +8,14 @@ export type Translate = (message: string, ...args: Array<string | number>) => st
 export function viewerStrings(t: Translate): ViewerStrings {
   return {
     loading: t('Loading…'),
+    loadingBytes: t('{0} of {1}', '{0}', '{1}'),
+    preparing: t('Preparing to draw…'),
+    largeTitle: t('This model is large'),
+    largeMessage: t(
+      'Drawing it means loading {0} into the view, which takes a while and a lot of memory. Its structure and statistics are ready in the panels.',
+      '{0}',
+    ),
+    draw: t('Draw Model'),
     errorTitle: t("This model can't be displayed"),
     errorWebGL: t(
       "WebGL 2 isn't available, so the model can't be drawn. Check that hardware acceleration isn't turned off in VS Code.",

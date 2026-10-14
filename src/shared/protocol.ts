@@ -163,6 +163,14 @@ export type Background = 'theme' | 'dark' | 'neutral' | 'light';
 /** UI strings localized by the extension host and handed to the webview. */
 export interface ViewerStrings {
   loading: string;
+  /** How much of the model has arrived: `{0} of {1}`. */
+  loadingBytes: string;
+  /** Every byte is in; the model is being built and sent to the GPU. */
+  preparing: string;
+  largeTitle: string;
+  /** Why a large model waits to be drawn: `{0}` is how many bytes it sends. */
+  largeMessage: string;
+  draw: string;
   errorTitle: string;
   errorWebGL: string;
   errorContextLost: string;
@@ -255,6 +263,16 @@ export interface ModelMessage {
   notices: string[];
 }
 
+/**
+ * The model is large enough that drawing it takes long and a lot of memory: the host waits for a
+ * `draw` from the webview before it sends it. Its structure and statistics are shown already.
+ */
+export interface LargeMessage {
+  type: 'large';
+  loadId: number;
+  bytes: number;
+}
+
 /** One large part, as a buffer of its own. */
 export interface PartMessage {
   type: 'part';
@@ -290,6 +308,7 @@ export type HostToWebviewMessage =
   | ImagesMessage
   | AnimationsMessage
   | ModelMessage
+  | LargeMessage
   | PartMessage
   | PartsMessage
   | FailedMessage
@@ -309,6 +328,8 @@ export type WebviewToHostMessage =
   | { type: 'ready' }
   /** The GPU context came back; the model has to be sent again to be drawn. */
   | { type: 'reload' }
+  /** The user asked to draw a large model after all. */
+  | { type: 'draw' }
   /**
    * A place in the model to put on the clipboard, for a chat with an AI assistant or a note: the
    * host puts the file's path first. No `location` means the model itself.

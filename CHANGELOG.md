@@ -70,6 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Textures show their size in pixels, mip levels and estimated GPU memory, read from each
   image's header as the model opens, and a preview of the image once the model is drawn. The
   Statistics tab adds up the texture memory of the scene.
+- A model that takes a moment to load says so in the middle of the view, with how much has
+  arrived, while its structure and statistics already show in the panels. A model of more than
+  1 GB waits for **Draw Model** before it is loaded into the view.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

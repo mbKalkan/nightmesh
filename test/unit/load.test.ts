@@ -110,6 +110,29 @@ describe('loadMessages', () => {
     expect((await loadAll('scene.glb')).map((message) => message.type)).not.toContain('animations');
   });
 
+  it('asks before sending a model too large to draw lightly, and only then', async () => {
+    const source = await fileSource(join(FIXTURES, 'scene.glb'));
+    const types: string[] = [];
+    let large: HostToWebviewMessage | undefined;
+    try {
+      const options = { loadId: 1, reload: false, texts: loadTexts(english), largeBytes: 1000 };
+      for await (const message of loadMessages(
+        source,
+        fileResourceOpener('/f', '/f', (p) => p),
+        options,
+      )) {
+        types.push(message.type);
+        if (message.type === 'large') large = message;
+      }
+    } finally {
+      await source.close();
+    }
+    expect(types.indexOf('large')).toBe(types.indexOf('model') - 1);
+    const model = (await loadAll('scene.glb')).find((message) => message.type === 'model');
+    expect(large).toMatchObject({ bytes: model?.type === 'model' && model.bytes });
+    expect((await loadAll('scene.glb')).map((message) => message.type)).not.toContain('large');
+  });
+
   it('packs small parts together, since a message carries only so many arrays', async () => {
     const messages = await load('animated.glb');
     const packs = messages.filter((message) => message.type === 'parts');

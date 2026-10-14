@@ -122,5 +122,10 @@
   "Theme Background": "Tema Arka Planı",
   "Dark Background": "Koyu Arka Plan",
   "Neutral Background": "Nötr Arka Plan",
-  "Light Background": "Açık Arka Plan"
+  "Light Background": "Açık Arka Plan",
+  "{0} of {1}": "{0} / {1}",
+  "Preparing to draw…": "Çizime hazırlanıyor…",
+  "This model is large": "Bu model büyük",
+  "Drawing it means loading {0} into the view, which takes a while and a lot of memory. Its structure and statistics are ready in the panels.": "Çizmek için görünüme {0} yüklenmesi gerekiyor; bu biraz sürer ve çok bellek ister. Yapısı ve istatistikleri panellerde hazır.",
+  "Draw Model": "Modeli Çiz"
 }
