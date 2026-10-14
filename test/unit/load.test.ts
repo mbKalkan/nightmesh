@@ -144,7 +144,7 @@ describe('loadMessages', () => {
     }
   });
 
-  it('turns textures next to a .gltf into parts and leaves no URI behind', async () => {
+  it('turns textures next to a .gltf into typed parts and leaves no URI behind', async () => {
     const [model] = await load('textured.gltf');
     if (model.type !== 'model') throw new Error('expected a model');
     expect(model.json).not.toMatch(/"uri"/);

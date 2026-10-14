@@ -736,12 +736,13 @@ function write(name, bytes) {
 
 const writeGlb = async (name, doc) => write(name, Buffer.from(await io.writeBinary(doc)));
 
-/** A .gltf with its resources as separate files, named by their URIs. */
-async function writeGltf(name, doc) {
+/** A .gltf with its resources as separate files, named by their URIs; `edit` changes the JSON. */
+async function writeGltf(name, doc, edit = () => {}) {
   const { json, resources } = await io.writeJSON(doc, {
     format: Format.GLTF,
     basename: name.replace(/\.gltf$/, ''),
   });
+  edit(json);
   write(name, Buffer.from(`${JSON.stringify(json, null, 2)}\n`));
   for (const [uri, bytes] of Object.entries(resources)) write(uri, Buffer.from(bytes));
   return json;
@@ -768,7 +769,10 @@ const sceneGlb = await writeGlb('scene.glb', sceneModel());
 await writeGlb('materials.glb', materials());
 await writeGlb('animated.glb', animated());
 await writeGlb('variants.glb', variants());
-await writeGltf('textured.gltf', textured());
+// Many exporters leave out the type of an image given by URI, which glTF allows.
+await writeGltf('textured.gltf', textured(), (json) => {
+  for (const image of json.images) delete image.mimeType;
+});
 write('embedded.gltf', Buffer.from(await triangleWithBuffer()));
 
 // The same dense sphere, stored three ways.
