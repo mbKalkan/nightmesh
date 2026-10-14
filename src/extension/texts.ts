@@ -22,6 +22,14 @@ export function viewerStrings(t: Translate): ViewerStrings {
     modelSize: t('Size of the model in metres: width (X), height (Y) and depth (Z)'),
     selectionSize: t('Size of the selection in metres: width (X), height (Y) and depth (Z)'),
     structure: structureStrings(t),
+    animation: {
+      bar: t('Animation playback'),
+      clip: t('Animation'),
+      play: t('Play (Space)'),
+      pause: t('Pause (Space)'),
+      time: t('Time'),
+      speed: t('Speed'),
+    },
   };
 }
 

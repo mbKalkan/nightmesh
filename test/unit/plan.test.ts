@@ -64,7 +64,8 @@ describe('planRender', () => {
     expect(plan.json.nodes?.[1]).toEqual({});
     expect(plan.json.nodes?.[0]).toEqual({ mesh: 0 });
     expect(plan.json.skins?.[0]).toEqual({});
-    expect(plan.json.animations).toEqual([]);
+    // Emptied, not removed: animations keep their indices.
+    expect(plan.json.animations).toEqual([{ channels: [], samplers: [{ input: 3, output: 3 }] }]);
     expect(plan.dropped).toEqual({ primitives: 1, textures: 0, animations: 1 });
     expect(plan.drawable).toBe(true);
   });

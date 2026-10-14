@@ -8,6 +8,7 @@ import type {
   ViewerStrings,
 } from '../shared/protocol';
 import { Shell, type PanelLayout } from './shell';
+import { AnimationBar } from './animationBar';
 import { Formatter } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { highlightColor, viewportBackground, watchTheme } from './theme';
@@ -30,6 +31,7 @@ const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayo
 let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
 let structure: StructureView | undefined;
+let animationBar: AnimationBar | undefined;
 /** Formats lengths in the user's language, once it is known. */
 let metres = new Formatter('en');
 /** The load whose structure the panels show. */
@@ -79,11 +81,13 @@ watchTheme(
     }),
 );
 
-// F frames the selection, Escape lets go of it, as in most 3D tools.
+// F frames the selection, Escape lets go of it, Space plays and pauses, as in most 3D tools.
 shell.viewport.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
   if (event.key === 'f' || event.key === 'F') {
     void view?.then((target) => target?.frameSelection());
+  } else if (event.key === ' ' && animationBar && !animationBar.element.hidden) {
+    void view?.then((target) => target?.togglePlaying());
   } else if (event.key === 'Escape') {
     structure?.select('model');
   } else {
@@ -99,10 +103,24 @@ function open(message: OpenMessage): void {
   strings = message.strings;
   metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
+  if (!animationBar) {
+    animationBar = new AnimationBar(strings.animation, message.locale, {
+      clip: (index) => void view?.then((target) => target?.setClip(index)),
+      playing: (playing) => void view?.then((target) => target?.setPlaying(playing)),
+      seek: (time) => void view?.then((target) => target?.seek(time)),
+      speed: (speed) => void view?.then((target) => target?.setSpeed(speed)),
+    });
+    shell.addBelowViewport(animationBar.element);
+  }
   structure ??= new StructureView(shell, strings, message.locale, {
     selected: (key) => {
       selectedKey = key;
-      void view?.then((target) => target?.select(key));
+      void view?.then((target) => {
+        target?.select(key);
+        // Picking an animation in the structure makes it the one the bar plays.
+        const animation = /^animation:(\d+)$/.exec(key);
+        if (animation) target?.setClip(Number(animation[1]));
+      });
     },
     activated: () => void view?.then((target) => target?.frameSelection()),
     preview: async (texture) => (await view)?.textureImage(texture),
@@ -160,6 +178,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       structure?.select(node === undefined ? 'model' : `node:${node}`);
       if (frame) created.frameSelection();
     },
+    animation: (state) =>
+      animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
     measured: (size, selection) => shell.setSize(size, selection, (value) => metres.metres(value)),
   });
   created.setBackground(viewportBackground(shell.viewport));

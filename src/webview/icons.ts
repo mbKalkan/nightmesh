@@ -13,6 +13,8 @@ export const icons = {
   warning: svg('<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.5M8 11.75v.25"/>'),
   close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
   chevron: svg('<path d="M6 4l4 4-4 4"/>'),
+  play: svg('<path d="M5 3.5v9l7.5-4.5z" fill="currentColor"/>'),
+  pause: svg('<path d="M5.5 3.5v9M10.5 3.5v9" stroke-width="2"/>'),
   frame: svg(
     '<path d="M2.5 5.5v-3h3M10.5 2.5h3v3M13.5 10.5v3h-3M5.5 13.5h-3v-3"/><circle cx="8" cy="8" r="2"/>',
   ),

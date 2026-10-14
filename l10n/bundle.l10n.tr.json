@@ -84,5 +84,10 @@
   "GPU memory": "GPU belleği",
   "Texture memory": "Doku belleği",
   "Size of the model in metres: width (X), height (Y) and depth (Z)": "Modelin metre cinsinden boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
-  "Size of the selection in metres: width (X), height (Y) and depth (Z)": "Seçimin metre cinsinden boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)"
+  "Size of the selection in metres: width (X), height (Y) and depth (Z)": "Seçimin metre cinsinden boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
+  "Animation playback": "Animasyon oynatma",
+  "Play (Space)": "Oynat (Boşluk)",
+  "Pause (Space)": "Duraklat (Boşluk)",
+  "Time": "Zaman",
+  "Speed": "Hız"
 }

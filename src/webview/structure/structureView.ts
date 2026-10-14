@@ -107,6 +107,19 @@ export class StructureView {
     this.render(true);
   }
 
+  /** Each animation's name, or its kind and index when it has none, by glTF index. */
+  animationNames(): string[] {
+    const model = this.context?.model;
+    if (!model) return [];
+    return model
+      .items('animations')
+      .map(
+        (_, index) =>
+          model.displayName('animations', index) ??
+          `${this.strings.structure.kinds.animation} ${index}`,
+      );
+  }
+
   /** Selects `key` in the tree, opening what holds it, and shows its details. */
   select(key: EntryKey): void {
     if (!this.context) return;
