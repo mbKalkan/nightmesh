@@ -8,7 +8,8 @@ import { SidePanel } from './panel';
  */
 export class Shell {
   readonly viewport: HTMLElement;
-  /** Opens the View menu, once there is a 3D view. */
+  /** Open the Shading and View menus, once there is a 3D view. */
+  readonly shadingButton: HTMLButtonElement;
   readonly viewButton: HTMLButtonElement;
   readonly structurePanel: SidePanel;
   readonly inspectorPanel: SidePanel;
@@ -38,6 +39,7 @@ export class Shell {
             <span class="nm-file-name"></span>
           </div>
           <div class="nm-actions" hidden>
+            <button class="nm-icon-button nm-menu-button" data-action="shading" type="button" hidden>${icons.shading}${icons.chevronDown}</button>
             <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
             <span class="nm-separator"></span>
@@ -82,6 +84,7 @@ export class Shell {
     this.toggles = find('.nm-actions');
     this.measureBadge = find('.nm-measure');
     this.viewButton = find('[data-action="view"]');
+    this.shadingButton = find('[data-action="shading"]');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -126,11 +129,13 @@ export class Shell {
       const label =
         button.dataset.action === 'view'
           ? strings.view.menu
-          : button.dataset.action === 'frame'
-            ? strings.frame
-            : button.dataset.panel === 'structure'
-              ? structure.structure
-              : structure.inspector;
+          : button.dataset.action === 'shading'
+            ? strings.shading.menu
+            : button.dataset.action === 'frame'
+              ? strings.frame
+              : button.dataset.panel === 'structure'
+                ? structure.structure
+                : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }

@@ -110,5 +110,10 @@
   "Orthographic": "Ortografik",
   "Grid": "Izgara",
   "Grid ({0} squares)": "Izgara ({0} kare)",
-  "Origin Axes": "Orijin Eksenleri"
+  "Origin Axes": "Orijin Eksenleri",
+  "Shading": "Gölgelendirme",
+  "Lit": "Işıklı",
+  "Unlit": "Işıksız",
+  "Normals": "Normaller",
+  "Wireframe": "Tel Kafes"
 }

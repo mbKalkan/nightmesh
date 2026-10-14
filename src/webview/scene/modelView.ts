@@ -28,7 +28,8 @@ import { Helpers, type HelperColors } from './helpers';
 import { Picker } from './picking';
 import { Playback } from './playback';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
-import type { Projection, StandardView } from '../../shared/protocol';
+import { Shading } from './shading';
+import type { Projection, ShadingMode, StandardView } from '../../shared/protocol';
 import { OPPOSITE, Viewpoint } from './viewpoint';
 
 /** Decoders a model needs, made the first time any model needs them. */
@@ -83,6 +84,7 @@ export class ModelView {
   private readonly resizeObserver: ResizeObserver;
   private readonly highlight = new Highlight();
   private readonly helpers = new Helpers();
+  private readonly shading = new Shading();
   private readonly picker = new Picker();
   private model: Object3D | undefined;
   private index: SelectionIndex | undefined;
@@ -123,6 +125,7 @@ export class ModelView {
     // Vertex data left memory once it was on the GPU, so a lost context can't redraw the model:
     // drop it, and draw again once the model comes back.
     canvas.addEventListener('webglcontextlost', () => {
+      this.shading.detach();
       if (this.model) this.scene.remove(this.model);
       this.model = undefined;
       this.index = undefined;
@@ -159,6 +162,24 @@ export class ModelView {
     this.requestRender();
   }
 
+  get shadingMode(): ShadingMode {
+    return this.shading.current;
+  }
+
+  setShadingMode(mode: ShadingMode): void {
+    this.shading.setMode(mode);
+    this.requestRender();
+  }
+
+  get wireframe(): boolean {
+    return this.shading.wireframe;
+  }
+
+  setWireframe(shown: boolean): void {
+    this.shading.setWireframe(shown);
+    this.requestRender();
+  }
+
   /** The grid's cell size in metres, once there is a model. */
   get gridCell(): number | undefined {
     return this.helpers.cell;
@@ -169,6 +190,8 @@ export class ModelView {
     const model = gltf.scene;
     prepareForUpload(model);
     const previous = this.model;
+    // Its own materials back first, to be disposed with it.
+    this.shading.detach();
     if (previous) {
       this.scene.remove(previous);
       disposeObject(previous);
@@ -176,6 +199,7 @@ export class ModelView {
     this.model = model;
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
+    this.shading.attach(model);
     this.modelBox().getBoundingSphere(this.modelSphere);
     this.helpers.fit(this.modelBox());
     if (!keepCamera || !this.framed) this.viewpoint.frame(this.modelBox());
@@ -397,6 +421,7 @@ export class ModelView {
     this.picker.dispose();
     this.highlight.dispose();
     this.helpers.dispose();
+    this.shading.dispose();
     if (this.model) disposeObject(this.model);
     this.renderer.dispose();
   }
@@ -471,6 +496,7 @@ export class ModelView {
   private render(): void {
     const camera = this.viewpoint.camera;
     this.renderer.render(this.scene, camera);
+    this.shading.drawWireframe(this.renderer, this.scene, camera);
     if (!camera.quaternion.equals(this.turnedTo)) {
       this.turnedTo.copy(camera.quaternion);
       this.events.turned(camera.quaternion.toArray() as [number, number, number, number]);
