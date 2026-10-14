@@ -3,6 +3,7 @@ import type {
   FailedMessage,
   HostToWebviewMessage,
   ModelMessage,
+  Motion,
   OpenMessage,
   StructureMessage,
   ViewerStrings,
@@ -54,6 +55,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       break;
     case 'images':
       if (message.loadId === structureLoad) structure?.setImages(message.images);
+      break;
+    case 'animations':
+      if (message.loadId === structureLoad) receiveMotion(message.motion);
       break;
     case 'model':
       receiveModel(message);
@@ -114,7 +118,7 @@ function open(message: OpenMessage): void {
   metres = new Formatter(message.locale);
   shell.setDocument(message.fileName, message.format, strings);
   if (!animationBar) {
-    animationBar = new AnimationBar(strings.animation, message.locale, {
+    animationBar = new AnimationBar(strings.animation, strings.structure.motion, message.locale, {
       clip: (index) => void view?.then((target) => target?.setClip(index)),
       playing: (playing) => void view?.then((target) => target?.setPlaying(playing)),
       seek: (time) => void view?.then((target) => target?.seek(time)),
@@ -155,7 +159,15 @@ function receiveStructure(message: StructureMessage): void {
   latestLoad = message.loadId;
   structureLoad = message.loadId;
   structure?.setStructure(message, opened.fileName, opened.format);
+  // The new file's animations are read next; until then nothing is said about them.
+  animationBar?.setMotion([]);
   shell.setPanelsAvailable(true);
+}
+
+/** Says in the inspector, and next to the clip in the bar, which animations move nothing. */
+function receiveMotion(motion: readonly (Motion | null)[]): void {
+  structure?.setMotion(motion);
+  animationBar?.setMotion(motion);
 }
 
 /** Probes WebGL 2 first, so a machine without it gets a message and not a stack of errors. */

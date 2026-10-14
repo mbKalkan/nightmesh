@@ -647,6 +647,7 @@ body.vscode-high-contrast .nm-link {
 }
 
 .nm-animation {
+  container-type: inline-size;
   display: flex;
   flex: none;
   gap: 8px;
@@ -676,6 +677,29 @@ body.vscode-high-contrast .nm-link {
 
 .nm-clips {
   flex: 0 1 200px;
+  min-width: 64px;
+}
+
+/* That the picked clip moves nothing. The clip list narrows first to make room for it. */
+.nm-motion {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.nm-motion svg {
+  flex: none;
+  color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+}
+
+/* Too narrow for words: the icon stays, and its tooltip says it. */
+@container (max-width: 480px) {
+  .nm-motion-text {
+    display: none;
+  }
 }
 
 .nm-timeline {

@@ -89,5 +89,11 @@
   "Play (Space)": "Oynat (Boşluk)",
   "Pause (Space)": "Duraklat (Boşluk)",
   "Time": "Zaman",
-  "Speed": "Hız"
+  "Speed": "Hız",
+  "Motion": "Hareket",
+  "Moves": "Hareket ettiriyor",
+  "Holds one pose: its keyframes don't change over time": "Tek bir pozda duruyor: anahtar kareleri zamanla değişmiyor",
+  "Moves nothing: every keyframe matches the model's rest pose": "Hiçbir şeyi hareket ettirmiyor: her anahtar kare modelin dinlenme pozuyla aynı",
+  "Holds one pose": "Tek pozda duruyor",
+  "Moves nothing": "Hiçbir şeyi hareket ettirmiyor"
 }

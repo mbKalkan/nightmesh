@@ -27,10 +27,10 @@ async function loadAll(name: string): Promise<HostToWebviewMessage[]> {
   return messages;
 }
 
-/** The messages after the structure and image sizes, which are checked on their own. */
+/** The messages after the structure, image sizes and animation motion, checked on their own. */
 const load = async (name: string) =>
   (await loadAll(name)).filter(
-    (message) => message.type !== 'structure' && message.type !== 'images',
+    (message) => !['structure', 'images', 'animations'].includes(message.type),
   );
 
 const failure = async (name: string) => {
@@ -97,6 +97,17 @@ describe('loadMessages', () => {
     expect(sent).toBe(model.bytes);
     expect(model.notices).toEqual([]);
     expect(JSON.parse(model.json).asset.generator).toBe('Nightmesh fixture generator');
+  });
+
+  it('tells which animations move anything before the model is drawn', async () => {
+    const messages = await loadAll('animated.glb');
+    expect(messages.map((message) => message.type).slice(0, 3)).toEqual([
+      'structure',
+      'images',
+      'animations',
+    ]);
+    expect(messages[2]).toMatchObject({ motion: ['moves', 'moves', 'moves', 'moves', 'none'] });
+    expect((await loadAll('scene.glb')).map((message) => message.type)).not.toContain('animations');
   });
 
   it('packs small parts together, since a message carries only so many arrays', async () => {
