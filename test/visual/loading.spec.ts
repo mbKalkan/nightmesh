@@ -15,7 +15,8 @@ test('says the model is loading, and how much has arrived, once it takes a momen
   for (const message of messages.slice(0, model + 1)) await viewer.post(message);
 
   const loading = page.locator('.nm-loading');
-  await expect(loading).toBeVisible();
+  // Software WebGL in CI holds the page for seconds while it starts the 3D view.
+  await expect(loading).toBeVisible({ timeout: 30_000 });
   await expect(loading).toContainText('Loading…');
   await expect(page.locator('.nm-loading-detail')).toHaveText(/^0 B of [\d.]+ KB$/);
   // The panels show the structure meanwhile.
