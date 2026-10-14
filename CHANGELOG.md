@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A clip whose keyframes move nothing (all equal to the rest pose, as some exporters write
   them) is marked in the bar and the Inspector, so a model that doesn't move when played isn't
   mistaken for a viewer problem. Clips that hold a single pose are marked too.
+- **Copy Reference** in the right-click menu puts the file's path and what was right-clicked on
+  the clipboard, such as `models/robot.glb, node "Arm" (nodes[12]), under Root › Body`, ready to
+  paste into a chat with an AI assistant: a part of the model in the view, a row in the
+  structure, or a link in the inspector. **Copy Reference with Details** adds what the inspector
+  says about it. Both are in the Command Palette too, where they refer to the selection.
 - Textures show their size in pixels, mip levels and estimated GPU memory, read from each
   image's header as the model opens, and a preview of the image once the model is drawn. The
   Statistics tab adds up the texture memory of the scene.

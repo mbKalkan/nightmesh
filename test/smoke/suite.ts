@@ -44,6 +44,24 @@ const tests: Record<string, () => Promise<void>> = {
     assert.equal(input.viewType, VIEW_TYPE);
   },
 
+  async 'copies a reference to the model, with what the inspector says'() {
+    await openInEditor('scene.glb');
+    const saved = await vscode.env.clipboard.readText();
+    try {
+      await vscode.env.clipboard.writeText('');
+      let copied = '';
+      // Until the model's structure has arrived, the viewer can only name the file.
+      for (const start = Date.now(); !copied.includes('\n') && Date.now() - start < 30_000;) {
+        await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        copied = await vscode.env.clipboard.readText();
+      }
+      assert.match(copied, /scene\.glb:\nModel\n- version: 2\.0\n/);
+    } finally {
+      await vscode.env.clipboard.writeText(saved);
+    }
+  },
+
   async 'keeps .gltf files JSON when opened as text'() {
     const document = await vscode.workspace.openTextDocument(
       vscode.Uri.file(path.join(FIXTURES, 'triangle.gltf')),

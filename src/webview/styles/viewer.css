@@ -291,6 +291,16 @@ body {
   outline-offset: -1px;
 }
 
+/* What the context menu was opened on, while VS Code shows it: the only row outlined then. */
+.vscode-context-menu-visible .nm-menu-target {
+  outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+  outline-offset: -1px;
+}
+
+.vscode-context-menu-visible .nm-tree:focus .nm-tree-row.nm-focused:not(.nm-menu-target) {
+  outline: none;
+}
+
 .nm-tree:focus .nm-tree-row.nm-focused {
   outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
   outline-offset: -1px;

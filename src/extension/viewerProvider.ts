@@ -2,6 +2,7 @@ import { posix } from 'node:path';
 import * as vscode from 'vscode';
 import { formatForPath } from '../shared/formats';
 import type { HostToWebviewMessage, WebviewToHostMessage } from '../shared/protocol';
+import { composeReference } from '../shared/reference';
 import { watchFile } from './fileWatcher';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
@@ -13,15 +14,40 @@ import { buildWebviewHtml } from './webviewHtml';
 export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   static readonly viewType = 'nightmesh.viewer';
 
+  /** The viewer in front, which commands act on. */
+  private active: vscode.WebviewPanel | undefined;
+
   constructor(private readonly extensionUri: vscode.Uri) {}
 
   static register(context: vscode.ExtensionContext): vscode.Disposable {
     const provider = new ViewerProvider(context.extensionUri);
-    return vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
-      // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
-      webviewOptions: { retainContextWhenHidden: true },
-      supportsMultipleEditorsPerDocument: true,
-    });
+    return vscode.Disposable.from(
+      vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
+        // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: true,
+      }),
+      vscode.commands.registerCommand('nightmesh.copyReference', (menu?: unknown) =>
+        provider.copyReference(false, menu),
+      ),
+      vscode.commands.registerCommand('nightmesh.copyReferenceWithDetails', (menu?: unknown) =>
+        provider.copyReference(true, menu),
+      ),
+    );
+  }
+
+  /**
+   * Asks the viewer in front for a reference. VS Code hands commands run from the webview's
+   * context menu what the menu was opened on; the viewer has remembered what was under the
+   * pointer. From the Command Palette, the reference is to the selection.
+   */
+  private copyReference(details: boolean, menu: unknown): void {
+    const atPointer = typeof menu === 'object' && menu !== null && 'webview' in menu;
+    void this.active?.webview.postMessage({
+      type: 'copyReference',
+      details,
+      atPointer,
+    } satisfies HostToWebviewMessage);
   }
 
   openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
@@ -88,15 +114,44 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           void load(false);
         } else if (message.type === 'reload') {
           void load(true);
+        } else if (message.type === 'reference') {
+          const reference = composeReference(referencePath(uri), message.location, message.details);
+          void vscode.env.clipboard
+            .writeText(reference)
+            .then(() =>
+              vscode.window.setStatusBarMessage(
+                message.details
+                  ? vscode.l10n.t('Copied reference with details')
+                  : vscode.l10n.t('Copied reference'),
+                3000,
+              ),
+            );
         }
       }),
       watchFile(uri, () => void load(true)),
+      panel.onDidChangeViewState(() => this.track(panel)),
     ];
+    this.track(panel);
     panel.onDidDispose(() => {
       disposed = true;
+      if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });
   }
+
+  private track(panel: vscode.WebviewPanel): void {
+    if (panel.active) this.active = panel;
+    else if (this.active === panel) this.active = undefined;
+  }
+}
+
+/**
+ * How a copied reference names the file: relative to its workspace folder, so that an assistant
+ * working in the workspace finds it; versions from Git and other virtual files by name only.
+ */
+function referencePath(uri: vscode.Uri): string {
+  if (uri.scheme === 'file') return vscode.workspace.asRelativePath(uri, false);
+  return uri.path.slice(uri.path.lastIndexOf('/') + 1);
 }
 
 function readFailure(loadId: number, reload: boolean): HostToWebviewMessage {

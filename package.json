@@ -75,7 +75,43 @@
         ],
         "priority": "default"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "nightmesh.copyReference",
+        "title": "%command.copyReference%",
+        "category": "%category%"
+      },
+      {
+        "command": "nightmesh.copyReferenceWithDetails",
+        "title": "%command.copyReferenceWithDetails%",
+        "category": "%category%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "nightmesh.copyReference",
+          "when": "activeCustomEditorId == nightmesh.viewer"
+        },
+        {
+          "command": "nightmesh.copyReferenceWithDetails",
+          "when": "activeCustomEditorId == nightmesh.viewer"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "nightmesh.copyReference",
+          "when": "webviewId == 'nightmesh.viewer'",
+          "group": "9_cutcopypaste@1"
+        },
+        {
+          "command": "nightmesh.copyReferenceWithDetails",
+          "when": "webviewId == 'nightmesh.viewer'",
+          "group": "9_cutcopypaste@2"
+        }
+      ]
+    }
   },
   "files": [
     "dist/**",

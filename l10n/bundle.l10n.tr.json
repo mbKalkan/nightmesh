@@ -95,5 +95,8 @@
   "Holds one pose: its keyframes don't change over time": "Tek bir pozda duruyor: anahtar kareleri zamanla değişmiyor",
   "Moves nothing: every keyframe matches the model's rest pose": "Hiçbir şeyi hareket ettirmiyor: her anahtar kare modelin dinlenme pozuyla aynı",
   "Holds one pose": "Tek pozda duruyor",
-  "Moves nothing": "Hiçbir şeyi hareket ettirmiyor"
+  "Moves nothing": "Hiçbir şeyi hareket ettirmiyor",
+  "under {0}": "{0} altında",
+  "Copied reference": "Referans kopyalandı",
+  "Copied reference with details": "Referans ayrıntılarıyla kopyalandı"
 }

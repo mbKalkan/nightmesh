@@ -1,5 +1,8 @@
 {
   "displayName": "Nightmesh",
   "description": "glTF ve GLB 3D modellerini VS Code'da, koyu temanızda görüntüleyin ve inceleyin. Hızlı, çevrimdışı ve salt okunur.",
-  "customEditor.displayName": "Nightmesh"
+  "customEditor.displayName": "Nightmesh",
+  "category": "Nightmesh",
+  "command.copyReference": "Referansı Kopyala",
+  "command.copyReferenceWithDetails": "Referansı Ayrıntılarla Kopyala"
 }

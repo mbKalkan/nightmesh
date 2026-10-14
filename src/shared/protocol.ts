@@ -86,6 +86,8 @@ export interface StructureStrings {
     required: string;
     /** `{0}` more, after a list cut short. */
     more: string;
+    /** Where a node is in a copied reference: `under {0}`, the nodes above it. */
+    under: string;
   };
 }
 
@@ -230,9 +232,25 @@ export type HostToWebviewMessage =
   | ModelMessage
   | PartMessage
   | PartsMessage
-  | FailedMessage;
+  | FailedMessage
+  | CopyReferenceMessage;
+
+/**
+ * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
+ * (`atPointer`), to the selection otherwise. With `details`, what the inspector says about it.
+ */
+export interface CopyReferenceMessage {
+  type: 'copyReference';
+  details: boolean;
+  atPointer: boolean;
+}
 
 export type WebviewToHostMessage =
   | { type: 'ready' }
   /** The GPU context came back; the model has to be sent again to be drawn. */
-  | { type: 'reload' };
+  | { type: 'reload' }
+  /**
+   * A place in the model to put on the clipboard, for a chat with an AI assistant or a note: the
+   * host puts the file's path first. No `location` means the model itself.
+   */
+  | { type: 'reference'; location?: string; details?: string };
