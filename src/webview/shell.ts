@@ -1,16 +1,6 @@
-import type { ModelFormat, ViewerStrings } from '../shared/protocol';
+import type { ModelFormat, PanelLayout, ViewerStrings } from '../shared/protocol';
 import { icons } from './icons';
 import { SidePanel } from './panel';
-
-/** Which side panels show and how wide they are; kept with the webview's state. */
-export interface PanelLayout {
-  structure: boolean;
-  inspector: boolean;
-  structureWidth: number;
-  inspectorWidth: number;
-  /** The right panel's tab: `inspector` or `statistics`. */
-  inspectorTab: string;
-}
 
 /**
  * The static frame around a model: toolbar, progress, the viewport and its overlays, and the
@@ -189,6 +179,14 @@ export class Shell {
   /** Puts a bar below the viewport, the full width of the view. */
   addBelowViewport(element: HTMLElement): void {
     this.center.append(element);
+  }
+
+  /** Lays the panels out as the user last left them. */
+  setLayout(layout: PanelLayout): void {
+    Object.assign(this.layout, layout);
+    this.structurePanel.setWidth(layout.structureWidth);
+    this.inspectorPanel.setWidth(layout.inspectorWidth);
+    this.showPanels();
   }
 
   /** Shows the side panels, as the layout has them, once there is a structure to put in them. */

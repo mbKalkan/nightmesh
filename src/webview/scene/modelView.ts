@@ -24,6 +24,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { Helpers, type HelperColors } from './helpers';
 import { Picker } from './picking';
 import { Playback } from './playback';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
@@ -81,6 +82,7 @@ export class ModelView {
   private readonly viewpoint: Viewpoint;
   private readonly resizeObserver: ResizeObserver;
   private readonly highlight = new Highlight();
+  private readonly helpers = new Helpers();
   private readonly picker = new Picker();
   private model: Object3D | undefined;
   private index: SelectionIndex | undefined;
@@ -114,7 +116,7 @@ export class ModelView {
     const pmrem = new PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
-    this.scene.add(this.highlight.group);
+    this.scene.add(this.highlight.group, this.helpers.group);
 
     this.viewpoint = new Viewpoint(canvas, this.modelSphere, () => this.requestRender());
     this.listenForClicks();
@@ -145,6 +147,23 @@ export class ModelView {
     this.requestRender();
   }
 
+  /** Shows or hides the ground grid and the origin axes. */
+  setHelpers({ grid, axes }: { grid: boolean; axes: boolean }): void {
+    this.helpers.gridShown = grid;
+    this.helpers.axesShown = axes;
+    this.requestRender();
+  }
+
+  setHelperColors(colors: HelperColors): void {
+    this.helpers.setColors(colors);
+    this.requestRender();
+  }
+
+  /** The grid's cell size in metres, once there is a model. */
+  get gridCell(): number | undefined {
+    return this.helpers.cell;
+  }
+
   /** Shows a loaded model in place of the one before; `keepCamera` keeps the view the user had. */
   show(gltf: GLTF, keepCamera: boolean): void {
     const model = gltf.scene;
@@ -158,6 +177,7 @@ export class ModelView {
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
     this.modelBox().getBoundingSphere(this.modelSphere);
+    this.helpers.fit(this.modelBox());
     if (!keepCamera || !this.framed) this.viewpoint.frame(this.modelBox());
     this.framed = true;
     this.startAnimations(model, gltf.animations, keepCamera);
@@ -376,6 +396,7 @@ export class ModelView {
     this.viewpoint.dispose();
     this.picker.dispose();
     this.highlight.dispose();
+    this.helpers.dispose();
     if (this.model) disposeObject(this.model);
     this.renderer.dispose();
   }
@@ -436,7 +457,7 @@ export class ModelView {
       this.scene,
       this.viewpoint.camera,
       this.model,
-      [this.highlight.group],
+      [this.highlight.group, this.helpers.group],
       {
         x: Math.floor((event.clientX - rect.left) * scale),
         y: Math.floor((event.clientY - rect.top) * scale),

@@ -156,6 +156,7 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       format: formatForPath(fixture) ?? 'glb',
       locale: 'en',
       strings,
+      preferences: {},
     }),
     /** The messages the host sends for one load of a fixture, to post some or all of them. */
     async messages(fixture: string, { reload = false } = {}) {

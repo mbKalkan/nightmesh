@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   orthographic, keeping what you see the same size. An axes gizmo in the corner of the view shows
   which way X, Y and Z point; click an axis to look along it. In the view, the arrow keys orbit
   and + and - zoom.
+- A ground grid under the model, in squares of a power of ten metres sized to the model (the View
+  menu says how big), and the world's axes through the origin, from the View menu. The grid shows
+  by default; the axes when you ask.
+- The panels, their widths and the grid and axes stay as you left them, for every model you open
+  next.
 - A Statistics tab beside the Inspector counts the scene shown, before its geometry loads:
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles

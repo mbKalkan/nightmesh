@@ -5,17 +5,19 @@ import type {
   ModelMessage,
   Motion,
   OpenMessage,
+  PanelLayout,
+  Preferences,
   StandardView,
   StructureMessage,
   ViewerStrings,
 } from '../shared/protocol';
-import { Shell, type PanelLayout } from './shell';
+import { Shell } from './shell';
 import { AnimationBar } from './animationBar';
 import { Gizmo } from './gizmo';
 import { MenuButton, type MenuItem } from './menu';
-import { Formatter } from './structure/format';
+import { Formatter, fill } from './structure/format';
 import { StructureView } from './structure/structureView';
-import { highlightColor, viewportBackground, watchTheme } from './theme';
+import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
@@ -29,10 +31,25 @@ interface Arrival {
   received: number;
 }
 
-const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayout(), {
-  layoutChanged: (layout) => vscode.setState({ layout }),
-  frame: () => void view?.then((target) => target?.frameSelection()),
-});
+const DEFAULT_LAYOUT: PanelLayout = {
+  structure: true,
+  inspector: true,
+  structureWidth: 240,
+  inspectorWidth: 300,
+  inspectorTab: 'inspector',
+};
+
+/** What the user set, as the host kept it from the viewers before. */
+let preferences: Preferences = {};
+
+const shell = new Shell(
+  document.getElementById('app') as HTMLElement,
+  { ...DEFAULT_LAYOUT },
+  {
+    layoutChanged: (layout) => savePreferences({ layout: { ...layout } }),
+    frame: () => void view?.then((target) => target?.frameSelection()),
+  },
+);
 let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
 let structure: StructureView | undefined;
@@ -120,6 +137,7 @@ watchTheme(
     void view?.then((current) => {
       current?.setBackground(viewportBackground(shell.viewport));
       current?.setHighlightColor(highlightColor());
+      current?.setHelperColors(helperColors(shell.viewport));
     }),
 );
 
@@ -165,6 +183,11 @@ document.addEventListener('keydown', (event) => {
 vscode.postMessage({ type: 'ready' });
 
 function open(message: OpenMessage): void {
+  // The host sends this once per viewer; the preferences then are the ones it starts with.
+  if (!opened) {
+    preferences = message.preferences ?? {};
+    shell.setLayout({ ...DEFAULT_LAYOUT, ...preferences.layout });
+  }
   opened = message;
   strings = message.strings;
   metres = new Formatter(message.locale);
@@ -194,11 +217,13 @@ function open(message: OpenMessage): void {
   });
 }
 
-/** The View menu: the standard views, then the projection. */
+/** The View menu: the standard views, the projection, then the grid and axes. */
 function viewMenuItems(): MenuItem[] {
   const current = shownView;
   const text = strings?.view;
   if (!current || !text) return [];
+  const shown = helpersShown();
+  const cell = current.gridCell;
   return [
     ...STANDARD_VIEWS.map((name) => ({
       label: text.views[name],
@@ -213,6 +238,19 @@ function viewMenuItems(): MenuItem[] {
       checked: current.projection === projection,
       run: () => current.setProjection(projection),
     })),
+    'separator',
+    {
+      label: cell === undefined ? text.grid : fill(text.gridCell, metres.metres(cell)),
+      kind: 'check',
+      checked: shown.grid,
+      run: () => setHelpers({ grid: !shown.grid }),
+    },
+    {
+      label: text.axes,
+      kind: 'check',
+      checked: shown.axes,
+      run: () => setHelpers({ axes: !shown.axes }),
+    },
   ];
 }
 
@@ -222,17 +260,20 @@ function markMenuTarget(target: Element | undefined): void {
   menuTarget?.classList.add('nm-menu-target');
 }
 
-/** The panels' layout as the user left it in this editor, or the default. */
-function savedLayout(): PanelLayout {
-  const saved = (vscode.getState() as { layout?: Partial<PanelLayout> } | undefined)?.layout;
-  return {
-    structure: true,
-    inspector: true,
-    structureWidth: 240,
-    inspectorWidth: 300,
-    inspectorTab: 'inspector',
-    ...saved,
-  };
+/** Keeps a change for this viewer and, through the host, for the next ones. */
+function savePreferences(change: Preferences): void {
+  preferences = { ...preferences, ...change };
+  vscode.postMessage({ type: 'preferences', preferences });
+}
+
+/** The ground grid shows unless the user hid it; the origin axes only when asked for. */
+function helpersShown(): { grid: boolean; axes: boolean } {
+  return { grid: preferences.grid ?? true, axes: preferences.axes ?? false };
+}
+
+function setHelpers(change: { grid?: boolean; axes?: boolean }): void {
+  savePreferences(change);
+  shownView?.setHelpers(helpersShown());
 }
 
 function receiveStructure(message: StructureMessage): void {
@@ -307,6 +348,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   shell.viewButton.hidden = false;
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());
+  created.setHelperColors(helperColors(shell.viewport));
+  created.setHelpers(helpersShown());
   created.select(selectedKey);
   return created;
 }

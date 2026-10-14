@@ -113,6 +113,30 @@ export interface ViewStrings {
   menu: string;
   views: Record<StandardView, string>;
   projections: Record<Projection, string>;
+  grid: string;
+  /** The grid with its cell size: `Grid ({0} squares)`. */
+  gridCell: string;
+  axes: string;
+}
+
+/** Which side panels show and how wide they are. */
+export interface PanelLayout {
+  structure: boolean;
+  inspector: boolean;
+  structureWidth: number;
+  inspectorWidth: number;
+  /** The right panel's tab: `inspector` or `statistics`. */
+  inspectorTab: string;
+}
+
+/**
+ * What the user set in a viewer, for the next ones to start with: the extension keeps it across
+ * files and sessions. Anything left out takes its default.
+ */
+export interface Preferences {
+  layout?: Partial<PanelLayout>;
+  grid?: boolean;
+  axes?: boolean;
 }
 
 /** UI strings localized by the extension host and handed to the webview. */
@@ -143,6 +167,7 @@ export interface OpenMessage {
   /** VS Code's display language, for formatting numbers. */
   locale: string;
   strings: ViewerStrings;
+  preferences: Preferences;
 }
 
 /**
@@ -266,4 +291,6 @@ export type WebviewToHostMessage =
    * A place in the model to put on the clipboard, for a chat with an AI assistant or a note: the
    * host puts the file's path first. No `location` means the model itself.
    */
-  | { type: 'reference'; location?: string; details?: string };
+  | { type: 'reference'; location?: string; details?: string }
+  /** The user changed a preference; the host keeps them all for the next viewer. */
+  | { type: 'preferences'; preferences: Preferences };

@@ -107,5 +107,8 @@
   "Top": "Üst",
   "Bottom": "Alt",
   "Perspective": "Perspektif",
-  "Orthographic": "Ortografik"
+  "Orthographic": "Ortografik",
+  "Grid": "Izgara",
+  "Grid ({0} squares)": "Izgara ({0} kare)",
+  "Origin Axes": "Orijin Eksenleri"
 }

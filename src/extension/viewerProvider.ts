@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import * as vscode from 'vscode';
 import { formatForPath } from '../shared/formats';
-import type { HostToWebviewMessage, WebviewToHostMessage } from '../shared/protocol';
+import type { HostToWebviewMessage, Preferences, WebviewToHostMessage } from '../shared/protocol';
 import { composeReference } from '../shared/reference';
 import { watchFile } from './fileWatcher';
 import { fileResourceOpener } from './model/fileResources';
@@ -11,16 +11,22 @@ import { fileSource, memorySource, type ByteSource } from './model/sources';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
 
+const PREFERENCES = 'nightmesh.preferences';
+
 export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   static readonly viewType = 'nightmesh.viewer';
 
   /** The viewer in front, which commands act on. */
   private active: vscode.WebviewPanel | undefined;
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    /** Where the viewers' preferences are kept, for every window and session. */
+    private readonly globalState: vscode.Memento,
+  ) {}
 
   static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new ViewerProvider(context.extensionUri);
+    const provider = new ViewerProvider(context.extensionUri, context.globalState);
     return vscode.Disposable.from(
       vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
         // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
@@ -110,10 +116,13 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
             format,
             locale: vscode.env.language,
             strings: viewerStrings(vscode.l10n.t),
+            preferences: this.globalState.get<Preferences>(PREFERENCES) ?? {},
           });
           void load(false);
         } else if (message.type === 'reload') {
           void load(true);
+        } else if (message.type === 'preferences') {
+          void this.globalState.update(PREFERENCES, message.preferences);
         } else if (message.type === 'reference') {
           const reference = composeReference(referencePath(uri), message.location, message.details);
           void vscode.env.clipboard
