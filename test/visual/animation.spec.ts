@@ -89,3 +89,36 @@ test('has no bar for a model without animations', async ({ page }) => {
   await expect(bar(page)).toBeHidden();
   expect(viewer.problems).toEqual([]);
 });
+
+test('pauses with a slow click while the clip plays', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('animated.glb');
+  await play(page).click();
+  await expect(play(page)).toHaveAttribute('aria-label', 'Pause (Space)');
+
+  // A person's click: the button is held for a few frames before it is let go.
+  const box = (await play(page).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(150);
+  await page.mouse.up();
+  await expect(play(page)).toHaveAttribute('aria-label', 'Play (Space)');
+  expect(viewer.problems).toEqual([]);
+});
+
+test('plays and pauses with Space from anywhere but the panels', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('animated.glb');
+  // A node selected in the tree: Space there belongs to the tree.
+  await page.locator('.nm-tree-row', { hasText: /^Spinner$/ }).click();
+  await page.keyboard.press('Space');
+  await expect(play(page)).toHaveAttribute('aria-label', 'Play (Space)');
+
+  // Anywhere else, Space plays and pauses: the clock is not a control, focus leaves the tree.
+  await clock(page).click();
+  await page.keyboard.press('Space');
+  await expect(play(page)).toHaveAttribute('aria-label', 'Pause (Space)');
+  await page.keyboard.press('Space');
+  await expect(play(page)).toHaveAttribute('aria-label', 'Play (Space)');
+  expect(viewer.problems).toEqual([]);
+});

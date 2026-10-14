@@ -92,20 +92,28 @@ export class AnimationBar {
         ...state.names.map((name, index) => new Option(name, String(index))),
       );
     }
-    this.clips.value = String(state.clip);
-    this.speeds.value = String(state.speed);
-    this.playing = state.playing;
-    const label = state.playing ? this.strings.pause : this.strings.play;
-    this.play.innerHTML = state.playing ? icons.pause : icons.play;
-    this.play.title = label;
-    this.play.setAttribute('aria-label', label);
+    // Playback reports every frame. Only what changed is touched: a control rebuilt under the
+    // pointer between press and release loses the click, and an open list would close.
+    setIfChanged(this.clips, String(state.clip));
+    setIfChanged(this.speeds, String(state.speed));
+    if (state.playing !== this.playing || !this.play.firstChild) {
+      this.playing = state.playing;
+      const label = state.playing ? this.strings.pause : this.strings.play;
+      this.play.innerHTML = state.playing ? icons.pause : icons.play;
+      this.play.title = label;
+      this.play.setAttribute('aria-label', label);
+    }
     const duration = state.durations[state.clip] ?? 0;
     this.play.disabled = duration <= 0;
-    this.slider.max = String(duration);
     this.slider.disabled = duration <= 0;
+    if (this.slider.max !== String(duration)) this.slider.max = String(duration);
     if (!this.scrubbing) this.slider.value = String(state.time);
     this.clock.textContent = `${this.seconds.format(state.time)} / ${this.seconds.format(duration)} s`;
   }
+}
+
+function setIfChanged(control: HTMLSelectElement, value: string): void {
+  if (control.value !== value) control.value = value;
 }
 
 /** Numbers with exactly `fixed` decimals, or up to two when `fixed` is 0. */

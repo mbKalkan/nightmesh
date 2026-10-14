@@ -161,8 +161,11 @@ export class Shell {
     this.measureBadge.hidden = size === undefined;
     if (!size || !this.strings) return;
     const label = selection ? this.strings.selectionSize : this.strings.modelSize;
+    const description = `${label}: ${size.map(metres).join(' × ')}`;
+    // Measured again while a clip plays: leave it be when nothing changed, text selected in it too.
+    if (this.measureBadge.getAttribute('aria-label') === description) return;
     this.measureBadge.title = label;
-    this.measureBadge.setAttribute('aria-label', `${label}: ${size.map(metres).join(' × ')}`);
+    this.measureBadge.setAttribute('aria-label', description);
     this.measureBadge.replaceChildren(
       ...['X', 'Y', 'Z'].flatMap((axis, index) => {
         const name = document.createElement('span');
