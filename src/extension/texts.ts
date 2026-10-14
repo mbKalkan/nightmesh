@@ -29,6 +29,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
       pause: t('Pause (Space)'),
       time: t('Time'),
       speed: t('Speed'),
+      motion: { holds: t('Holds one pose'), none: t('Moves nothing') },
     },
   };
 }
@@ -67,6 +68,11 @@ function structureStrings(t: Translate): StructureStrings {
       cameras: t('Cameras'),
       lights: t('Lights'),
     },
+    motion: {
+      moves: t('Moves'),
+      holds: t("Holds one pose: its keyframes don't change over time"),
+      none: t("Moves nothing: every keyframe matches the model's rest pose"),
+    },
     sections: {
       file: t('File'),
       contents: t('Contents'),
@@ -90,6 +96,7 @@ function structureStrings(t: Translate): StructureStrings {
       lines: t('Lines'),
       points: t('Points'),
       rotationDegrees: t('Rotation (degrees)'),
+      motion: t('Motion'),
       instances: t('Instances'),
       drawCalls: t('Draw calls'),
       dimensions: t('Dimensions'),

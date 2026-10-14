@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { viewerStrings, type Translate } from '../../src/extension/texts';
-import { inspect, type Inspection, type Row } from '../../src/webview/structure/details';
+import {
+  inspect,
+  type InspectContext,
+  type Inspection,
+  type Row,
+} from '../../src/webview/structure/details';
 import { Formatter } from '../../src/webview/structure/format';
 import { GltfModel } from '../../src/webview/structure/gltf';
 import { statistics } from '../../src/webview/structure/statistics';
@@ -32,13 +37,19 @@ const labels = (entries: OutlineEntry[]) => entries.map((entry) => entry.label);
 const childrenOf = (entries: OutlineEntry[], key: string) =>
   entries.find((entry) => entry.key === key)?.children?.() ?? [];
 
-function inspectFixture(name: string, key: string, json = fixture(name)): Inspection | undefined {
+function inspectFixture(
+  name: string,
+  key: string,
+  json = fixture(name),
+  more: Partial<InspectContext> = {},
+): Inspection | undefined {
   return inspect(
     {
       model: new GltfModel(json),
       strings,
       format: new Formatter('en'),
       file: { name, size: 1234, container: name.endsWith('.glb') ? 'glb' : 'gltf' },
+      ...more,
     },
     key,
   );
@@ -267,6 +278,20 @@ describe('inspector', () => {
     const animation = inspectFixture('animated.glb', 'animation:0');
     expect(rows(animation, 'Animation')[0]).toMatch(/^Duration: [\d.]+ s$/);
     expect(rows(animation, 'Channels').length).toBeGreaterThan(0);
+  });
+
+  it('says whether an animation moves anything, once the host has told', () => {
+    const json = fixture('animated.glb');
+    const motion = ['moves', 'moves', 'moves', 'moves', 'none'] as const;
+    expect(
+      rows(inspectFixture('animated.glb', 'animation:4', json), 'Animation'),
+    ).not.toContainEqual(expect.stringMatching(/^Motion/));
+    expect(
+      rows(inspectFixture('animated.glb', 'animation:4', json, { motion }), 'Animation'),
+    ).toContain("Motion: Moves nothing: every keyframe matches the model's rest pose");
+    expect(
+      rows(inspectFixture('animated.glb', 'animation:0', json, { motion }), 'Animation'),
+    ).toContain('Motion: Moves');
   });
 
   it('shows cameras and lights with angles in degrees', () => {

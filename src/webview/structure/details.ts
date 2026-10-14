@@ -1,4 +1,4 @@
-import type { ImageInfo, StructureKind, StructureStrings } from '../../shared/protocol';
+import type { ImageInfo, Motion, StructureKind, StructureStrings } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import {
   fileName,
@@ -67,6 +67,8 @@ export interface InspectContext {
   file: FileFacts;
   /** Image sizes by index, once the host has read them. */
   images?: readonly (ImageInfo | null)[];
+  /** Whether each animation moves anything, once the host has read its keyframes. */
+  motion?: readonly (Motion | null)[];
 }
 
 /** Lists longer than this are cut short, with a count of the rest. */
@@ -659,6 +661,8 @@ function inspectAnimation(context: InspectContext, index: number): Section[] {
   const rows: Row[] = [];
   if (end >= start)
     rows.push({ label: strings.labels.duration, text: format.seconds(end - start), mono: true });
+  const motion = context.motion?.[index];
+  if (motion) rows.push({ label: strings.labels.motion, text: strings.motion[motion] });
   rows.push({ label: 'channels', text: format.count(channels.length), mono: true });
   rows.push({ label: 'samplers', text: format.count(samplers.length), mono: true });
   if (interpolations.size > 0)

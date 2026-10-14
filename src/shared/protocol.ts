@@ -45,6 +45,8 @@ export interface StructureStrings {
   inspectorWidth: string;
   kinds: Record<StructureKind, string>;
   groups: Record<StructureGroup, string>;
+  /** What each kind of motion means, in the inspector and the animation bar's tooltip. */
+  motion: Record<Motion, string>;
   sections: {
     file: string;
     contents: string;
@@ -68,6 +70,7 @@ export interface StructureStrings {
     lines: string;
     points: string;
     rotationDegrees: string;
+    motion: string;
     instances: string;
     drawCalls: string;
     dimensions: string;
@@ -94,6 +97,8 @@ export interface AnimationStrings {
   pause: string;
   time: string;
   speed: string;
+  /** Short notes next to a clip that moves nothing; the inspector has the longer ones. */
+  motion: Record<Exclude<Motion, 'moves'>, string>;
 }
 
 /** UI strings localized by the extension host and handed to the webview. */
@@ -157,6 +162,19 @@ export interface ImagesMessage {
 }
 
 /**
+ * What an animation does when it plays: `moves` something over time, `holds` one pose other than
+ * the model's rest pose, or moves `none` of it, every keyframe matching the rest pose.
+ */
+export type Motion = 'moves' | 'holds' | 'none';
+
+/** Each animation's motion, by index: null where its keyframes couldn't be read. */
+export interface AnimationsMessage {
+  type: 'animations';
+  loadId: number;
+  motion: (Motion | null)[];
+}
+
+/**
  * A model to draw. Its bytes follow in `part` and `parts` messages, `parts` keys in all;
  * the webview hands them to glTF's loader under those keys, so the loader never fetches.
  */
@@ -208,6 +226,7 @@ export type HostToWebviewMessage =
   | OpenMessage
   | StructureMessage
   | ImagesMessage
+  | AnimationsMessage
   | ModelMessage
   | PartMessage
   | PartsMessage

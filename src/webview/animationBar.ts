@@ -1,4 +1,4 @@
-import type { AnimationStrings } from '../shared/protocol';
+import type { AnimationStrings, Motion } from '../shared/protocol';
 import { icons } from './icons';
 
 /** What the bar shows: the clips by name and length, and where playback is. */
@@ -32,13 +32,19 @@ export class AnimationBar {
   private readonly clock: HTMLElement;
   private readonly speeds: HTMLSelectElement;
   private readonly seconds: Intl.NumberFormat;
+  private readonly note: HTMLElement;
+  private readonly noteText: HTMLElement;
   private names: string[] = [];
+  private motion: readonly (Motion | null)[] = [];
+  private clip = 0;
   private playing = false;
   /** While the user drags the time line, playback doesn't move it under the pointer. */
   private scrubbing = false;
 
+  /** `descriptions` say at length what each kind of motion means, in the note's tooltip. */
   constructor(
     private readonly strings: AnimationStrings,
+    private readonly descriptions: Record<Motion, string>,
     locale: string,
     events: AnimationBarEvents,
   ) {
@@ -51,6 +57,7 @@ export class AnimationBar {
     this.element.innerHTML = `
       <button class="nm-icon-button nm-play" type="button"></button>
       <select class="nm-select nm-clips"></select>
+      <span class="nm-motion" hidden>${icons.warning}<span class="nm-motion-text"></span></span>
       <input class="nm-timeline" type="range" min="0" step="any" value="0" />
       <span class="nm-clock nm-mono"></span>
       <select class="nm-select nm-speeds"></select>`;
@@ -61,6 +68,8 @@ export class AnimationBar {
     this.slider = find('.nm-timeline');
     this.clock = find('.nm-clock');
     this.speeds = find('.nm-speeds');
+    this.note = find('.nm-motion');
+    this.noteText = find('.nm-motion-text');
 
     this.clips.setAttribute('aria-label', strings.clip);
     this.clips.title = strings.clip;
@@ -82,6 +91,15 @@ export class AnimationBar {
     this.slider.addEventListener('change', () => (this.scrubbing = false));
   }
 
+  /**
+   * Whether each clip moves anything, by index. Next to a picked clip that doesn't, a note says
+   * so: playing it would otherwise look broken.
+   */
+  setMotion(motion: readonly (Motion | null)[]): void {
+    this.motion = motion;
+    this.showNote();
+  }
+
   /** Shows playback as the view reports it; undefined hides the bar. */
   update(state: AnimationBarState | undefined): void {
     this.element.hidden = !state;
@@ -95,6 +113,8 @@ export class AnimationBar {
     // Playback reports every frame. Only what changed is touched: a control rebuilt under the
     // pointer between press and release loses the click, and an open list would close.
     setIfChanged(this.clips, String(state.clip));
+    this.clip = state.clip;
+    this.showNote();
     setIfChanged(this.speeds, String(state.speed));
     if (state.playing !== this.playing || !this.play.firstChild) {
       this.playing = state.playing;
@@ -109,6 +129,16 @@ export class AnimationBar {
     if (this.slider.max !== String(duration)) this.slider.max = String(duration);
     if (!this.scrubbing) this.slider.value = String(state.time);
     this.clock.textContent = `${this.seconds.format(state.time)} / ${this.seconds.format(duration)} s`;
+  }
+
+  private showNote(): void {
+    const motion = this.motion[this.clip];
+    const still = motion === 'holds' || motion === 'none';
+    this.note.hidden = !still;
+    if (still && this.noteText.textContent !== this.strings.motion[motion]) {
+      this.noteText.textContent = this.strings.motion[motion];
+      this.note.title = this.descriptions[motion];
+    }
   }
 }
 

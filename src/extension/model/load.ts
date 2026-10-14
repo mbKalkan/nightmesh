@@ -3,6 +3,7 @@
 import { DRAWN_EXTENSIONS } from '../../shared/gltfExtensions';
 import type { HostToWebviewMessage, ImageInfo } from '../../shared/protocol';
 import { MAX_JSON_BYTES, readGlbLayout, sniff, withoutByteOrderMark } from './container';
+import { animationMotion } from './animationMotion';
 import { IMAGE_HEADER_BYTES, readImageInfo } from './imageInfo';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
@@ -129,6 +130,9 @@ export async function* loadMessages(
     );
     const plan = planRender(json, buffers, images);
     yield { type: 'images', loadId, images: await imageInfos(plan) };
+    if (plan.json.animations?.length) {
+      yield { type: 'animations', loadId, motion: await animationMotion(plan) };
+    }
 
     const notices = [...problems.values()];
     if (truncated) notices.push(texts.truncated);

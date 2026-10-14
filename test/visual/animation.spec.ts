@@ -10,6 +10,9 @@ const clips = (page: Page) => page.locator('.nm-clips');
 const play = (page: Page) => page.locator('.nm-play');
 const clock = (page: Page) => page.locator('.nm-clock');
 const badge = (page: Page) => page.locator('.nm-measure');
+const note = (page: Page) => page.locator('.nm-motion');
+
+const MOVES_NOTHING = "Moves nothing: every keyframe matches the model's rest pose";
 
 /** Moves the time line as dragging it would. */
 async function scrub(page: Page, time: number) {
@@ -26,11 +29,26 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
     await viewer.open('animated.glb');
 
     await expect(bar(page)).toBeVisible();
-    await expect(clips(page).locator('option')).toHaveText(['Spin', 'Bounce', 'Morph', 'Wave']);
+    await expect(clips(page).locator('option')).toHaveText([
+      'Spin',
+      'Bounce',
+      'Morph',
+      'Wave',
+      'Still',
+    ]);
     await expect(play(page)).toHaveAttribute('aria-label', 'Play (Space)');
     await expect(clock(page)).toHaveText('0.00 / 2.00 s');
+    await expect(note(page)).toBeHidden();
     expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `${SCREENS}/animation-${theme}.png` });
+
+    // A clip whose keys all match the rest pose says so, since playing it shows nothing.
+    await clips(page).selectOption('Still');
+    await expect(note(page)).toBeVisible();
+    await expect(note(page)).toHaveText('Moves nothing');
+    await expect(note(page)).toHaveAttribute('title', MOVES_NOTHING);
+    expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `${SCREENS}/animation-still-${theme}.png` });
     expect(viewer.problems).toEqual([]);
   });
 }
@@ -78,6 +96,22 @@ test('picks the clip from the bar, the tree, and plays it with Space', async ({ 
   // Changing the file on disk keeps the clip.
   await viewer.open('animated.glb', { reload: true });
   await expect(clips(page)).toHaveValue('3');
+  expect(viewer.problems).toEqual([]);
+});
+
+test('keeps the whole note, or only its icon when the bar is narrow', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('animated.glb');
+  await clips(page).selectOption('Still');
+  const text = page.locator('.nm-motion-text');
+  await expect(text).toBeVisible();
+  expect(await text.evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
+  expect((await page.locator('.nm-timeline').boundingBox())!.width).toBeGreaterThanOrEqual(60);
+
+  await page.setViewportSize({ width: 900, height: 600 });
+  await expect(text).toBeHidden();
+  await expect(note(page).locator('svg')).toBeVisible();
+  await expect(note(page)).toHaveAttribute('title', MOVES_NOTHING);
   expect(viewer.problems).toEqual([]);
 });
 

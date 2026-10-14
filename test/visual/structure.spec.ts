@@ -262,3 +262,18 @@ test('previews textures and gives their size and memory', async ({ page }) => {
   await expect(page.locator('.nm-statistics dl')).toContainText('Texture memory');
   expect(viewer.problems).toEqual([]);
 });
+
+test('says which animations move nothing when they play', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.open('animated.glb');
+  await row(page, 'Animations').click();
+
+  await row(page, 'Still').click();
+  await expect(section(page, 'Animation')).toContainText([
+    'Motion',
+    "Moves nothing: every keyframe matches the model's rest pose",
+  ]);
+  await row(page, 'Spin').click();
+  await expect(section(page, 'Animation')).toContainText(['Motion', /^Moves$/]);
+  expect(viewer.problems).toEqual([]);
+});

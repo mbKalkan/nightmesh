@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Animations play from a bar below the view: pick a clip (or select it in the structure),
   play and pause (Space), scrub the time line, change the speed. Clips loop; switching clips
   puts the model back in its rest pose first. When the file changes, the clip stays.
+- A clip whose keyframes move nothing (all equal to the rest pose, as some exporters write
+  them) is marked in the bar and the Inspector, so a model that doesn't move when played isn't
+  mistaken for a viewer problem. Clips that hold a single pose are marked too.
 - Textures show their size in pixels, mip levels and estimated GPU memory, read from each
   image's header as the model opens, and a preview of the image once the model is drawn. The
   Statistics tab adds up the texture memory of the scene.

@@ -479,7 +479,10 @@ function materials() {
   return doc;
 }
 
-/** Four animations: a spinning box, a bouncing sphere, morph targets and a skinned arm. */
+/**
+ * Five animations: a spinning box, a bouncing sphere, morph targets, a skinned arm, and a clip
+ * that moves nothing.
+ */
 function animated() {
   const doc = newDocument();
   const material = doc.createMaterial('Clay').setBaseColorFactor([0.8, 0.75, 0.7, 1]);
@@ -599,6 +602,8 @@ function animated() {
     [...quaternionZ(0), ...quaternionZ(-1.2), ...quaternionZ(0)],
     'VEC4',
   );
+  // As some exporters write it: every key is the rest pose, so playing it moves nothing.
+  animate('Still', elbow, 'rotation', [0, 1], [...quaternionZ(0), ...quaternionZ(0)], 'VEC4');
 
   scene(doc, 'Animated', spinner, bouncer, morph, shoulder, armNode);
   return doc;

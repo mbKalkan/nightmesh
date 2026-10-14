@@ -1,6 +1,7 @@
 import type {
   ImageInfo,
   ModelFormat,
+  Motion,
   StructureMessage,
   ViewerStrings,
 } from '../../shared/protocol';
@@ -99,6 +100,13 @@ export class StructureView {
     if (!this.context) return;
     this.context.images = images;
     this.statistics.show(statistics(this.context.model, images), this.context.model);
+    this.render(true);
+  }
+
+  /** Whether each animation moves anything, from the host: the inspector says so. */
+  setMotion(motion: readonly (Motion | null)[]): void {
+    if (!this.context) return;
+    this.context.motion = motion;
     this.render(true);
   }
 
