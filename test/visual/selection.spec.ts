@@ -14,7 +14,11 @@ const row = (page: Page, label: string) =>
     })
     .first();
 const heading = (page: Page) => page.locator('.nm-inspector-heading');
-const highlight = (page: Page) => areaOf(page, '.nm-canvas', HIGHLIGHT);
+/** The highlight's pixels on the canvas; the size badge, outlined in the same color, set aside. */
+async function highlight(page: Page) {
+  await page.locator('.nm-measure').evaluate((badge) => (badge.style.visibility = 'hidden'));
+  return areaOf(page, '.nm-canvas', HIGHLIGHT);
+}
 
 /** Clicks the viewport at a fraction of its width and height. */
 async function clickView(page: Page, x: number, y: number, clickCount = 1) {
@@ -98,9 +102,12 @@ test('frames the selection with F, from the toolbar and with a double-click', as
   // A double-click in the tree frames what it lands on.
   await row(page, 'Model').click();
   await page.locator('[data-action="frame"]').click();
+  await row(page, 'Sphere').click();
+  await expect.poll(wide).toBeGreaterThan(20);
+  const sphere = await wide();
   await row(page, 'Sphere').dblclick();
   await expect(heading(page)).toHaveText(/Sphere/);
-  await expect.poll(wide).toBeGreaterThan(300);
+  await expect.poll(wide).toBeGreaterThan(sphere * 1.3);
   expect(viewer.problems).toEqual([]);
 });
 
@@ -126,5 +133,22 @@ test('keeps the selection highlighted when the file changes', async ({ page }) =
   await viewer.open('scene.glb', { reload: true });
   await expect(row(page, 'Box')).toHaveAttribute('aria-selected', 'true');
   await expect.poll(async () => (await highlight(page))?.count ?? 0).toBeGreaterThan(50);
+  expect(viewer.problems).toEqual([]);
+});
+
+test('shows the size of the model, or of the selection, in metres', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  const badge = page.locator('.nm-measure');
+
+  await expect(badge).toHaveText('X4.1 mY1.781 mZ1.849 m');
+  await expect(badge).toHaveAttribute('title', /^Size of the model in metres/);
+  // A node along its own axes: the sphere is turned 45°, its size isn't.
+  await row(page, 'Sphere').click();
+  await expect(badge).toHaveText('X1.2 mY1.2 mZ1.2 m');
+  await expect(badge).toHaveAttribute('title', /^Size of the selection in metres/);
+  await page.locator('.nm-viewport').focus();
+  await page.keyboard.press('Escape');
+  await expect(badge).toHaveText('X4.1 mY1.781 mZ1.849 m');
   expect(viewer.problems).toEqual([]);
 });

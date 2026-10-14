@@ -22,6 +22,8 @@ export class Shell {
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
   private readonly toggles: HTMLElement;
+  private readonly measureBadge: HTMLElement;
+  private strings: ViewerStrings | undefined;
   private readonly fileName: HTMLElement;
   private readonly progress: HTMLElement;
   private readonly error: HTMLElement;
@@ -61,6 +63,7 @@ export class Shell {
               </div>
               <ul class="nm-notice-list"></ul>
             </section>
+            <div class="nm-measure" role="status" hidden></div>
             <div class="nm-error" role="alert" hidden>
               <div class="nm-error-icon">${icons.error}</div>
               <h1 class="nm-error-title"></h1>
@@ -80,6 +83,7 @@ export class Shell {
     this.error = find('.nm-error');
     this.notice = find('.nm-notice');
     this.toggles = find('.nm-actions');
+    this.measureBadge = find('.nm-measure');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -106,6 +110,7 @@ export class Shell {
   }
 
   setDocument(fileName: string, format: ModelFormat, strings: ViewerStrings): void {
+    this.strings = strings;
     this.root.dataset.format = format;
     this.fileName.textContent = fileName;
     this.fileName.title = fileName;
@@ -137,6 +142,34 @@ export class Shell {
   set inspectorTab(tab: string) {
     this.layout.inspectorTab = tab;
     this.events.layoutChanged(this.layout);
+  }
+
+  /**
+   * Shows how big the selection, or the model, is, along X, Y and Z, in the corner of the view;
+   * `undefined` hides it. Each axis takes its color from the axes three.js and Blender draw.
+   */
+  setSize(
+    size: readonly number[] | undefined,
+    selection: boolean,
+    metres: (value: number) => string,
+  ): void {
+    this.measureBadge.hidden = size === undefined;
+    if (!size || !this.strings) return;
+    const label = selection ? this.strings.selectionSize : this.strings.modelSize;
+    this.measureBadge.title = label;
+    this.measureBadge.setAttribute('aria-label', `${label}: ${size.map(metres).join(' × ')}`);
+    this.measureBadge.replaceChildren(
+      ...['X', 'Y', 'Z'].flatMap((axis, index) => {
+        const name = document.createElement('span');
+        name.className = `nm-axis nm-axis-${axis.toLowerCase()}`;
+        name.textContent = axis;
+        const value = document.createElement('span');
+        value.className = 'nm-measure-value';
+        value.textContent = metres(size[index]);
+        return [name, value];
+      }),
+    );
+    this.measureBadge.classList.toggle('nm-measure-selection', selection);
   }
 
   /** Shows the side panels, as the layout has them, once there is a structure to put in them. */
@@ -177,6 +210,7 @@ export class Shell {
     fillList(this.error.querySelector('.nm-error-details') as HTMLElement, details);
     this.error.hidden = false;
     this.notice.hidden = true;
+    this.measureBadge.hidden = true;
     this.setState('failed');
   }
 

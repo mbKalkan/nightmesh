@@ -25,7 +25,7 @@ import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { Picker } from './picking';
-import { Highlight, SelectionIndex, framingBounds } from './selection';
+import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 
 /** Decoders a model needs, made the first time any model needs them. */
 export interface Decoders {
@@ -36,6 +36,11 @@ export interface Decoders {
 export interface ViewEvents {
   /** A click on the model picked the node drawn there, or empty space; `frame` on double-click. */
   picked(node: number | undefined, frame: boolean): void;
+  /**
+   * The size, in metres along X, Y and Z, of what is selected, or of the whole model when the
+   * selection draws nothing; undefined when there is nothing drawn at all.
+   */
+  measured(size: [number, number, number] | undefined, selection: boolean): void;
 }
 
 /** The direction the camera looks at a model from when it frames it: front, right, above. */
@@ -139,6 +144,7 @@ export class ModelView {
   select(key: string): void {
     this.selected = key;
     this.highlight.show(this.index?.objects(key) ?? []);
+    this.measure();
     this.requestRender();
   }
 
@@ -208,6 +214,20 @@ export class ModelView {
     this.highlight.dispose();
     if (this.model) disposeObject(this.model);
     this.renderer.dispose();
+  }
+
+  /**
+   * Reports the size of the selection, or of the model, to whoever shows it: a single node along
+   * its own axes, as Blender gives an object's dimensions; anything else along the world's.
+   */
+  private measure(): void {
+    const objects = this.index?.objects(this.selected) ?? [];
+    let size =
+      objects.length === 1 && this.selected.startsWith('node:') ? ownSize(objects[0]) : undefined;
+    if (!size && objects.length > 0) size = worldSize(boundsOf(objects));
+    const selection = size !== undefined;
+    if (!size && this.model) size = worldSize(new Box3().setFromObject(this.model));
+    this.events.measured(size, selection);
   }
 
   private modelBox(): Box3 {
@@ -317,6 +337,20 @@ export class ModelView {
     // Draw right away: waiting a frame would show a stretched image while resizing.
     this.render();
   }
+}
+
+function worldSize(box: Box3): [number, number, number] | undefined {
+  return box.isEmpty()
+    ? undefined
+    : (box.getSize(new Vector3()).toArray() as [number, number, number]);
+}
+
+/** An object's size along its own axes, scaled as the scene scales it. */
+function ownSize(object: Object3D): [number, number, number] | undefined {
+  const box = localBox(object);
+  if (!box) return undefined;
+  const size = box.getSize(new Vector3()).multiply(object.getWorldScale(new Vector3()));
+  return [Math.abs(size.x), Math.abs(size.y), Math.abs(size.z)];
 }
 
 /**

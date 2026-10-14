@@ -13,7 +13,7 @@ import {
 } from './gltf';
 import { meshCounts, primitiveCounts } from './counts';
 import { entryKey, parseKey, type EntryKey } from './outline';
-import { positionBounds } from './statistics';
+import { meshBounds, nodeSize, nodesBounds, positionBounds, sizeOf } from './bounds';
 import { drawnImage, textureMemory } from './textures';
 
 /** Something the inspector shows a link to; following it selects that entry. */
@@ -239,9 +239,12 @@ function inspectModel(context: InspectContext): Inspection {
       { title: strings.sections.file, rows: fileRows },
       {
         title: strings.sections.contents,
-        rows: counts.flatMap(([label, count]) =>
-          count > 0 ? [{ label, text: format.count(count), mono: true }] : [],
-        ),
+        rows: [
+          ...dimensionRows(context, sceneNodes(model)),
+          ...counts.flatMap(([label, count]) =>
+            count > 0 ? [{ label, text: format.count(count), mono: true }] : [],
+          ),
+        ],
       },
       {
         title: strings.sections.extensions,
@@ -258,6 +261,30 @@ function inspectModel(context: InspectContext): Inspection {
   };
 }
 
+/** The nodes of the scene shown: the default scene's, or the top nodes when there is none. */
+function sceneNodes(model: GltfModel): number[] {
+  const scene = model.ref('scenes', model.root.scene ?? 0);
+  return scene !== undefined ? model.sceneRoots(scene) : model.unreachedRoots();
+}
+
+/**
+ * Width, height and depth in metres, as glTF's units are metres: of a single node along its own
+ * axes, of a scene or model along the world's.
+ */
+function dimensionRows(context: InspectContext, nodes: readonly number[], own = false): Row[] {
+  const bounds = own ? undefined : nodesBounds(context.model, nodes);
+  const measured = own ? nodeSize(context.model, nodes[0]) : bounds && sizeOf(bounds);
+  if (!measured) return [];
+  const size = measured.map((value) => Number(value.toPrecision(4)));
+  return [
+    {
+      label: context.strings.labels.dimensions,
+      text: `${context.format.vector(size)} m`,
+      mono: true,
+    },
+  ];
+}
+
 function inspectScene(context: InspectContext, index: number): Section[] {
   const { model, strings, format } = context;
   const roots = model.sceneRoots(index);
@@ -268,6 +295,7 @@ function inspectScene(context: InspectContext, index: number): Section[] {
     stack.push(...model.children(stack.pop()!));
   }
   const rows: Row[] = [
+    ...dimensionRows(context, roots),
     { label: strings.labels.nodes, text: format.count(total), mono: true },
     ...linkRows(context, 'nodes', 'node', roots),
   ];
@@ -301,6 +329,7 @@ function inspectNode(context: InspectContext, index: number): Section[] {
   }
   const weights = numbers(node.weights);
   if (weights) rows.push({ label: 'weights', text: format.vector(weights), mono: true });
+  rows.unshift(...dimensionRows(context, [index], true));
 
   const sections: Section[] = [
     { title: strings.kinds.node, rows },
@@ -385,6 +414,10 @@ function inspectMesh(context: InspectContext, index: number): Section[] {
   const { model, strings, format } = context;
   const mesh = model.items('meshes')[index];
   const rows = meshSummary(context, index);
+  const bounds = meshBounds(model, index);
+  // In the mesh's own units: the nodes that use it can scale it.
+  if (bounds)
+    rows.unshift({ label: strings.labels.size, text: format.vector(sizeOf(bounds)), mono: true });
   const weights = numbers(mesh.weights);
   if (weights) rows.push({ label: 'weights', text: format.vector(weights), mono: true });
   const extras = isObject(mesh.extras) ? mesh.extras : {};

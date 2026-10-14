@@ -19,6 +19,8 @@ export function viewerStrings(t: Translate): ViewerStrings {
     partialTitle: t("Part of this model couldn't be loaded"),
     close: t('Close'),
     frame: t('Frame Selection (F)'),
+    modelSize: t('Size of the model in metres: width (X), height (Y) and depth (Z)'),
+    selectionSize: t('Size of the selection in metres: width (X), height (Y) and depth (Z)'),
     structure: structureStrings(t),
   };
 }

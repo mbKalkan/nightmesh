@@ -174,6 +174,7 @@ describe('inspector', () => {
     ]);
     expect(rows(model, 'File')).toEqual(['Container: GLB', 'File size: 1.2 KB']);
     expect(rows(model, 'Contents')).toEqual([
+      'Dimensions: [4.1, 1.781, 1.849] m',
       'Nodes: 13',
       'Meshes: 4',
       'Primitives: 4',
@@ -190,7 +191,12 @@ describe('inspector', () => {
   it("shows a node's transform, references and mesh", () => {
     const node = inspectFixture('scene.glb', 'node:2');
     expect(node).toMatchObject({ title: 'Sphere', kind: 'Node 2' });
-    expect(rows(node, 'Node')).toEqual(['parent: Root', 'mesh: Sphere']);
+    // Along the node's own axes, however it is turned: a 1 m sphere scaled by 1.2.
+    expect(rows(node, 'Node')).toEqual([
+      'Dimensions: [1.2, 1.2, 1.2] m',
+      'parent: Root',
+      'mesh: Sphere',
+    ]);
     expect(rows(node, 'Transform')).toEqual([
       'translation: [0, 0.5, 0]',
       'rotation: [0, 0.382683, 0, 0.92388]',
@@ -396,5 +402,14 @@ describe('textures', () => {
     expect(statistics(new GltfModel(json), [images[1], images[1]]).textureMemory).toBeCloseTo(
       64 * 64 * (4 / 3) * 2,
     );
+  });
+});
+
+describe('Formatter', () => {
+  it('writes lengths for reading, in the display language', () => {
+    expect(new Formatter('en').metres(1.23456)).toBe('1.235 m');
+    expect(new Formatter('tr').metres(1.23456)).toBe('1,235 m');
+    expect(new Formatter('en').metres(12345.6)).toBe('12,350 m');
+    expect(new Formatter('en').metres(0.000123456)).toBe('0.0001235 m');
   });
 });

@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles
   they put on screen. Mesh names select the mesh and outline where it is drawn.
+- The size of the model in metres shows in the corner of the 3D view, and the size of the
+  selection when something is selected: a node along its own axes, so a turned part keeps its
+  real length. The Inspector gives the dimensions of the model, scenes and nodes, and each
+  mesh's size, before the geometry has loaded. Selection boxes turn with what they outline.
 - Textures show their size in pixels, mip levels and estimated GPU memory, read from each
   image's header as the model opens, and a preview of the image once the model is drawn. The
   Statistics tab adds up the texture memory of the scene.
