@@ -51,7 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Statistics tab beside the Inspector counts the scene shown, before its geometry loads:
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles
-  they put on screen. Mesh names select the mesh and outline where it is drawn.
+  they put on screen. Mesh names select the mesh and outline where it is drawn. For a model with
+  animations it sums them up too: clips, the longest, channels, keyframes, the nodes they move,
+  and how many move nothing.
 - The size of the model in metres shows in the corner of the 3D view, and the size of the
   selection when something is selected: a node along its own axes, so a turned part keeps its
   real length. The Inspector gives the dimensions of the model, scenes and nodes, and each

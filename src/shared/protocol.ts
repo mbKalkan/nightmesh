@@ -71,6 +71,11 @@ export interface StructureStrings {
     points: string;
     rotationDegrees: string;
     motion: string;
+    /** The animation summary in the statistics. */
+    longest: string;
+    keyframes: string;
+    animatedNodes: string;
+    stillClips: string;
     instances: string;
     drawCalls: string;
     dimensions: string;

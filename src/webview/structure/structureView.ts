@@ -100,14 +100,21 @@ export class StructureView {
   setImages(images: readonly (ImageInfo | null)[]): void {
     if (!this.context) return;
     this.context.images = images;
-    this.statistics.show(statistics(this.context.model, images), this.context.model);
+    this.showStatistics();
     this.render(true);
+  }
+
+  private showStatistics(): void {
+    if (!this.context) return;
+    const { model, images, motion } = this.context;
+    this.statistics.show(statistics(model, images, motion), model);
   }
 
   /** Whether each animation moves anything, from the host: the inspector says so. */
   setMotion(motion: readonly (Motion | null)[]): void {
     if (!this.context) return;
     this.context.motion = motion;
+    this.showStatistics();
     this.render(true);
   }
 
