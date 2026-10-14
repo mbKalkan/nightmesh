@@ -49,6 +49,8 @@ test('opens the View menu from the toolbar, in every theme', async ({ page }) =>
     'Orthographic',
     'Grid (1 m squares)',
     'Origin Axes',
+    'Front Camera',
+    'Top Camera',
   ]);
   await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'true');
   await expect(item(page, 'Origin Axes')).toHaveAttribute('aria-checked', 'false');
@@ -73,9 +75,8 @@ test('works the View menu with the keyboard', async ({ page }) => {
   await page.keyboard.press('ArrowDown');
   await expect(item(page, 'Front')).toBeFocused();
   await page.keyboard.press('End');
-  await expect(item(page, 'Origin Axes')).toBeFocused();
-  await page.keyboard.press('ArrowUp');
-  await page.keyboard.press('ArrowUp');
+  await expect(item(page, 'Top Camera')).toBeFocused();
+  for (let step = 0; step < 4; step++) await page.keyboard.press('ArrowUp');
   await expect(item(page, 'Orthographic')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(menu(page)).toBeHidden();
@@ -83,7 +84,7 @@ test('works the View menu with the keyboard', async ({ page }) => {
 
   await page.keyboard.press('ArrowUp');
   await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'true');
-  await expect(item(page, 'Origin Axes')).toBeFocused();
+  await expect(item(page, 'Top Camera')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu(page)).toBeHidden();
 
