@@ -73,7 +73,6 @@ function open(message: OpenMessage): void {
   strings = message.strings;
   shell.setDocument(message.fileName, message.format, strings);
   structure ??= new StructureView(shell, strings, message.locale);
-  view ??= createView(strings);
 }
 
 /** The panels' layout as the user left it in this editor, or the default. */
@@ -123,6 +122,8 @@ function receiveModel(message: ModelMessage): void {
   if (message.loadId < latestLoad) return;
   latestLoad = message.loadId;
   arrival = { message, parts: new Map(), received: 0 };
+  // The 3D view starts once there is a model to draw: a file that isn't one needs no GPU.
+  view ??= createView(strings!);
   if (!(message.reload && hasModel)) shell.setProgress(message.bytes > 0 ? 0 : undefined);
   // Decoders load while the bytes arrive; build() finds them ready.
   void view?.then((target) => target?.decoders(message.extensions));

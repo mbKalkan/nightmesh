@@ -4,6 +4,8 @@ import { openViewer } from './harness';
 import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
+/** The panels work the same with or without a 3D view, and are quicker to test without. */
+const PANELS_ONLY = { withoutWebGL: true };
 
 const tree = (page: Page) => page.locator('.nm-tree');
 const row = (page: Page, label: string) =>
@@ -48,7 +50,7 @@ test('shows the structure before the model has arrived', async ({ page }) => {
 });
 
 test('moves through the tree with the keyboard', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');
   await tree(page).focus();
 
@@ -83,7 +85,7 @@ test('moves through the tree with the keyboard', async ({ page }) => {
 });
 
 test('follows links in the inspector to what they name', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');
   await row(page, 'Sphere').click();
 
@@ -112,7 +114,7 @@ test('shows the structure of a model it cannot draw', async ({ page }) => {
 });
 
 test('has no panels for a file that is not a model', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');
   await expect(page.locator('.nm-panel-left')).toBeVisible();
   await viewer.open('not-a-model.glb', { reload: false });
@@ -124,7 +126,7 @@ test('has no panels for a file that is not a model', async ({ page }) => {
 });
 
 test('hides, shows and resizes the panels', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');
   const toggle = page.locator('[data-panel="inspector"]');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -146,7 +148,7 @@ test('hides, shows and resizes the panels', async ({ page }) => {
 });
 
 test('keeps what is open and selected when the file changes', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');
   await row(page, 'Group').locator('.nm-twistie').click();
   await row(page, 'Small Box').click();
@@ -158,7 +160,7 @@ test('keeps what is open and selected when the file changes', async ({ page }) =
 });
 
 test('lists thousands of nodes without drawing them all', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.post(viewer.openMessage('many-nodes.gltf'));
   const nodes = Array.from({ length: 20000 }, (_, i) => ({ name: `Part ${i}` }));
   const json = JSON.stringify({
