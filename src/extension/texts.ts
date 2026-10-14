@@ -109,6 +109,7 @@ function structureStrings(t: Translate): StructureStrings {
       size: t('Size'),
       required: t('Required'),
       more: t('{0} more', '{0}'),
+      under: t('under {0}', '{0}'),
     },
   };
 }

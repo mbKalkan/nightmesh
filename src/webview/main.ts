@@ -43,6 +43,18 @@ let view: Promise<View | undefined> | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
 let hasModel = false;
+/** What the context menu's reference commands name: what was right-clicked last. */
+let menuKey: string | undefined;
+/** The context menu the 3D view opened, having set `menuKey` to what is under the pointer. */
+let viewMenu: Event | undefined;
+/** The row or link the context menu was opened on, outlined while the menu shows. */
+let menuTarget: Element | undefined;
+
+// Cut and Paste do nothing in a read-only viewer; Copy stays for the values in the inspector.
+document.body.dataset.vscodeContext = JSON.stringify({ preventDefaultContextMenuItems: true });
+shell.inspectorPanel.body.dataset.vscodeContext = JSON.stringify({
+  preventDefaultContextMenuItems: false,
+});
 
 window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) => {
   const message = event.data;
@@ -74,7 +86,26 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'failed':
       fail(message);
       break;
+    case 'copyReference': {
+      const key = message.atPointer ? (menuKey ?? selectedKey) : selectedKey;
+      vscode.postMessage({ type: 'reference', ...structure?.reference(key, message.details) });
+      break;
+    }
   }
+});
+
+// A right-click on a tree row, or a link in the panels, refers to that entry; anywhere else, to
+// the selection. The 3D view opens its own menu, having set what is under the pointer; the
+// browser's, which its orbit controls stop, are left alone.
+document.addEventListener('contextmenu', (event) => {
+  if (event.defaultPrevented || event === viewMenu) return;
+  const target = event.target instanceof Element ? event.target : null;
+  // Opened from the keyboard in the tree, the menu is for the tree itself: its row in focus.
+  const entry =
+    target?.closest<HTMLElement>('[data-key]') ??
+    target?.querySelector<HTMLElement>('.nm-tree-row.nm-focused');
+  menuKey = entry?.dataset.key ?? selectedKey;
+  markMenuTarget(entry ?? undefined);
 });
 
 watchTheme(
@@ -141,6 +172,12 @@ function open(message: OpenMessage): void {
   });
 }
 
+function markMenuTarget(target: Element | undefined): void {
+  menuTarget?.classList.remove('nm-menu-target');
+  menuTarget = target;
+  menuTarget?.classList.add('nm-menu-target');
+}
+
 /** The panels' layout as the user left it in this editor, or the default. */
 function savedLayout(): PanelLayout {
   const saved = (vscode.getState() as { layout?: Partial<PanelLayout> } | undefined)?.layout;
@@ -203,6 +240,18 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     animation: (state) =>
       animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
     measured: (size, selection) => shell.setSize(size, selection, (value) => metres.metres(value)),
+    menu: (node, x, y) => {
+      menuKey = node === undefined ? 'model' : `node:${node}`;
+      markMenuTarget(undefined);
+      // VS Code opens its menu for a context menu event no one has handled.
+      viewMenu = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      shell.viewport.dispatchEvent(viewMenu);
+    },
   });
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());

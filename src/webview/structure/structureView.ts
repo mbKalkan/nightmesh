@@ -7,6 +7,7 @@ import type {
 } from '../../shared/protocol';
 import type { Shell } from '../shell';
 import { inspect, type InspectContext } from './details';
+import { referenceOf, type Reference } from './reference';
 import { Formatter } from './format';
 import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
@@ -41,7 +42,7 @@ export class StructureView {
   constructor(
     shell: Shell,
     private readonly strings: ViewerStrings,
-    locale: string,
+    private readonly locale: string,
     private readonly events: StructureEvents,
   ) {
     this.format = new Formatter(locale);
@@ -126,6 +127,14 @@ export class StructureView {
           model.displayName('animations', index) ??
           `${this.strings.structure.kinds.animation} ${index}`,
       );
+  }
+
+  /**
+   * A reference to `key` for a chat with an AI assistant or a note: where it is in the model,
+   * and with `details` what the inspector says about it.
+   */
+  reference(key: EntryKey, details: boolean): Reference | undefined {
+    return this.context && referenceOf(this.context, key, this.locale, details);
   }
 
   /** Selects `key` in the tree, opening what holds it, and shows its details. */

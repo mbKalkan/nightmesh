@@ -45,6 +45,11 @@ export interface ViewEvents {
   measured(size: [number, number, number] | undefined, selection: boolean): void;
   /** Where playback is: undefined when the model has no animations. */
   animation(state: AnimationState | undefined): void;
+  /**
+   * A right-click that didn't drag, which opens the context menu: the node drawn under the
+   * pointer, or undefined over empty space. A right-drag pans, and opens no menu.
+   */
+  menu(node: number | undefined, x: number, y: number): void;
 }
 
 export interface AnimationState {
@@ -419,17 +424,26 @@ export class ModelView {
     this.camera.updateProjectionMatrix();
   }
 
-  /** A click picks what is under the pointer; a double-click also frames it. */
+  /**
+   * A click picks what is under the pointer; a double-click also frames it. A right-click opens
+   * the context menu once the button is released, as the orbit controls keep the browser's own
+   * menu from opening: on some systems it opens on press, before a right-drag pans.
+   */
   private listenForClicks(): void {
-    let down: { x: number; y: number } | undefined;
+    let down: { x: number; y: number; button: number } | undefined;
     this.canvas.addEventListener('pointerdown', (event) => {
-      down = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
+      down =
+        event.button === 0 || event.button === 2
+          ? { x: event.clientX, y: event.clientY, button: event.button }
+          : undefined;
     });
     this.canvas.addEventListener('pointerup', (event) => {
-      if (!down || event.button !== 0) return;
+      if (!down || event.button !== down.button) return;
       const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
       down = undefined;
-      if (moved <= CLICK_SLOP) this.events.picked(this.pickAt(event), false);
+      if (moved > CLICK_SLOP) return;
+      if (event.button === 0) this.events.picked(this.pickAt(event), false);
+      else this.events.menu(this.pickAt(event), event.clientX, event.clientY);
     });
     this.canvas.addEventListener('dblclick', (event) => {
       this.events.picked(this.pickAt(event), true);
