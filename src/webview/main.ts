@@ -81,19 +81,29 @@ watchTheme(
     }),
 );
 
-// F frames the selection, Escape lets go of it, Space plays and pauses, as in most 3D tools.
+// F frames the selection, Escape lets go of it, as in most 3D tools.
 shell.viewport.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
   if (event.key === 'f' || event.key === 'F') {
     void view?.then((target) => target?.frameSelection());
-  } else if (event.key === ' ' && animationBar && !animationBar.element.hidden) {
-    void view?.then((target) => target?.togglePlaying());
   } else if (event.key === 'Escape') {
     structure?.select('model');
   } else {
     return;
   }
   event.preventDefault();
+});
+
+// Space plays and pauses wherever it has no job of its own: not on a button or a list, which it
+// presses or opens, nor in the panels, where it folds the tree and scrolls the details.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!animationBar || animationBar.element.hidden) return;
+  const target = event.target as HTMLElement;
+  if (target instanceof HTMLButtonElement || target instanceof HTMLSelectElement) return;
+  if (target.closest('.nm-panel')) return;
+  event.preventDefault();
+  void view?.then((current) => current?.togglePlaying());
 });
 
 vscode.postMessage({ type: 'ready' });
