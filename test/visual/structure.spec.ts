@@ -259,6 +259,33 @@ test('counts the scene in a statistics tab beside the inspector', async ({ page 
   expect(viewer.problems).toEqual([]);
 });
 
+test('shows counts in the mesh table in full, however long', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.post(viewer.openMessage('heavy.gltf'));
+  const accessor = (count: number) => ({ count, componentType: 5125, type: 'SCALAR' });
+  const json = JSON.stringify({
+    asset: { version: '2.0' },
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'Terrain', mesh: 0 }],
+    meshes: [
+      {
+        name: 'A terrain mesh with a long name that has to give way',
+        primitives: [{ attributes: { POSITION: 0 }, indices: 1 }],
+      },
+    ],
+    accessors: [{ count: 12_000_000, componentType: 5126, type: 'VEC3' }, accessor(36_000_000)],
+  });
+  await viewer.post({ type: 'structure', loadId: 1, reload: false, json, fileSize: json.length });
+  await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+
+  const counts = page.locator('.nm-table tbody td.nm-number');
+  await expect(counts).toHaveText(['1', '12,000,000', '12,000,000']);
+  for (const cell of await counts.all()) {
+    expect(await cell.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+  expect(viewer.problems).toEqual([]);
+});
+
 test('previews textures and gives their size and memory', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('textured.gltf');
