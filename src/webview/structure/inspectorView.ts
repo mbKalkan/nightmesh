@@ -1,6 +1,13 @@
 import type { Inspection, Row } from './details';
 import type { EntryKey } from './outline';
 
+/** A texture's image to preview, `compressed` when it can't be read back, or nothing yet. */
+export type TexturePreview =
+  { image: CanvasImageSource; width: number; height: number } | 'compressed' | undefined;
+
+/** The largest side of a texture preview, in CSS pixels. */
+const PREVIEW_SIZE = 256;
+
 /**
  * The inspector's content: a heading for the selected entry, then its sections as label and
  * value pairs. Values can be selected and copied; links select what they name.
@@ -12,7 +19,13 @@ export class InspectorView {
   private readonly kind: HTMLElement;
   private readonly body: HTMLElement;
 
-  constructor(private readonly onLink: (key: EntryKey) => void) {
+  private previewToken = 0;
+
+  constructor(
+    private readonly onLink: (key: EntryKey) => void,
+    private readonly loadPreview: (texture: number) => Promise<TexturePreview>,
+    private readonly noPreview: string,
+  ) {
     this.element = document.createElement('div');
     this.element.className = 'nm-inspector-content';
     this.element.innerHTML = `
@@ -56,6 +69,39 @@ export class InspectorView {
       }),
     );
     this.body.scrollTop = scroll;
+    const token = ++this.previewToken;
+    if (inspection?.preview !== undefined) {
+      void this.loadPreview(inspection.preview).then((preview) => {
+        if (token === this.previewToken) this.showPreview(preview);
+      });
+    }
+  }
+
+  /** Draws a texture's image above its details, scaled down to fit, on a checkerboard for alpha. */
+  private showPreview(preview: TexturePreview): void {
+    if (!preview) return;
+    const figure = document.createElement('figure');
+    figure.className = 'nm-preview';
+    if (preview === 'compressed') {
+      const caption = document.createElement('figcaption');
+      caption.textContent = this.noPreview;
+      figure.append(caption);
+    } else {
+      const scale = Math.min(1, PREVIEW_SIZE / Math.max(preview.width, preview.height, 1));
+      const width = Math.max(1, Math.round(preview.width * scale));
+      const height = Math.max(1, Math.round(preview.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * devicePixelRatio);
+      canvas.height = Math.round(height * devicePixelRatio);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(preview.image, 0, 0, canvas.width, canvas.height);
+      figure.append(canvas);
+    }
+    this.body.prepend(figure);
   }
 }
 

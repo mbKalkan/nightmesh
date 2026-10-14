@@ -47,6 +47,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'structure':
       receiveStructure(message);
       break;
+    case 'images':
+      if (message.loadId === structureLoad) structure?.setImages(message.images);
+      break;
     case 'model':
       receiveModel(message);
       break;
@@ -98,6 +101,7 @@ function open(message: OpenMessage): void {
       void view?.then((target) => target?.select(key));
     },
     activated: () => void view?.then((target) => target?.frameSelection()),
+    preview: async (texture) => (await view)?.textureImage(texture),
   });
 }
 
@@ -196,6 +200,8 @@ async function build(current: Arrival): Promise<void> {
     const gltf = await parseModel(current.message.json, current.parts, decoders);
     if (current !== arrival) return;
     target.show(gltf, current.message.reload && hasModel);
+    // A texture selected before the model was drawn can show its image now.
+    structure?.refresh();
     hasModel = true;
     shell.hideError();
     shell.setState('shown');

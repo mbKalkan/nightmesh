@@ -27,9 +27,11 @@ async function loadAll(name: string): Promise<HostToWebviewMessage[]> {
   return messages;
 }
 
-/** The messages after the structure, which is checked on its own. */
+/** The messages after the structure and image sizes, which are checked on their own. */
 const load = async (name: string) =>
-  (await loadAll(name)).filter((message) => message.type !== 'structure');
+  (await loadAll(name)).filter(
+    (message) => message.type !== 'structure' && message.type !== 'images',
+  );
 
 const failure = async (name: string) => {
   const [message] = await load(name);
@@ -39,7 +41,7 @@ const failure = async (name: string) => {
 
 describe('loadMessages', () => {
   it('sends the structure first, as the file has it', async () => {
-    const [structure, model] = await loadAll('textured.gltf');
+    const [structure, , model] = await loadAll('textured.gltf');
     expect(structure).toMatchObject({
       type: 'structure',
       fileSize: statSync(join(FIXTURES, 'textured.gltf')).size,
@@ -63,9 +65,15 @@ describe('loadMessages', () => {
   });
 
   it('sends the structure of models it cannot draw', async () => {
-    for (const name of ['unsupported-extension.glb', 'missing-resource.gltf']) {
-      expect((await loadAll(name)).map((message) => message.type)).toEqual(['structure', 'failed']);
-    }
+    expect((await loadAll('unsupported-extension.glb')).map((message) => message.type)).toEqual([
+      'structure',
+      'failed',
+    ]);
+    expect((await loadAll('missing-resource.gltf')).map((message) => message.type)).toEqual([
+      'structure',
+      'images',
+      'failed',
+    ]);
     for (const name of ['empty.glb', 'not-a-model.glb', 'lfs-pointer.glb']) {
       expect((await loadAll(name)).map((message) => message.type)).toEqual(['failed']);
     }
@@ -118,6 +126,21 @@ describe('loadMessages', () => {
     const [ktx2] = await load('ktx2.glb');
     expect(ktx2).toMatchObject({ type: 'model', notices: [] });
     expect(ktx2.type === 'model' && ktx2.extensions).toContain('KHR_texture_basisu');
+  });
+
+  it("reads every image's size, from the binary chunk or a separate file", async () => {
+    const images = async (name: string) =>
+      (await loadAll(name)).find((message) => message.type === 'images');
+    expect(await images('textured.gltf')).toMatchObject({
+      images: [{ format: 'png', width: 64, height: 64 }],
+    });
+    expect(await images('ktx2.glb')).toMatchObject({
+      images: [
+        { format: 'ktx2', width: 64, height: 64, levels: 7 },
+        { format: 'ktx2', width: 64, height: 64, levels: 7 },
+      ],
+    });
+    expect(await images('scene.glb')).toMatchObject({ images: [] });
   });
 
   it('reads embedded data: URIs', async () => {

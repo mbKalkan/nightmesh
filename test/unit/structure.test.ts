@@ -6,6 +6,8 @@ import { inspect, type Inspection, type Row } from '../../src/webview/structure/
 import { Formatter } from '../../src/webview/structure/format';
 import { GltfModel } from '../../src/webview/structure/gltf';
 import { statistics } from '../../src/webview/structure/statistics';
+import { drawnImage, textureMemory } from '../../src/webview/structure/textures';
+import type { ImageInfo } from '../../src/shared/protocol';
 import {
   ancestors,
   initiallyExpanded,
@@ -345,5 +347,54 @@ describe('statistics', () => {
     const stats = statistics(new GltfModel({ asset: { version: '2.0' } }));
     expect(stats).toMatchObject({ scene: undefined, nodes: 0, meshes: [] });
     expect(stats.bounds).toBeUndefined();
+  });
+});
+
+describe('textures', () => {
+  const images: ImageInfo[] = [
+    { format: 'png', width: 64, height: 64 },
+    { format: 'ktx2', width: 64, height: 64, levels: 7 },
+  ];
+
+  it("estimates GPU memory from each texture's drawn image and sampler", () => {
+    const model = new GltfModel({
+      textures: [
+        { source: 0 },
+        { source: 0, sampler: 0 },
+        { source: 0, extensions: { KHR_texture_basisu: { source: 1 } } },
+      ],
+      images: [{ uri: 'a.png' }, { uri: 'a.ktx2' }],
+      samplers: [{ minFilter: 9729 }],
+    });
+    expect(drawnImage(model, 2)).toBe(1);
+    // Four bytes a pixel, a third more for generated mipmaps unless the sampler needs none.
+    expect(textureMemory(model, images, 0)).toBeCloseTo(64 * 64 * 4 * (4 / 3));
+    expect(textureMemory(model, images, 1)).toBe(64 * 64 * 4);
+    expect(textureMemory(model, images, 2)).toBeCloseTo(64 * 64 * (4 / 3));
+    expect(textureMemory(model, undefined, 0)).toBeUndefined();
+  });
+
+  it('shows image sizes and memory in the inspector and the statistics', () => {
+    const json = fixture('ktx2.glb');
+    const texture = inspect(
+      {
+        model: new GltfModel(json),
+        strings,
+        format: new Formatter('en'),
+        file: { name: 'ktx2.glb', size: 1, container: 'glb' },
+        images,
+      },
+      'texture:1',
+    );
+    expect(texture?.preview).toBe(1);
+    expect(rows(texture, 'Texture')).toEqual([
+      expect.stringMatching(/^KHR_texture_basisu: UASTC/),
+      'Dimensions: 64 × 64 px',
+      'Mip levels: 7',
+      'GPU memory: ≈ 5.3 KB',
+    ]);
+    expect(statistics(new GltfModel(json), [images[1], images[1]]).textureMemory).toBeCloseTo(
+      64 * 64 * (4 / 3) * 2,
+    );
   });
 });

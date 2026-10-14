@@ -1,9 +1,14 @@
-import type { ModelFormat, StructureMessage, ViewerStrings } from '../../shared/protocol';
+import type {
+  ImageInfo,
+  ModelFormat,
+  StructureMessage,
+  ViewerStrings,
+} from '../../shared/protocol';
 import type { Shell } from '../shell';
 import { inspect, type InspectContext } from './details';
 import { Formatter } from './format';
 import { GltfModel } from './gltf';
-import { InspectorView } from './inspectorView';
+import { InspectorView, type TexturePreview } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
 import { statistics } from './statistics';
 import { StatisticsView } from './statisticsView';
@@ -14,6 +19,8 @@ export interface StructureEvents {
   selected(key: EntryKey): void;
   /** The user asked to see an entry in the 3D view. */
   activated(key: EntryKey): void;
+  /** A texture's image as the 3D view has it, for the inspector to show. */
+  preview(texture: number): Promise<TexturePreview>;
 }
 
 /**
@@ -42,7 +49,11 @@ export class StructureView {
       (key) => this.show(key),
       (key) => events.activated(key),
     );
-    this.inspector = new InspectorView((key) => this.select(key));
+    this.inspector = new InspectorView(
+      (key) => this.select(key),
+      (texture) => events.preview(texture),
+      strings.structure.labels.noPreview,
+    );
     this.statistics = new StatisticsView(strings.structure, this.format, (key) => this.select(key));
     shell.structurePanel.body.replaceChildren(this.tree.element);
     shell.inspectorPanel.setTabs(
@@ -83,6 +94,19 @@ export class StructureView {
     this.show(this.selected, keep);
   }
 
+  /** Image sizes from the host: they fill in texture details and the texture memory. */
+  setImages(images: readonly (ImageInfo | null)[]): void {
+    if (!this.context) return;
+    this.context.images = images;
+    this.statistics.show(statistics(this.context.model, images), this.context.model);
+    this.render(true);
+  }
+
+  /** Shows the selected entry's details again, now that the 3D view can preview more of it. */
+  refresh(): void {
+    this.render(true);
+  }
+
   /** Selects `key` in the tree, opening what holds it, and shows its details. */
   select(key: EntryKey): void {
     if (!this.context) return;
@@ -93,7 +117,11 @@ export class StructureView {
   private show(key: EntryKey, sameEntry = false): void {
     if (!this.context) return;
     this.selected = key;
-    this.inspector.show(inspect(this.context, key), sameEntry);
+    this.render(sameEntry);
     this.events.selected(key);
+  }
+
+  private render(sameEntry: boolean): void {
+    if (this.context) this.inspector.show(inspect(this.context, this.selected), sameEntry);
   }
 }

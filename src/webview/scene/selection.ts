@@ -8,6 +8,7 @@ import {
   type Material,
   type Mesh,
   type Object3D,
+  type Texture,
 } from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -22,6 +23,7 @@ const BOX_LIMIT = 300;
 export class SelectionIndex {
   private readonly byKey = new Map<string, Object3D[]>();
   private readonly nodeOf = new Map<Object3D, number>();
+  private readonly textures = new Map<number, Texture>();
 
   constructor(gltf: GLTF) {
     const associations = gltf.parser.associations;
@@ -30,6 +32,11 @@ export class SelectionIndex {
       if (!list) this.byKey.set(key, [object]);
       else if (!list.includes(object)) list.push(object);
     };
+    for (const [owner, association] of associations) {
+      if ((owner as Texture).isTexture && association.textures !== undefined) {
+        this.textures.set(association.textures, owner as Texture);
+      }
+    }
     gltf.scene.traverse((object) => {
       const association = associations.get(object);
       if (association?.nodes !== undefined) {
@@ -47,6 +54,11 @@ export class SelectionIndex {
         if (index !== undefined) add(`material:${index}`, object);
       }
     });
+  }
+
+  /** The loaded texture for a glTF texture index. */
+  texture(index: number): Texture | undefined {
+    return this.textures.get(index);
   }
 
   objects(key: string): Object3D[] {

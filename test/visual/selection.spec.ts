@@ -6,8 +6,13 @@ const SCREENS = 'test-results/screens';
 /** The dark theme's focus border, which selection boxes are drawn in. */
 const HIGHLIGHT = [0x00, 0x78, 0xd4];
 
+/** The first tree row labelled exactly `label`. */
 const row = (page: Page, label: string) =>
-  page.locator('.nm-tree-row', { has: page.locator('.nm-tree-label', { hasText: label }) }).first();
+  page
+    .locator('.nm-tree-row', {
+      has: page.locator('.nm-tree-label').getByText(label, { exact: true }),
+    })
+    .first();
 const heading = (page: Page) => page.locator('.nm-inspector-heading');
 const highlight = (page: Page) => areaOf(page, '.nm-canvas', HIGHLIGHT);
 

@@ -1,4 +1,6 @@
+import type { ImageInfo } from '../../shared/protocol';
 import { meshCounts } from './counts';
+import { drawnImage, textureMemory } from './textures';
 import { isObject, num, numbers, objects, type GltfModel, type JsonObject } from './gltf';
 
 /** One mesh as the scene draws it. */
@@ -29,6 +31,8 @@ export interface Statistics {
   points: number;
   materials: number;
   textures: number;
+  /** Estimated GPU memory of the textures used, once image sizes are known. */
+  textureMemory?: number;
   /** World-space bounds, from each primitive's POSITION bounds; undefined when there are none. */
   bounds?: { min: number[]; max: number[] };
   meshes: MeshStatistics[];
@@ -42,7 +46,7 @@ const IDENTITY: Matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 /** Integer component types and the largest value each holds, for normalized accessors. */
 const NORMALIZED_MAX: Record<number, number> = { 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 };
 
-export function statistics(model: GltfModel): Statistics {
+export function statistics(model: GltfModel, images?: readonly (ImageInfo | null)[]): Statistics {
   const scenes = model.items('scenes');
   const scene = scenes.length > 0 ? (model.ref('scenes', model.root.scene) ?? 0) : undefined;
   const roots = scene !== undefined ? model.sceneRoots(scene) : model.unreachedRoots();
@@ -117,6 +121,17 @@ export function statistics(model: GltfModel): Statistics {
       textures.add(texture);
   });
   result.textures = textures.size;
+  if (images) {
+    // Textures sharing an image and sampler are one upload.
+    const uploads = new Map<string, number>();
+    for (const texture of textures) {
+      const memory = textureMemory(model, images, texture);
+      const item = model.items('textures')[texture];
+      if (memory !== undefined)
+        uploads.set(`${drawnImage(model, texture)}:${String(item.sampler)}`, memory);
+    }
+    if (uploads.size > 0) result.textureMemory = [...uploads.values()].reduce((a, b) => a + b, 0);
+  }
   if (min[0] <= max[0]) result.bounds = { min, max };
   return result;
 }

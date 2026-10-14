@@ -13,6 +13,7 @@ import {
   WebGLRenderer,
   type BufferAttribute,
   type BufferGeometry,
+  type CompressedTexture,
   type InterleavedBufferAttribute,
   type Material,
   type Object3D,
@@ -139,6 +140,22 @@ export class ModelView {
     this.selected = key;
     this.highlight.show(this.index?.objects(key) ?? []);
     this.requestRender();
+  }
+
+  /**
+   * A texture's image as loaded, to preview: `compressed` for KTX2, whose data stays in GPU
+   * formats, and undefined before the model is drawn.
+   */
+  textureImage(
+    index: number,
+  ): { image: CanvasImageSource; width: number; height: number } | 'compressed' | undefined {
+    const texture = this.index?.texture(index);
+    if (!texture) return undefined;
+    if ((texture as CompressedTexture).isCompressedTexture) return 'compressed';
+    const image = texture.image as (CanvasImageSource & { width: number; height: number }) | null;
+    return image && image.width > 0
+      ? { image, width: image.width, height: image.height }
+      : undefined;
   }
 
   /** Frames what is selected, or the whole model when nothing drawn is. */

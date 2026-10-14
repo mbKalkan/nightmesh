@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowestTextContrast } from './contrast';
 import { openViewer } from './harness';
+import { areaOf } from './pixels';
 import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
@@ -8,8 +9,13 @@ const SCREENS = 'test-results/screens';
 const PANELS_ONLY = { withoutWebGL: true };
 
 const tree = (page: Page) => page.locator('.nm-tree');
+/** The first tree row labelled exactly `label`. */
 const row = (page: Page, label: string) =>
-  page.locator('.nm-tree-row', { has: page.locator('.nm-tree-label', { hasText: label }) }).first();
+  page
+    .locator('.nm-tree-row', {
+      has: page.locator('.nm-tree-label').getByText(label, { exact: true }),
+    })
+    .first();
 const heading = (page: Page) => page.locator('.nm-inspector-heading');
 /** An inspector section's rows as `label value` text. */
 const section = (page: Page, title: string) =>
@@ -46,9 +52,10 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
 test('shows the structure before the model has arrived', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.post(viewer.openMessage('scene.glb'));
-  const [structure, model] = await viewer.messages('scene.glb');
-  await viewer.post(structure);
-  await viewer.post(model);
+  const messages = await viewer.messages('scene.glb');
+  for (const type of ['structure', 'images', 'model']) {
+    await viewer.post(messages.find((message) => message.type === type)!);
+  }
 
   await expect(row(page, 'Root')).toBeVisible();
   await expect(page.locator('.nm-progress')).toBeVisible();
@@ -198,8 +205,8 @@ test('counts the scene in a statistics tab beside the inspector', async ({ page 
   await expect(tab('Statistics')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.nm-inspector-content')).toBeHidden();
   await expect(page.locator('.nm-statistics dl')).toContainText('Triangles984');
-  // Most triangles on screen first; then by how often each is drawn.
-  await expect(meshes).toHaveText(['Sphere', 'Box', 'Cloud', 'Axes']);
+  // Most triangles on screen first; ties in the file's order.
+  await expect(meshes).toHaveText(['Sphere', 'Box', 'Axes', 'Cloud']);
   await page.locator('.nm-sort', { hasText: 'Instances' }).click();
   await expect(meshes.first()).toHaveText('Box');
   await expect(page.locator('th[aria-sort]')).toHaveAttribute('aria-sort', 'descending');
@@ -216,5 +223,42 @@ test('counts the scene in a statistics tab beside the inspector', async ({ page 
   await expect(tab('Inspector')).toHaveAttribute('aria-selected', 'true');
   await expect(tab('Inspector')).toBeFocused();
   await expect(heading(page)).toHaveText(/Box\s*Mesh 0/);
+  expect(viewer.problems).toEqual([]);
+});
+
+test('previews textures and gives their size and memory', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('textured.gltf');
+  await row(page, 'Textures').click();
+  await row(page, 'checker').click();
+
+  await expect(section(page, 'Texture')).toContainText([
+    'Dimensions',
+    '64 × 64 px',
+    'GPU memory',
+    /^≈ [\d.]+ KB$/,
+  ]);
+  const preview = page.locator('.nm-preview canvas');
+  await expect(preview).toBeVisible();
+  // The checker's blue squares, drawn from the texture the 3D view loaded.
+  expect(
+    (await areaOf(page, '.nm-preview canvas', [52, 120, 220], 30))?.count ?? 0,
+  ).toBeGreaterThan(100);
+
+  // KTX2 stays compressed on the GPU: there is nothing to read back.
+  await viewer.open('ktx2.glb');
+  await row(page, 'Textures').click();
+  // The texture, below the scene's node and mesh of the same name.
+  await page
+    .locator('.nm-tree-row', {
+      has: page.locator('.nm-tree-label').getByText('ETC1S', { exact: true }),
+    })
+    .last()
+    .click();
+  await expect(page.locator('.nm-preview figcaption')).toHaveText(
+    'No preview: this texture stays compressed on the GPU.',
+  );
+  await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+  await expect(page.locator('.nm-statistics dl')).toContainText('Texture memory');
   expect(viewer.problems).toEqual([]);
 });

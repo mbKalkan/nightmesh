@@ -493,6 +493,28 @@ body.vscode-high-contrast .nm-tree-description {
   color: var(--vscode-descriptionForeground);
 }
 
+/* A texture's image, on a checkerboard that shows where it is transparent. */
+.nm-preview {
+  margin: 12px 0 4px;
+}
+
+.nm-preview canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--nm-border);
+  background: repeating-conic-gradient(
+      color-mix(in srgb, var(--vscode-foreground) 12%, transparent) 0 25%,
+      transparent 0 50%
+    )
+    0 0 / 12px 12px;
+}
+
+.nm-preview figcaption {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
 /* Statistics */
 
 .nm-statistics {
