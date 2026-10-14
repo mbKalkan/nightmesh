@@ -39,6 +39,8 @@ export class StructureTree {
   constructor(
     label: string,
     private readonly onSelect: (key: EntryKey) => void,
+    /** Enter or a double-click on an entry: show it in the 3D view. */
+    private readonly onActivate: (key: EntryKey) => void,
   ) {
     this.element = document.createElement('div');
     this.element.className = 'nm-tree';
@@ -297,7 +299,8 @@ export class StructureTree {
   private onDoubleClick(event: MouseEvent): void {
     const index = this.rowIndexAt(event);
     if (index < 0 || (event.target as HTMLElement).closest('.nm-twistie')) return;
-    if (this.visible[index].entry.count === undefined) this.toggle(index);
+    const { entry } = this.visible[index];
+    if (entry.count === undefined) this.onActivate(entry.key);
   }
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -336,7 +339,8 @@ export class StructureTree {
         break;
       case 'Enter':
       case ' ':
-        if (row.entry.children) this.toggle(this.focused);
+        if (row.entry.count !== undefined) this.toggle(this.focused);
+        else this.onActivate(row.entry.key);
         break;
       default:
         if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;

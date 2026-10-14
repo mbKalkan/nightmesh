@@ -83,6 +83,8 @@ export interface ViewerStrings {
   /** Title of the notice listing what couldn't be loaded. */
   partialTitle: string;
   close: string;
+  /** The toolbar button that frames the selection, with its shortcut. */
+  frame: string;
   structure: StructureStrings;
 }
 

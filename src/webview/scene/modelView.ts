@@ -21,7 +21,10 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { Picker } from './picking';
+import { Highlight, SelectionIndex, framingBounds } from './selection';
 
 /** Decoders a model needs, made the first time any model needs them. */
 export interface Decoders {
@@ -29,12 +32,20 @@ export interface Decoders {
   ktx2?: KTX2Loader;
 }
 
+export interface ViewEvents {
+  /** A click on the model picked the node drawn there, or empty space; `frame` on double-click. */
+  picked(node: number | undefined, frame: boolean): void;
+}
+
 /** The direction the camera looks at a model from when it frames it: front, right, above. */
 const VIEW_DIRECTION = new Vector3(1, 0.6, 1.4).normalize();
+/** A press that moves less than this, in CSS pixels, is a click rather than a drag. */
+const CLICK_SLOP = 4;
 
 /**
  * The 3D view: a model lit by a built-in environment, orbited with the mouse. It draws only
- * when something changes, so an idle view costs nothing.
+ * when something changes, so an idle view costs nothing. What is selected in the structure shows
+ * as boxes over the model; clicking the model selects what is under the pointer.
  */
 export class ModelView {
   private readonly renderer: WebGLRenderer;
@@ -42,7 +53,14 @@ export class ModelView {
   private readonly camera = new PerspectiveCamera(45, 1, 0.01, 1000);
   private readonly controls: OrbitControls;
   private readonly resizeObserver: ResizeObserver;
+  private readonly highlight = new Highlight();
+  private readonly picker = new Picker();
   private model: Object3D | undefined;
+  private index: SelectionIndex | undefined;
+  /** The structure entry selected, whose objects are highlighted. */
+  private selected = 'model';
+  /** Bounds of the whole model, which the clipping planes keep in view. */
+  private readonly modelSphere = new Sphere(new Vector3(), 1);
   /** Whether the camera was ever pointed at a model; a reload keeps that view. */
   private framed = false;
   private frameRequest = 0;
@@ -51,8 +69,9 @@ export class ModelView {
 
   constructor(
     private readonly container: HTMLElement,
-    canvas: HTMLCanvasElement,
+    private readonly canvas: HTMLCanvasElement,
     context: WebGL2RenderingContext,
+    private readonly events: ViewEvents,
   ) {
     this.renderer = new WebGLRenderer({ canvas, context });
     this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -61,14 +80,21 @@ export class ModelView {
     const pmrem = new PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
+    this.scene.add(this.highlight.group);
 
     this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.addEventListener('change', () => this.requestRender());
+    this.controls.addEventListener('change', () => {
+      this.updateClipping();
+      this.requestRender();
+    });
+    this.listenForClicks();
     // Vertex data left memory once it was on the GPU, so a lost context can't redraw the model:
     // drop it, and draw again once the model comes back.
     canvas.addEventListener('webglcontextlost', () => {
       if (this.model) this.scene.remove(this.model);
       this.model = undefined;
+      this.index = undefined;
+      this.highlight.clear();
     });
     canvas.addEventListener('webglcontextrestored', () => this.requestRender());
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -82,8 +108,15 @@ export class ModelView {
     this.requestRender();
   }
 
-  /** Shows `model` in place of the one before; `keepCamera` keeps the view the user had. */
-  show(model: Object3D, keepCamera: boolean): void {
+  /** The highlight's color, as sRGB channels from 0 to 1. */
+  setHighlightColor(color: readonly [number, number, number]): void {
+    this.highlight.setColor(color);
+    this.requestRender();
+  }
+
+  /** Shows a loaded model in place of the one before; `keepCamera` keeps the view the user had. */
+  show(gltf: GLTF, keepCamera: boolean): void {
+    const model = gltf.scene;
     prepareForUpload(model);
     const previous = this.model;
     if (previous) {
@@ -91,53 +124,33 @@ export class ModelView {
       disposeObject(previous);
     }
     this.model = model;
+    this.index = new SelectionIndex(gltf);
     this.scene.add(model);
+    this.modelBox().getBoundingSphere(this.modelSphere);
     if (!keepCamera || !this.framed) this.frame();
     this.framed = true;
+    this.select(this.selected);
+    this.updateClipping();
     this.render();
   }
 
-  /**
-   * Points the camera at the whole model, from the front, right and above, as close as it can
-   * while every corner of the model's bounding box stays in view.
-   */
-  frame(): void {
-    if (!this.model) return;
-    const box = new Box3().setFromObject(this.model);
-    if (box.isEmpty()) box.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
-    const center = box.getCenter(new Vector3());
-    const radius = box.getBoundingSphere(new Sphere()).radius || 1;
-
-    // Camera axes for the view direction; corners are measured along them from the center.
-    const forward = VIEW_DIRECTION.clone().negate();
-    const right = new Vector3().crossVectors(forward, this.camera.up).normalize();
-    const up = new Vector3().crossVectors(right, forward);
-    const tanY = Math.tan((this.camera.fov * Math.PI) / 360);
-    const tanX = tanY * this.camera.aspect;
-    let distance = 0;
-    for (const x of [box.min.x, box.max.x]) {
-      for (const y of [box.min.y, box.max.y]) {
-        for (const z of [box.min.z, box.max.z]) {
-          const corner = new Vector3(x, y, z).sub(center);
-          // A corner closer to the camera needs the camera further back to stay in the frustum.
-          const toward = -corner.dot(forward);
-          distance = Math.max(
-            distance,
-            toward + Math.abs(corner.dot(right)) / tanX,
-            toward + Math.abs(corner.dot(up)) / tanY,
-          );
-        }
-      }
-    }
-    distance *= 1.08;
-
-    this.camera.position.copy(center).addScaledVector(VIEW_DIRECTION, distance);
-    this.camera.near = Math.max(distance - radius * 4, distance / 1000, 1e-4);
-    this.camera.far = distance + radius * 10;
-    this.camera.updateProjectionMatrix();
-    this.controls.target.copy(center);
-    this.controls.update();
+  /** Highlights what a structure entry stands for: a node, a mesh's nodes, a material's uses. */
+  select(key: string): void {
+    this.selected = key;
+    this.highlight.show(this.index?.objects(key) ?? []);
     this.requestRender();
+  }
+
+  /** Frames what is selected, or the whole model when nothing drawn is. */
+  frameSelection(): void {
+    const objects = this.index?.objects(this.selected) ?? [];
+    if (objects.length === 0) return this.frame();
+    this.frameBox(framingBounds(objects, this.modelSphere.radius));
+  }
+
+  /** Points the camera at the whole model. */
+  frame(): void {
+    if (this.model) this.frameBox(this.modelBox());
   }
 
   requestRender(): void {
@@ -174,8 +187,104 @@ export class ModelView {
     cancelAnimationFrame(this.frameRequest);
     this.resizeObserver.disconnect();
     this.controls.dispose();
+    this.picker.dispose();
+    this.highlight.dispose();
     if (this.model) disposeObject(this.model);
     this.renderer.dispose();
+  }
+
+  private modelBox(): Box3 {
+    const box = this.model ? new Box3().setFromObject(this.model) : new Box3();
+    if (box.isEmpty()) box.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
+    return box;
+  }
+
+  /**
+   * Points the camera at `box`, from the front, right and above, as close as it can while every
+   * corner of the box stays in view.
+   */
+  private frameBox(box: Box3): void {
+    const center = box.getCenter(new Vector3());
+    // Camera axes for the view direction; corners are measured along them from the center.
+    const forward = VIEW_DIRECTION.clone().negate();
+    const right = new Vector3().crossVectors(forward, this.camera.up).normalize();
+    const up = new Vector3().crossVectors(right, forward);
+    const tanY = Math.tan((this.camera.fov * Math.PI) / 360);
+    const tanX = tanY * this.camera.aspect;
+    let distance = 0;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          const corner = new Vector3(x, y, z).sub(center);
+          // A corner closer to the camera needs the camera further back to stay in the frustum.
+          const toward = -corner.dot(forward);
+          distance = Math.max(
+            distance,
+            toward + Math.abs(corner.dot(right)) / tanX,
+            toward + Math.abs(corner.dot(up)) / tanY,
+          );
+        }
+      }
+    }
+    distance = Math.max(distance * 1.08, 1e-3);
+
+    this.camera.position.copy(center).addScaledVector(VIEW_DIRECTION, distance);
+    this.controls.target.copy(center);
+    this.controls.update();
+    this.updateClipping();
+    this.requestRender();
+  }
+
+  /**
+   * Keeps the whole model between the clipping planes wherever the camera is: the far plane past
+   * its farthest side, the near one well short of the point orbited, so a part zoomed in on is
+   * never cut and the rest of the model doesn't disappear behind it.
+   */
+  private updateClipping(): void {
+    const toModel = this.camera.position.distanceTo(this.modelSphere.center);
+    const far = Math.max(toModel + this.modelSphere.radius * 2, 1e-2);
+    const toTarget = this.camera.position.distanceTo(this.controls.target);
+    this.camera.far = far;
+    this.camera.near = Math.max(Math.min(toTarget / 100, far / 1000), far / 1e6);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** A click picks what is under the pointer; a double-click also frames it. */
+  private listenForClicks(): void {
+    let down: { x: number; y: number } | undefined;
+    this.canvas.addEventListener('pointerdown', (event) => {
+      down = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
+    });
+    this.canvas.addEventListener('pointerup', (event) => {
+      if (!down || event.button !== 0) return;
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      down = undefined;
+      if (moved <= CLICK_SLOP) this.events.picked(this.pickAt(event), false);
+    });
+    this.canvas.addEventListener('dblclick', (event) => {
+      this.events.picked(this.pickAt(event), true);
+    });
+  }
+
+  /** The node drawn under the pointer, if any. */
+  private pickAt(event: MouseEvent): number | undefined {
+    if (!this.model || !this.index) return undefined;
+    const rect = this.canvas.getBoundingClientRect();
+    const scale = this.canvas.width / Math.max(1, rect.width);
+    const object = this.picker.pick(
+      this.renderer,
+      this.scene,
+      this.camera,
+      this.model,
+      [this.highlight.group],
+      {
+        x: Math.floor((event.clientX - rect.left) * scale),
+        y: Math.floor((event.clientY - rect.top) * scale),
+        width: this.canvas.width,
+        height: this.canvas.height,
+      },
+    );
+    return object ? this.index.node(object) : undefined;
   }
 
   private render(): void {

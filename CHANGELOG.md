@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   animation channels and more, with links between them. Values can be selected and copied.
 - Both panels can be hidden from the toolbar and resized; the tree works with the keyboard
   (arrow keys, Home/End, type to find) and stays fast with tens of thousands of nodes.
+- What is selected in the structure is outlined in the 3D view: a node, every node using a
+  mesh, every part drawn with a material. Click the model to select what is under the pointer;
+  click empty space or press Escape to let go.
+- Frame Selection (F, the toolbar button, or a double-click in the view or the tree) brings the
+  selection into view, so a small part next to a large ground plane is easy to look at.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

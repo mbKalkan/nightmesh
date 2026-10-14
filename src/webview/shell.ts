@@ -30,7 +30,7 @@ export class Shell {
   constructor(
     container: HTMLElement,
     private readonly layout: PanelLayout,
-    private readonly onLayout: (layout: PanelLayout) => void,
+    private readonly events: { layoutChanged(layout: PanelLayout): void; frame(): void },
   ) {
     container.innerHTML = `
       <div class="nm-shell">
@@ -40,6 +40,8 @@ export class Shell {
             <span class="nm-file-name"></span>
           </div>
           <div class="nm-actions" hidden>
+            <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
+            <span class="nm-separator"></span>
             <button class="nm-icon-button" data-panel="structure" type="button">${icons.panelLeft}</button>
             <button class="nm-icon-button" data-panel="inspector" type="button">${icons.panelRight}</button>
           </div>
@@ -84,18 +86,19 @@ export class Shell {
     const saveWidths = () => {
       this.layout.structureWidth = this.structurePanel.width;
       this.layout.inspectorWidth = this.inspectorPanel.width;
-      this.onLayout(this.layout);
+      this.events.layoutChanged(this.layout);
     };
     this.structurePanel = new SidePanel('left', layout.structureWidth, saveWidths);
     this.inspectorPanel = new SidePanel('right', layout.inspectorWidth, saveWidths);
     this.viewport.before(this.structurePanel.element);
     this.viewport.after(this.inspectorPanel.element);
     this.toggles.addEventListener('click', (event) => {
-      const panel = (event.target as HTMLElement).closest<HTMLElement>('[data-panel]')?.dataset
-        .panel as 'structure' | 'inspector' | undefined;
+      const button = (event.target as HTMLElement).closest<HTMLElement>('button');
+      if (button?.dataset.action === 'frame') return this.events.frame();
+      const panel = button?.dataset.panel as 'structure' | 'inspector' | undefined;
       if (!panel) return;
       this.layout[panel] = !this.layout[panel];
-      this.onLayout(this.layout);
+      this.events.layoutChanged(this.layout);
       this.showPanels();
     });
   }
@@ -113,9 +116,13 @@ export class Shell {
     const { structure } = strings;
     this.structurePanel.setLabels(structure.structure, structure.structureWidth);
     this.inspectorPanel.setLabels(structure.inspector, structure.inspectorWidth);
-    for (const button of this.toggles.querySelectorAll<HTMLElement>('[data-panel]')) {
+    for (const button of this.toggles.querySelectorAll<HTMLElement>('button')) {
       const label =
-        button.dataset.panel === 'structure' ? structure.structure : structure.inspector;
+        button.dataset.action === 'frame'
+          ? strings.frame
+          : button.dataset.panel === 'structure'
+            ? structure.structure
+            : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }

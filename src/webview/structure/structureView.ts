@@ -7,6 +7,13 @@ import { InspectorView } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
 import { StructureTree } from './tree';
 
+export interface StructureEvents {
+  /** The selection changed: in the tree, through a link, or from the 3D view. */
+  selected(key: EntryKey): void;
+  /** The user asked to see an entry in the 3D view. */
+  activated(key: EntryKey): void;
+}
+
 /**
  * The structure tree on the left and the inspector on the right, filled from the model's JSON as
  * soon as it arrives. Selecting in the tree, or following a link in the inspector, shows that
@@ -24,9 +31,14 @@ export class StructureView {
     shell: Shell,
     private readonly strings: ViewerStrings,
     locale: string,
+    private readonly events: StructureEvents,
   ) {
     this.format = new Formatter(locale);
-    this.tree = new StructureTree(strings.structure.structure, (key) => this.show(key));
+    this.tree = new StructureTree(
+      strings.structure.structure,
+      (key) => this.show(key),
+      (key) => events.activated(key),
+    );
     this.inspector = new InspectorView((key) => this.select(key));
     shell.structurePanel.body.replaceChildren(this.tree.element);
     shell.inspectorPanel.body.replaceChildren(this.inspector.element);
@@ -70,5 +82,6 @@ export class StructureView {
     if (!this.context) return;
     this.selected = key;
     this.inspector.show(inspect(this.context, key), sameEntry);
+    this.events.selected(key);
   }
 }

@@ -9,7 +9,7 @@ import type {
 } from '../shared/protocol';
 import { Shell, type PanelLayout } from './shell';
 import { StructureView } from './structure/structureView';
-import { viewportBackground, watchTheme } from './theme';
+import { highlightColor, viewportBackground, watchTheme } from './theme';
 import { vscode } from './vscodeApi';
 
 type SceneModule = typeof import('./scene');
@@ -22,14 +22,17 @@ interface Arrival {
   received: number;
 }
 
-const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayout(), (layout) =>
-  vscode.setState({ layout }),
-);
+const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayout(), {
+  layoutChanged: (layout) => vscode.setState({ layout }),
+  frame: () => void view?.then((target) => target?.frameSelection()),
+});
 let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
 let structure: StructureView | undefined;
 /** The load whose structure the panels show. */
 let structureLoad = -1;
+/** The structure entry selected, which the 3D view highlights once it has a model. */
+let selectedKey = 'model';
 let view: Promise<View | undefined> | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
@@ -63,8 +66,25 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
 });
 
 watchTheme(
-  () => void view?.then((current) => current?.setBackground(viewportBackground(shell.viewport))),
+  () =>
+    void view?.then((current) => {
+      current?.setBackground(viewportBackground(shell.viewport));
+      current?.setHighlightColor(highlightColor());
+    }),
 );
+
+// F frames the selection, Escape lets go of it, as in most 3D tools.
+shell.viewport.addEventListener('keydown', (event) => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
+  if (event.key === 'f' || event.key === 'F') {
+    void view?.then((target) => target?.frameSelection());
+  } else if (event.key === 'Escape') {
+    structure?.select('model');
+  } else {
+    return;
+  }
+  event.preventDefault();
+});
 
 vscode.postMessage({ type: 'ready' });
 
@@ -72,7 +92,13 @@ function open(message: OpenMessage): void {
   opened = message;
   strings = message.strings;
   shell.setDocument(message.fileName, message.format, strings);
-  structure ??= new StructureView(shell, strings, message.locale);
+  structure ??= new StructureView(shell, strings, message.locale, {
+    selected: (key) => {
+      selectedKey = key;
+      void view?.then((target) => target?.select(key));
+    },
+    activated: () => void view?.then((target) => target?.frameSelection()),
+  });
 }
 
 /** The panels' layout as the user left it in this editor, or the default. */
@@ -113,8 +139,16 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     if (hasModel) vscode.postMessage({ type: 'reload' });
   });
   const scene: SceneModule = await import('./scene');
-  const created = new scene.ModelView(shell.viewport, canvas, context);
+  const created = new scene.ModelView(shell.viewport, canvas, context, {
+    picked: (node, frame) => {
+      // The structure shows what was picked, and tells the view to highlight it.
+      structure?.select(node === undefined ? 'model' : `node:${node}`);
+      if (frame) created.frameSelection();
+    },
+  });
   created.setBackground(viewportBackground(shell.viewport));
+  created.setHighlightColor(highlightColor());
+  created.select(selectedKey);
   return created;
 }
 
@@ -154,7 +188,7 @@ async function build(current: Arrival): Promise<void> {
     const decoders = await target.decoders(current.message.extensions);
     const gltf = await parseModel(current.message.json, current.parts, decoders);
     if (current !== arrival) return;
-    target.show(gltf.scene, current.message.reload && hasModel);
+    target.show(gltf, current.message.reload && hasModel);
     hasModel = true;
     shell.hideError();
     shell.setState('shown');

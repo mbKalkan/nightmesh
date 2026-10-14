@@ -13,6 +13,9 @@ export const icons = {
   warning: svg('<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.5M8 11.75v.25"/>'),
   close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
   chevron: svg('<path d="M6 4l4 4-4 4"/>'),
+  frame: svg(
+    '<path d="M2.5 5.5v-3h3M10.5 2.5h3v3M13.5 10.5v3h-3M5.5 13.5h-3v-3"/><circle cx="8" cy="8" r="2"/>',
+  ),
   panelLeft: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/>'),
   panelRight: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10 2.5v11"/>'),
   // Structure tree entries.
