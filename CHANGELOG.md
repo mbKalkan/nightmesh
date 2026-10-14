@@ -37,8 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ground grid under the model, in squares of a power of ten metres sized to the model (the View
   menu says how big), and the world's axes through the origin, from the View menu. The grid shows
   by default; the axes when you ask.
-- The panels, their widths and the grid and axes stay as you left them, for every model you open
-  next.
+- The model's bounding box can be drawn from the View menu, and the view's background set to dark,
+  neutral grey or light instead of the theme's; the grid and box change shade to show on it.
+- The panels, their widths, the grid, axes, bounding box and background stay as you left them, for
+  every model you open next.
 - A Shading menu draws the model lit as its materials say, unlit in their base colors and
   textures, or colored by the direction its surfaces face, to check normals; a wireframe can be
   drawn over any of them.

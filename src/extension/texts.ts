@@ -45,6 +45,13 @@ export function viewerStrings(t: Translate): ViewerStrings {
       grid: t('Grid'),
       gridCell: t('Grid ({0} squares)', '{0}'),
       axes: t('Origin Axes'),
+      bounds: t('Bounding Box'),
+      backgrounds: {
+        theme: t('Theme Background'),
+        dark: t('Dark Background'),
+        neutral: t('Neutral Background'),
+        light: t('Light Background'),
+      },
     },
     shading: {
       menu: t('Shading'),

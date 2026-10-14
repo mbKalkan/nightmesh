@@ -13,10 +13,15 @@ export function highlightColor(): [number, number, number] {
   return probe('var(--vscode-focusBorder, #0078d4)', document.body);
 }
 
-/** The grid in the theme's text color, the axes in the colors the view's labels use. */
+/**
+ * The grid and the bounding box light on a dark background and dark on a light one, the axes in
+ * the colors the view's labels use.
+ */
 export function helperColors(viewport: HTMLElement): HelperColors {
+  const [r, g, b] = viewportBackground(viewport);
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
   return {
-    grid: probe('var(--vscode-foreground, #cccccc)', viewport),
+    grid: light ? [0, 0, 0] : [1, 1, 1],
     x: probe('var(--nm-axis-x)', viewport),
     y: probe('var(--nm-axis-y)', viewport),
     z: probe('var(--nm-axis-z)', viewport),

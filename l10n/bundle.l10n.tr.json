@@ -117,5 +117,10 @@
   "Normals": "Normaller",
   "Wireframe": "Tel Kafes",
   "Default Materials": "Varsayılan Materyaller",
-  "Variant {0}": "Varyant {0}"
+  "Variant {0}": "Varyant {0}",
+  "Bounding Box": "Sınır Kutusu",
+  "Theme Background": "Tema Arka Planı",
+  "Dark Background": "Koyu Arka Plan",
+  "Neutral Background": "Nötr Arka Plan",
+  "Light Background": "Açık Arka Plan"
 }

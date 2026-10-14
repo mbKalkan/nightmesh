@@ -160,11 +160,20 @@ export class ModelView {
     this.requestRender();
   }
 
-  /** Shows or hides the ground grid and the origin axes. */
-  setHelpers({ grid, axes }: { grid: boolean; axes: boolean }): void {
+  /** Shows or hides the ground grid, the origin axes and the bounding box. */
+  setHelpers({ grid, axes, bounds }: { grid: boolean; axes: boolean; bounds: boolean }): void {
     this.helpers.gridShown = grid;
     this.helpers.axesShown = axes;
+    this.helpers.boundsShown = bounds;
+    this.updateBounds();
     this.requestRender();
+  }
+
+  /** Fits the bounding box to the model as it is posed now, when it shows. */
+  private updateBounds(): void {
+    if (this.helpers.boundsShown && this.model) {
+      this.helpers.setBounds(new Box3().setFromObject(this.model));
+    }
   }
 
   setHelperColors(colors: HelperColors): void {
@@ -279,6 +288,7 @@ export class ModelView {
     this.shading.attach(model);
     this.modelBox().getBoundingSphere(this.modelSphere);
     this.helpers.fit(this.modelBox());
+    this.updateBounds();
     if (!keepCamera || !this.framed) this.viewpoint.frame(this.modelBox());
     this.framed = true;
     this.startAnimations(model, gltf.animations, keepCamera);
@@ -361,6 +371,7 @@ export class ModelView {
       if (now - this.lastMeasure > MEASURE_INTERVAL) {
         this.lastMeasure = now;
         this.measure();
+        this.updateBounds();
       }
       this.reportAnimation();
       this.playRequest = requestAnimationFrame(step);
@@ -378,6 +389,7 @@ export class ModelView {
   private afterPose(): void {
     this.model?.updateMatrixWorld(true);
     this.highlight.update();
+    this.updateBounds();
     this.measure();
     this.requestRender();
   }
