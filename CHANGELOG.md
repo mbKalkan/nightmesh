@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opens, and keeps your view when the file changes on disk.
 - Models are lit by a built-in environment, so they look right without any setup and without
   a network connection. meshopt-compressed and quantized models open too.
+- Draco-compressed meshes and KTX2 (Basis Universal) textures open too. Their decoders ship
+  with the extension and load only when a model needs them.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

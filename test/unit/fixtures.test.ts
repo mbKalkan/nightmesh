@@ -21,6 +21,7 @@ const VALID = [
   'draco.glb',
   'meshopt.glb',
   'quantized.glb',
+  'ktx2.glb',
 ];
 
 // Small files come back as views into Node's shared buffer pool; the validator needs their own bytes.
@@ -66,6 +67,7 @@ describe('test fixtures', () => {
     expect(await used('draco.glb')).toContain('KHR_draco_mesh_compression');
     expect(await used('meshopt.glb')).toContain('EXT_meshopt_compression');
     expect(await used('quantized.glb')).toContain('KHR_mesh_quantization');
+    expect(await used('ktx2.glb')).toContain('KHR_texture_basisu');
   });
 
   it('breaks the broken models the way their names say', async () => {

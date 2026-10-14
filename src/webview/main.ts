@@ -97,6 +97,8 @@ function receiveModel(message: ModelMessage): void {
   latestLoad = message.loadId;
   arrival = { message, parts: new Map(), received: 0 };
   if (!(message.reload && hasModel)) shell.setProgress(message.bytes > 0 ? 0 : undefined);
+  // Decoders load while the bytes arrive; build() finds them ready.
+  void view?.then((target) => target?.decoders(message.extensions));
   if (message.parts === 0) void build(arrival);
 }
 
@@ -121,7 +123,8 @@ async function build(current: Arrival): Promise<void> {
       return;
     }
     const { parseModel } = await import('./scene');
-    const gltf = await parseModel(current.message.json, current.parts);
+    const decoders = await target.decoders(current.message.extensions);
+    const gltf = await parseModel(current.message.json, current.parts, decoders);
     if (current !== arrival) return;
     target.show(gltf.scene, current.message.reload && hasModel);
     hasModel = true;

@@ -16,11 +16,13 @@ import {
   KHRMaterialsTransmission,
   KHRMaterialsUnlit,
   KHRMaterialsVariants,
+  KHRTextureBasisu,
   KHRTextureTransform,
   Light,
 } from '@gltf-transform/extensions';
 import { draco, meshopt, quantize } from '@gltf-transform/functions';
 import draco3d from 'draco3dgltf';
+import { encodeToKTX2 } from 'ktx2-encoder';
 import { MeshoptEncoder } from 'meshoptimizer';
 
 const argument = (name) => {
@@ -201,10 +203,30 @@ function png(width, height, pixel) {
   ]);
 }
 
-const checker = () =>
-  png(64, 64, (x, y) =>
-    ((x >> 3) + (y >> 3)) % 2 === 0 ? [235, 235, 235, 255] : [52, 120, 220, 255],
-  );
+/** Squares of 8 × 8 texels, light and `dark`. */
+const squares =
+  (dark = [52, 120, 220, 255]) =>
+  (x, y) =>
+    ((x >> 3) + (y >> 3)) % 2 === 0 ? [235, 235, 235, 255] : dark;
+
+const checker = () => png(64, 64, squares());
+
+/**
+ * A KTX2 texture compressed with Basis Universal: ETC1S, or with `uastc` UASTC and Zstandard
+ * supercompression, the two kinds glTF models carry.
+ */
+async function ktx2(width, height, pixel, { uastc = false } = {}) {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) data.set(pixel(x, y), (y * width + x) * 4);
+  }
+  return encodeToKTX2(data, {
+    imageDecoder: async () => ({ width, height, data }),
+    isUASTC: uastc,
+    needSupercompression: uastc,
+    generateMipmap: true,
+  });
+}
 
 /** A normal map of soft round bumps. */
 const bumps = () =>
@@ -634,6 +656,29 @@ function textured() {
   return doc;
 }
 
+/** Two boxes with KTX2 textures: ETC1S on the left, UASTC on the right. */
+async function compressedTextures() {
+  const doc = newDocument();
+  doc.createExtension(KHRTextureBasisu).setRequired(true);
+  const box = async (name, x, pixel, options) => {
+    const image = await ktx2(64, 64, pixel, options);
+    const material = doc
+      .createMaterial(name)
+      .setBaseColorTexture(doc.createTexture(name).setImage(image).setMimeType('image/ktx2'));
+    return doc
+      .createNode(name)
+      .setMesh(mesh(doc, name, boxGeometry(1), material))
+      .setTranslation([x, 0.5, 0]);
+  };
+  scene(
+    doc,
+    'Compressed textures',
+    await box('ETC1S', -0.75, squares()),
+    await box('UASTC', 0.75, squares([220, 110, 40, 255]), { uastc: true }),
+  );
+  return doc;
+}
+
 // Writing
 
 /** A GLB container: 12-byte header, then a JSON chunk padded with spaces and a BIN chunk. */
@@ -715,6 +760,7 @@ await writeGlb(
   await dense().transform(meshopt({ encoder: MeshoptEncoder, level: 'medium' })),
 );
 await writeGlb('quantized.glb', await dense().transform(quantize()));
+await writeGlb('ktx2.glb', await compressedTextures());
 
 // Files that can't be shown, or only partly.
 write('empty.glb', Buffer.alloc(0));

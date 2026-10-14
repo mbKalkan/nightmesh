@@ -8,6 +8,7 @@ export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
   'EXT_meshopt_compression',
   'EXT_texture_avif',
   'EXT_texture_webp',
+  'KHR_draco_mesh_compression',
   'KHR_lights_punctual',
   'KHR_materials_anisotropy',
   'KHR_materials_clearcoat',
@@ -23,5 +24,6 @@ export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
   'KHR_materials_volume',
   'KHR_mesh_quantization',
   'KHR_meshopt_compression',
+  'KHR_texture_basisu',
   'KHR_texture_transform',
 ]);

@@ -20,6 +20,14 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+
+/** Decoders a model needs, made the first time any model needs them. */
+export interface Decoders {
+  draco?: DRACOLoader;
+  ktx2?: KTX2Loader;
+}
 
 /** The direction the camera looks at a model from when it frames it: front, right, above. */
 const VIEW_DIRECTION = new Vector3(1, 0.6, 1.4).normalize();
@@ -38,6 +46,8 @@ export class ModelView {
   /** Whether the camera was ever pointed at a model; a reload keeps that view. */
   private framed = false;
   private frameRequest = 0;
+  private draco: Promise<DRACOLoader> | undefined;
+  private ktx2: Promise<KTX2Loader> | undefined;
 
   constructor(
     private readonly container: HTMLElement,
@@ -138,7 +148,29 @@ export class ModelView {
     });
   }
 
+  /**
+   * The decoders for a model using `extensions`. Each is a chunk of its own, with WebAssembly
+   * inside, loaded only once a model uses it.
+   */
+  async decoders(extensions: readonly string[]): Promise<Decoders> {
+    const decoders: Decoders = {};
+    if (extensions.includes('KHR_draco_mesh_compression')) {
+      this.draco ??= import('./draco').then(({ createDracoLoader }) => createDracoLoader());
+      decoders.draco = await this.draco;
+    }
+    if (extensions.includes('KHR_texture_basisu')) {
+      // Transcoding targets a format this GPU supports, so it needs the renderer.
+      this.ktx2 ??= import('./ktx2').then(({ createKtx2Loader }) =>
+        createKtx2Loader(this.renderer),
+      );
+      decoders.ktx2 = await this.ktx2;
+    }
+    return decoders;
+  }
+
   dispose(): void {
+    void this.draco?.then((loader) => loader.dispose());
+    void this.ktx2?.then((loader) => loader.dispose());
     cancelAnimationFrame(this.frameRequest);
     this.resizeObserver.disconnect();
     this.controls.dispose();

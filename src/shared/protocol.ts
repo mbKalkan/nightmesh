@@ -33,6 +33,8 @@ export interface ModelMessage {
   /** True when the file changed on disk and the view should keep its camera. */
   reload: boolean;
   json: string;
+  /** `extensionsUsed`, so the webview can load the decoders it needs while bytes arrive. */
+  extensions: string[];
   parts: number;
   bytes: number;
   /** What couldn't be loaded, in sentences for the user; empty when all of it could. */

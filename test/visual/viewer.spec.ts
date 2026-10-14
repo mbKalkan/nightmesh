@@ -101,8 +101,10 @@ test.describe('models that open', () => {
     'textured.gltf',
     'embedded.gltf',
     'dense.glb',
+    'draco.glb',
     'meshopt.glb',
     'quantized.glb',
+    'ktx2.glb',
   ]) {
     test(fixture, async ({ page }) => {
       const viewer = await openViewer(page, 'dark');
@@ -115,6 +117,26 @@ test.describe('models that open', () => {
       expect(viewer.problems).toEqual([]);
     });
   }
+});
+
+test('draws KTX2 textures, both ETC1S and UASTC', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('ktx2.glb');
+
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  const box = (await page.locator('.nm-viewport').boundingBox())!;
+  const colors: number[][] = [];
+  for (let row = 1; row <= 6; row++) {
+    for (let column = 1; column <= 9; column++) {
+      const x = Math.round(box.x + (box.width * column) / 10);
+      const y = Math.round(box.y + (box.height * row) / 7);
+      colors.push(await pixelAt(page, x, y));
+    }
+  }
+  // Blue squares on the ETC1S box, orange on the UASTC one: untextured boxes would be white.
+  expect(colors.some(([r, , b]) => b > r + 80)).toBe(true);
+  expect(colors.some(([r, , b]) => r > b + 80)).toBe(true);
+  expect(viewer.problems).toEqual([]);
 });
 
 test.describe('files that cannot be shown', () => {
