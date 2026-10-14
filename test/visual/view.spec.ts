@@ -29,38 +29,42 @@ async function expectLookingFrom(page: Page, view: string) {
     .toBeLessThan(0.5);
 }
 
-for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
-  test(`opens the View menu from the toolbar, ${theme} theme`, async ({ page }) => {
-    const viewer = await openViewer(page, theme);
-    await viewer.open('scene.glb');
-    await expect(page.locator('.nm-gizmo')).toBeVisible();
+// One model for all four themes: each load costs seconds of software WebGL in CI.
+test('opens the View menu from the toolbar, in every theme', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  await expect(page.locator('.nm-gizmo')).toBeVisible();
 
-    await viewButton(page).click();
-    await expect(menu(page)).toBeVisible();
-    await expect(viewButton(page)).toHaveAttribute('aria-expanded', 'true');
-    await expect(menu(page).locator('.nm-menu-label')).toHaveText([
-      'Front',
-      'Back',
-      'Right',
-      'Left',
-      'Top',
-      'Bottom',
-      'Perspective',
-      'Orthographic',
-      'Grid (1 m squares)',
-      'Origin Axes',
-    ]);
-    await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'true');
-    await expect(item(page, 'Origin Axes')).toHaveAttribute('aria-checked', 'false');
-    await expect(item(page, 'Perspective')).toHaveAttribute('aria-checked', 'true');
-    await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'false');
-    await expect(item(page, 'Back')).toHaveAttribute('aria-keyshortcuts', 'Shift+1');
-    await item(page, 'Top').hover();
+  await viewButton(page).click();
+  await expect(menu(page)).toBeVisible();
+  await expect(viewButton(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu(page).locator('.nm-menu-label')).toHaveText([
+    'Front',
+    'Back',
+    'Right',
+    'Left',
+    'Top',
+    'Bottom',
+    'Perspective',
+    'Orthographic',
+    'Grid (1 m squares)',
+    'Origin Axes',
+  ]);
+  await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'true');
+  await expect(item(page, 'Origin Axes')).toHaveAttribute('aria-checked', 'false');
+  await expect(item(page, 'Perspective')).toHaveAttribute('aria-checked', 'true');
+  await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'false');
+  await expect(item(page, 'Back')).toHaveAttribute('aria-keyshortcuts', 'Shift+1');
+  await item(page, 'Top').hover();
+  for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
+    await viewer.setTheme(theme);
+    // The view takes the theme's colors a moment after VS Code switches it.
+    await page.waitForTimeout(200);
     expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `${SCREENS}/view-menu-${theme}.png` });
-    expect(viewer.problems).toEqual([]);
-  });
-}
+  }
+  expect(viewer.problems).toEqual([]);
+});
 
 test('works the View menu with the keyboard', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
@@ -179,6 +183,7 @@ test('starts with what the host kept from the viewers before', async ({ page }) 
     preferences: { grid: false, axes: true, layout: { inspector: false, structureWidth: 320 } },
   } as Parameters<typeof viewer.post>[0]);
   for (const message of await viewer.messages('scene.glb')) await viewer.post(message);
+  await page.waitForSelector('.nm-viewport[data-state]');
   await expect(page.locator('.nm-gizmo')).toBeVisible();
 
   await expect(page.locator('.nm-panel-right')).toBeHidden();
