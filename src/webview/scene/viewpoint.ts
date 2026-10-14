@@ -44,6 +44,7 @@ export const OPPOSITE: Readonly<Record<StandardView, StandardView>> = {
 
 /** Where a model is first looked at from: the front, right and above. */
 const FIRST_DIRECTION = new Vector3(1, 0.6, 1.4).normalize();
+/** The vertical field of view, in degrees, unless a camera from the file sets its own. */
 const FOV = 45;
 /** How long the camera takes to turn to a standard view, in milliseconds. */
 const TURN_TIME = 300;
@@ -108,7 +109,7 @@ export class Viewpoint {
     const from = this.camera;
     const target = this.controls.target;
     const direction = this.direction();
-    const tan = Math.tan(MathUtils.degToRad(FOV / 2));
+    const tan = this.tanHalfFov();
     if (projection === 'orthographic') {
       const height = from.position.distanceTo(target) * tan;
       this.orthographic.zoom = 1;
@@ -131,6 +132,7 @@ export class Viewpoint {
    */
   frame(box: Box3, direction?: Vector3): void {
     this.stopTurn();
+    this.setFov(FOV);
     const center = box.getCenter(new Vector3());
     const from = (direction ?? FIRST_DIRECTION).clone().normalize();
     // Turned toward the box first, so its corners can be measured along the camera's own axes:
@@ -144,7 +146,7 @@ export class Viewpoint {
 
     let distance = 0;
     let height = 0;
-    const tanY = Math.tan(MathUtils.degToRad(FOV / 2));
+    const tanY = this.tanHalfFov();
     const tanX = tanY * this.aspect;
     for (const x of [box.min.x, box.max.x]) {
       for (const y of [box.min.y, box.max.y]) {
@@ -212,6 +214,43 @@ export class Viewpoint {
     this.turnRequest = requestAnimationFrame(step);
   }
 
+  /**
+   * Looks through a camera from the file: from where it is, the way it faces, with its field of
+   * view or its height. The point orbited is where its line of sight passes the model's middle.
+   * The view stays upright: the controls can't roll.
+   */
+  lookThrough(source: PerspectiveCamera | OrthographicCamera): void {
+    this.stopTurn();
+    this.view = undefined;
+    source.updateWorldMatrix(true, false);
+    const position = new Vector3().setFromMatrixPosition(source.matrixWorld);
+    const forward = new Vector3(0, 0, -1).transformDirection(source.matrixWorld);
+    const ahead = Math.max(
+      this.bounds.center.clone().sub(position).dot(forward),
+      this.bounds.radius * 0.1,
+      1e-3,
+    );
+    const target = position.clone().addScaledVector(forward, ahead);
+    const back = awayFrom(forward, new Vector3(0, 1, 0).transformDirection(source.matrixWorld));
+    if ((source as OrthographicCamera).isOrthographicCamera) {
+      const ortho = source as OrthographicCamera;
+      this.controls.object = this.orthographic;
+      this.orthographic.zoom = 1;
+      this.setOrthographicHeight(Math.max((ortho.top - ortho.bottom) / 2, 1e-3) / ortho.zoom);
+      this.controls.target.copy(target);
+      this.orthographic.position
+        .copy(target)
+        .addScaledVector(back, this.standOff(this.orthographic.top));
+    } else {
+      this.controls.object = this.perspective;
+      this.setFov((source as PerspectiveCamera).fov);
+      this.controls.target.copy(target);
+      this.perspective.position.copy(target).addScaledVector(back, ahead);
+    }
+    this.controls.update();
+    this.afterMove();
+  }
+
   /** Orbits by angles in radians: around the vertical, then up over the point orbited. */
   orbit(left: number, up: number): void {
     this.stopTurn();
@@ -241,6 +280,16 @@ export class Viewpoint {
   private stopTurn(): void {
     if (this.turnRequest) cancelAnimationFrame(this.turnRequest);
     this.turnRequest = 0;
+  }
+
+  private tanHalfFov(): number {
+    return Math.tan(MathUtils.degToRad(this.perspective.fov / 2));
+  }
+
+  private setFov(fov: number): void {
+    if (this.perspective.fov === fov) return;
+    this.perspective.fov = fov;
+    this.perspective.updateProjectionMatrix();
   }
 
   /** Half the orthographic view's height, at zoom 1; its width follows the aspect. */
@@ -276,6 +325,21 @@ export class Viewpoint {
     camera.near = Math.max(Math.min(toTarget / 100, far / 1000), far / 1e6);
     camera.updateProjectionMatrix();
   }
+}
+
+/**
+ * The way from the point orbited back to a camera looking along `forward`. Looking straight down
+ * or up, the controls take their bearing from the tiniest sideways part of it, which rounding
+ * leaves to chance: it is set so the camera's `up` stays up on screen.
+ */
+function awayFrom(forward: Vector3, up: Vector3): Vector3 {
+  const back = forward.clone().negate();
+  if (Math.abs(forward.y) < 1 - 1e-6) return back;
+  // Seen from above, the view's top is away from the side the camera leans to; from below, toward.
+  const lean = new Vector3(up.x, 0, up.z).multiplyScalar(forward.y < 0 ? -1 : 1);
+  if (lean.lengthSq() === 0) return back;
+  const theta = Math.atan2(lean.x, lean.z);
+  return new Vector3().setFromSphericalCoords(1, forward.y < 0 ? 1e-4 : Math.PI - 1e-4, theta);
 }
 
 function easeInOut(amount: number): number {

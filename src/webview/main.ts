@@ -7,6 +7,7 @@ import type {
   OpenMessage,
   PanelLayout,
   Preferences,
+  ShadingStrings,
   StandardView,
   StructureMessage,
   ViewerStrings,
@@ -242,6 +243,23 @@ function shadingMenuItems(): MenuItem[] {
       checked: current.wireframe,
       run: () => current.setWireframe(!current.wireframe),
     },
+    ...variantItems(current, text),
+  ];
+}
+
+/** KHR_materials_variants, when the model has them: its own materials or one of its variants. */
+function variantItems(current: View, text: ShadingStrings): MenuItem[] {
+  if (current.variants.length === 0) return [];
+  const pick = (variant: number | undefined, label: string): MenuItem => ({
+    label,
+    kind: 'radio',
+    checked: current.variant === variant,
+    run: () => current.setVariant(variant),
+  });
+  return [
+    'separator',
+    pick(undefined, text.defaultVariant),
+    ...current.variants.map((name, index) => pick(index, name ?? fill(text.variant, index))),
   ];
 }
 
@@ -279,6 +297,22 @@ function viewMenuItems(): MenuItem[] {
       checked: shown.axes,
       run: () => setHelpers({ axes: !shown.axes }),
     },
+    ...cameraItems(current),
+  ];
+}
+
+/** The cameras in the model, to look through; 0 goes through them one after the other. */
+function cameraItems(current: View): MenuItem[] {
+  const nodes = current.cameraNodes;
+  if (nodes.length === 0) return [];
+  const kind = strings?.structure.kinds.camera ?? '';
+  return [
+    'separator',
+    ...nodes.map((node, index) => ({
+      label: (node !== undefined && structure?.nodeName(node)) || `${kind} ${index}`,
+      shortcut: index === 0 ? '0' : undefined,
+      run: () => current.lookThrough(index),
+    })),
   ];
 }
 

@@ -33,7 +33,8 @@ function screenUp(view: Viewpoint): Vector3 {
   return new Vector3().setFromMatrixColumn(view.camera.matrixWorld, 1);
 }
 
-const near = (a: Vector3, b: Vector3) => expect(a.distanceTo(b)).toBeLessThan(1e-4);
+const near = (a: Vector3, b: Vector3, tolerance = 1e-4) =>
+  expect(a.distanceTo(b)).toBeLessThan(tolerance);
 
 describe('Viewpoint', () => {
   it('frames a box closely, with every corner in view, in either projection', () => {
@@ -125,5 +126,41 @@ describe('Viewpoint', () => {
       ...[BOX.min, BOX.max].map((corner) => camera.position.distanceTo(corner)),
     );
     expect(camera.far).toBeGreaterThan(farthest);
+  });
+});
+
+describe('Viewpoint.lookThrough', () => {
+  it('looks through a perspective camera from the file, with its field of view', async () => {
+    const { PerspectiveCamera } = await import('three');
+    const { view } = viewpoint();
+    view.frame(BOX);
+    const camera = new PerspectiveCamera(30, 1, 0.1, 100);
+    camera.position.set(10, 1, 6);
+    view.lookThrough(camera);
+    expect(view.projection).toBe('perspective');
+    expect(view.perspective.fov).toBe(30);
+    near(view.camera.position, new Vector3(10, 1, 6));
+    near(view.direction(), new Vector3(0, 0, 1));
+    // The point orbited is level with the model's middle, straight ahead.
+    expect(view.controls.target.z).toBeCloseTo(0, 6);
+
+    // Framing goes back to the viewer's own field of view.
+    view.frame(BOX);
+    expect(view.perspective.fov).toBe(45);
+  });
+
+  it('looks through an orthographic camera, as tall as it is', async () => {
+    const { OrthographicCamera, Quaternion } = await import('three');
+    const { view } = viewpoint();
+    view.frame(BOX);
+    const camera = new OrthographicCamera(-3, 3, 2, -2, 0.1, 50);
+    camera.position.set(10, 10, 0);
+    camera.quaternion.copy(new Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2));
+    view.lookThrough(camera);
+    expect(view.projection).toBe('orthographic');
+    expect(view.orthographic.top / view.orthographic.zoom).toBeCloseTo(2, 6);
+    // Leaning a hair to the front, so the view's top stays the camera's top.
+    near(view.direction(), new Vector3(0, 1, 0), 1e-3);
+    near(screenUp(view), new Vector3(0, 0, -1), 1e-3);
   });
 });

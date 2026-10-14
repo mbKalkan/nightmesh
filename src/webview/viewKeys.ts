@@ -8,6 +8,7 @@ export interface Steerable {
   setProjection(projection: Projection): void;
   orbit(left: number, up: number): void;
   zoom(factor: number): void;
+  nextCamera(): void;
 }
 
 export const STANDARD_VIEWS: readonly StandardView[] = [
@@ -57,6 +58,8 @@ export function viewKey(
   const pair = digit && DIGITS[digit];
   if (pair) return (view) => view.look(pair[event.shiftKey ? 1 : 0]);
   if (digit === '9') return (view) => view.lookOpposite();
+  // As Blender's 0, through the file's cameras, one after the other.
+  if (digit === '0') return (view) => view.nextCamera();
   if (digit === '5') {
     return (view) =>
       view.setProjection(view.projection === 'perspective' ? 'orthographic' : 'perspective');

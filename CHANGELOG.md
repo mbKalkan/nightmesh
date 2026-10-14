@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Shading menu draws the model lit as its materials say, unlit in their base colors and
   textures, or colored by the direction its surfaces face, to check normals; a wireframe can be
   drawn over any of them.
+- Models with material variants (KHR_materials_variants) switch between them from the Shading
+  menu, in any shading.
+- Look through the cameras in the model from the View menu, or with 0, which goes from one to
+  the next: from where each camera is, with its field of view, perspective or orthographic.
 - A Statistics tab beside the Inspector counts the scene shown, before its geometry loads:
   nodes, mesh instances (GPU instancing included), draw calls, vertices, triangles, materials,
   textures and the scene's dimensions in metres, then a table of meshes sorted by the triangles

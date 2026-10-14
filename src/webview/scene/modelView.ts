@@ -3,7 +3,9 @@ import {
   Color,
   Mesh,
   NeutralToneMapping,
+  OrthographicCamera,
   PMREMGenerator,
+  PerspectiveCamera,
   Quaternion,
   SRGBColorSpace,
   Scene,
@@ -24,6 +26,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
 import { Picker } from './picking';
 import { Playback } from './playback';
@@ -102,6 +105,13 @@ export class ModelView {
   private lastMeasure = 0;
   private draco: Promise<DRACOLoader> | undefined;
   private ktx2: Promise<KTX2Loader> | undefined;
+  /** The cameras in the model, to look through. */
+  private cameras: (PerspectiveCamera | OrthographicCamera)[] = [];
+  private cameraIndex = -1;
+  private variantNames: (string | undefined)[] = [];
+  private variantIndex: number | undefined;
+  /** Each mesh with variants and its own material, for when no variant is picked. */
+  private readonly ownMaterials = new Map<Mesh, Material | Material[]>();
   /** The camera's rotation when the gizmo was last told. */
   private readonly turnedTo = new Quaternion(Number.NaN);
 
@@ -162,6 +172,53 @@ export class ModelView {
     this.requestRender();
   }
 
+  /**
+   * The glTF node of each camera in the model, in the order they are in its scene: the loader
+   * changes names to suit animation paths, so the structure has the names to show.
+   */
+  get cameraNodes(): (number | undefined)[] {
+    return this.cameras.map((camera) => this.index?.node(camera));
+  }
+
+  /** Looks through camera `index` of the model. */
+  lookThrough(index: number): void {
+    const camera = this.cameras[index];
+    if (!camera) return;
+    this.cameraIndex = index;
+    this.viewpoint.lookThrough(camera);
+  }
+
+  /** Looks through the model's next camera, as 0 does. */
+  nextCamera(): void {
+    if (this.cameras.length > 0) this.lookThrough((this.cameraIndex + 1) % this.cameras.length);
+  }
+
+  /** The KHR_materials_variants the model has, by name where it gives one. */
+  get variants(): readonly (string | undefined)[] {
+    return this.variantNames;
+  }
+
+  /** The variant shown; undefined when the model shows its own materials. */
+  get variant(): number | undefined {
+    return this.variantIndex;
+  }
+
+  setVariant(index: number | undefined): void {
+    if (!this.model || index === this.variantIndex) return;
+    this.shading.detach();
+    this.applyVariant(index);
+    this.shading.attach(this.model);
+    this.requestRender();
+  }
+
+  private applyVariant(index: number | undefined): void {
+    this.variantIndex = index;
+    for (const [mesh, own] of this.ownMaterials) {
+      const materials = mesh.userData.variantMaterials as VariantMaterials;
+      mesh.material = (index !== undefined && materials.get(index)) || own;
+    }
+  }
+
   get shadingMode(): ShadingMode {
     return this.shading.current;
   }
@@ -199,6 +256,26 @@ export class ModelView {
     this.model = model;
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
+    this.cameras = [];
+    this.cameraIndex = -1;
+    model.traverse((object) => {
+      if ((object as PerspectiveCamera).isPerspectiveCamera) {
+        this.cameras.push(object as PerspectiveCamera);
+      } else if ((object as OrthographicCamera).isOrthographicCamera) {
+        this.cameras.push(object as OrthographicCamera);
+      }
+    });
+    const keepVariant =
+      keepCamera && sameNames(this.variantNames, (gltf.userData.variants as string[]) ?? []);
+    this.variantNames = (gltf.userData.variants as (string | undefined)[]) ?? [];
+    this.ownMaterials.clear();
+    model.traverse((object) => {
+      if ((object as Mesh).userData.variantMaterials) {
+        this.ownMaterials.set(object as Mesh, (object as Mesh).material);
+      }
+    });
+    if (keepVariant && this.variantIndex !== undefined) this.applyVariant(this.variantIndex);
+    else this.variantIndex = undefined;
     this.shading.attach(model);
     this.modelBox().getBoundingSphere(this.modelSphere);
     this.helpers.fit(this.modelBox());
@@ -559,10 +636,13 @@ function disposeObject(root: Object3D): void {
   root.traverse((object) => {
     const { geometry, material } = object as Partial<Mesh>;
     geometry?.dispose();
-    for (const item of Array.isArray(material) ? material : material ? [material] : []) {
-      disposeMaterial(item);
-    }
+    const variants = (object.userData.variantMaterials as VariantMaterials | undefined)?.values();
+    for (const item of [material, ...(variants ?? [])].flat()) if (item) disposeMaterial(item);
   });
+}
+
+function sameNames(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((name, index) => name === b[index]);
 }
 
 function disposeMaterial(material: Material): void {

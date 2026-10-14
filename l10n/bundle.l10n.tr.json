@@ -115,5 +115,7 @@
   "Lit": "Işıklı",
   "Unlit": "Işıksız",
   "Normals": "Normaller",
-  "Wireframe": "Tel Kafes"
+  "Wireframe": "Tel Kafes",
+  "Default Materials": "Varsayılan Materyaller",
+  "Variant {0}": "Varyant {0}"
 }

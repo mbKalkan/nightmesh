@@ -116,6 +116,11 @@ export class StructureView {
     this.render(true);
   }
 
+  /** A node's name, if it has one. */
+  nodeName(index: number): string | undefined {
+    return this.context?.model.displayName('nodes', index);
+  }
+
   /** Each animation's name, or its kind and index when it has none, by glTF index. */
   animationNames(): string[] {
     const model = this.context?.model;

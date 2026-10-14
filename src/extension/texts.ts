@@ -50,6 +50,8 @@ export function viewerStrings(t: Translate): ViewerStrings {
       menu: t('Shading'),
       modes: { lit: t('Lit'), unlit: t('Unlit'), normals: t('Normals') },
       wireframe: t('Wireframe'),
+      defaultVariant: t('Default Materials'),
+      variant: t('Variant {0}', '{0}'),
     },
   };
 }

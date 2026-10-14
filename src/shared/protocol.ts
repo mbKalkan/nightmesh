@@ -116,6 +116,10 @@ export interface ShadingStrings {
   menu: string;
   modes: Record<ShadingMode, string>;
   wireframe: string;
+  /** No KHR_materials_variants variant picked: the materials the meshes name. */
+  defaultVariant: string;
+  /** A variant with no name: `Variant {0}`. */
+  variant: string;
 }
 
 /** The View menu, and the axes gizmo's tooltips. */
