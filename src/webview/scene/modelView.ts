@@ -11,6 +11,7 @@ import {
   Sphere,
   Vector3,
   WebGLRenderer,
+  type AnimationClip,
   type BufferAttribute,
   type BufferGeometry,
   type CompressedTexture,
@@ -25,6 +26,7 @@ import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { Picker } from './picking';
+import { Playback } from './playback';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 
 /** Decoders a model needs, made the first time any model needs them. */
@@ -41,7 +43,21 @@ export interface ViewEvents {
    * selection draws nothing; undefined when there is nothing drawn at all.
    */
   measured(size: [number, number, number] | undefined, selection: boolean): void;
+  /** Where playback is: undefined when the model has no animations. */
+  animation(state: AnimationState | undefined): void;
 }
+
+export interface AnimationState {
+  /** Each clip's length in seconds, by the glTF animation index. */
+  durations: number[];
+  clip: number;
+  time: number;
+  playing: boolean;
+  speed: number;
+}
+
+/** While playing, the size of the selection is measured again this often, in milliseconds. */
+const MEASURE_INTERVAL = 500;
 
 /** The direction the camera looks at a model from when it frames it: front, right, above. */
 const VIEW_DIRECTION = new Vector3(1, 0.6, 1.4).normalize();
@@ -70,6 +86,11 @@ export class ModelView {
   /** Whether the camera was ever pointed at a model; a reload keeps that view. */
   private framed = false;
   private frameRequest = 0;
+  private playback: Playback | undefined;
+  /** The animation frame that plays the clip, while it plays. */
+  private playRequest = 0;
+  private lastFrame = 0;
+  private lastMeasure = 0;
   private draco: Promise<DRACOLoader> | undefined;
   private ktx2: Promise<KTX2Loader> | undefined;
 
@@ -101,6 +122,7 @@ export class ModelView {
       this.model = undefined;
       this.index = undefined;
       this.highlight.clear();
+      this.stopPlaying();
     });
     canvas.addEventListener('webglcontextrestored', () => this.requestRender());
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -135,9 +157,118 @@ export class ModelView {
     this.modelBox().getBoundingSphere(this.modelSphere);
     if (!keepCamera || !this.framed) this.frame();
     this.framed = true;
+    this.startAnimations(model, gltf.animations, keepCamera);
     this.select(this.selected);
     this.updateClipping();
     this.render();
+  }
+
+  /** Plays clip `index` from where it is now, or from the start if it is another clip. */
+  setClip(index: number): void {
+    if (!this.playback || index === this.playback.clip) return;
+    this.playback.select(index);
+    this.afterPose();
+    this.reportAnimation();
+  }
+
+  setPlaying(playing: boolean): void {
+    if (!this.playback) return;
+    this.playback.setPlaying(playing);
+    if (this.playback.playing) this.startPlaying();
+    else this.stopPlaying();
+    this.reportAnimation();
+  }
+
+  togglePlaying(): void {
+    this.setPlaying(!this.playback?.playing);
+  }
+
+  /** Shows the pose `time` seconds into the clip. */
+  seek(time: number): void {
+    if (!this.playback) return;
+    this.playback.seek(time);
+    this.afterPose();
+    this.reportAnimation();
+  }
+
+  setSpeed(speed: number): void {
+    if (!this.playback) return;
+    this.playback.speed = speed;
+    this.reportAnimation();
+  }
+
+  /**
+   * Sets up playback for a model's clips, picking up where the last model left off when the
+   * file changed: same clip, same time, still playing if it was.
+   */
+  private startAnimations(model: Object3D, clips: readonly AnimationClip[], keep: boolean): void {
+    const before = keep ? this.playback : undefined;
+    const state = before && {
+      clip: before.clip,
+      time: before.time,
+      playing: before.playing,
+      speed: before.speed,
+    };
+    this.stopPlaying();
+    this.playback?.dispose();
+    this.playback = undefined;
+    // Skinned meshes are bounded in their rest pose; animated, they can leave that sphere.
+    model.traverse((object) => {
+      if ((object as SkinnedMesh).isSkinnedMesh) object.frustumCulled = false;
+    });
+    if (clips.length === 0) return this.events.animation(undefined);
+    this.playback = new Playback(model, clips);
+    this.playback.speed = state?.speed ?? 1;
+    this.playback.setPlaying(state?.playing ?? false);
+    this.playback.select(state && state.clip < clips.length ? state.clip : 0, state?.time ?? 0);
+    if (this.playback.playing) this.startPlaying();
+    this.reportAnimation();
+  }
+
+  private startPlaying(): void {
+    if (this.playRequest) return;
+    this.lastFrame = performance.now();
+    const step = (now: number) => {
+      if (!this.playback?.playing) return void (this.playRequest = 0);
+      this.playback.advance(Math.min((now - this.lastFrame) / 1000, 0.25));
+      this.lastFrame = now;
+      this.highlight.update();
+      this.render();
+      if (now - this.lastMeasure > MEASURE_INTERVAL) {
+        this.lastMeasure = now;
+        this.measure();
+      }
+      this.reportAnimation();
+      this.playRequest = requestAnimationFrame(step);
+    };
+    this.playRequest = requestAnimationFrame(step);
+  }
+
+  private stopPlaying(): void {
+    cancelAnimationFrame(this.playRequest);
+    this.playRequest = 0;
+    this.measure();
+  }
+
+  /** After the model moved: boxes follow it, the size is measured again, the view redrawn. */
+  private afterPose(): void {
+    this.model?.updateMatrixWorld(true);
+    this.highlight.update();
+    this.measure();
+    this.requestRender();
+  }
+
+  private reportAnimation(): void {
+    const playback = this.playback;
+    this.events.animation(
+      playback && {
+        durations: playback.clips.map((clip) => clip.duration),
+        clip: playback.clip,
+        time: playback.time,
+        playing: playback.playing,
+        speed: playback.speed,
+      },
+    );
   }
 
   /** Highlights what a structure entry stands for: a node, a mesh's nodes, a material's uses. */
@@ -205,6 +336,8 @@ export class ModelView {
   }
 
   dispose(): void {
+    this.stopPlaying();
+    this.playback?.dispose();
     void this.draco?.then((loader) => loader.dispose());
     void this.ktx2?.then((loader) => loader.dispose());
     cancelAnimationFrame(this.frameRequest);

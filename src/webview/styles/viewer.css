@@ -637,6 +637,76 @@ body.vscode-high-contrast .nm-link {
   outline-offset: 1px;
 }
 
+/* The viewport, with the animation bar below it */
+
+.nm-center {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nm-animation {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  height: 34px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--nm-border);
+  background: var(--vscode-editor-background);
+}
+
+.nm-select {
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, var(--nm-border)));
+  border-radius: 2px;
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  font: inherit;
+}
+
+.nm-select:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.nm-clips {
+  flex: 0 1 200px;
+}
+
+.nm-timeline {
+  flex: 1;
+  min-width: 60px;
+  margin: 0;
+  accent-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+}
+
+.nm-timeline:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.nm-clock {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
+.nm-play {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.nm-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Viewport */
 
 .nm-viewport {

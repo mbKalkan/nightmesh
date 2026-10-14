@@ -183,18 +183,15 @@ export function planRender(
     }
   }
 
-  if (json.animations) {
-    const animations = json.animations;
-    for (const animation of animations) {
-      animation.channels = animation.channels.filter((channel) => {
-        const sampler = animation.samplers[channel.sampler];
-        return (
-          sampler && !brokenAccessors.has(sampler.input) && !brokenAccessors.has(sampler.output)
-        );
-      });
-    }
-    json.animations = animations.filter((animation) => animation.channels.length > 0);
-    dropped.animations = animations.length - json.animations.length;
+  // An animation left with no channels stays, empty, so every animation keeps its index: the
+  // viewer matches the loader's clips to the structure by it.
+  for (const animation of json.animations ?? []) {
+    const before = animation.channels.length;
+    animation.channels = animation.channels.filter((channel) => {
+      const sampler = animation.samplers[channel.sampler];
+      return sampler && !brokenAccessors.has(sampler.input) && !brokenAccessors.has(sampler.output);
+    });
+    if (before > 0 && animation.channels.length === 0) dropped.animations++;
   }
 
   const kept = primitives - dropped.primitives;

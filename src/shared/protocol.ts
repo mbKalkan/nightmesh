@@ -86,6 +86,16 @@ export interface StructureStrings {
   };
 }
 
+/** Words for the animation bar below the view. */
+export interface AnimationStrings {
+  bar: string;
+  clip: string;
+  play: string;
+  pause: string;
+  time: string;
+  speed: string;
+}
+
 /** UI strings localized by the extension host and handed to the webview. */
 export interface ViewerStrings {
   loading: string;
@@ -102,6 +112,7 @@ export interface ViewerStrings {
   modelSize: string;
   selectionSize: string;
   structure: StructureStrings;
+  animation: AnimationStrings;
 }
 
 /** Sent once the webview is ready: what file this is. */

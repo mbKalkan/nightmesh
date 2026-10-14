@@ -22,6 +22,8 @@ export class Shell {
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
   private readonly toggles: HTMLElement;
+  /** The viewport, and below it the bar for a model's animations. */
+  private readonly center: HTMLElement;
   private readonly measureBadge: HTMLElement;
   private strings: ViewerStrings | undefined;
   private readonly fileName: HTMLElement;
@@ -54,23 +56,25 @@ export class Shell {
           <div class="nm-progress-bar"></div>
         </div>
         <div class="nm-body">
-          <main class="nm-viewport" tabindex="0">
-            <section class="nm-notice" role="status" hidden>
-              <div class="nm-notice-header">
-                <span class="nm-notice-icon">${icons.warning}</span>
-                <h2 class="nm-notice-title"></h2>
-                <button class="nm-icon-button" data-action="close-notice" type="button">${icons.close}</button>
+          <div class="nm-center">
+            <main class="nm-viewport" tabindex="0">
+              <section class="nm-notice" role="status" hidden>
+                <div class="nm-notice-header">
+                  <span class="nm-notice-icon">${icons.warning}</span>
+                  <h2 class="nm-notice-title"></h2>
+                  <button class="nm-icon-button" data-action="close-notice" type="button">${icons.close}</button>
+                </div>
+                <ul class="nm-notice-list"></ul>
+              </section>
+              <div class="nm-measure" role="status" hidden></div>
+              <div class="nm-error" role="alert" hidden>
+                <div class="nm-error-icon">${icons.error}</div>
+                <h1 class="nm-error-title"></h1>
+                <p class="nm-error-message"></p>
+                <ul class="nm-error-details"></ul>
               </div>
-              <ul class="nm-notice-list"></ul>
-            </section>
-            <div class="nm-measure" role="status" hidden></div>
-            <div class="nm-error" role="alert" hidden>
-              <div class="nm-error-icon">${icons.error}</div>
-              <h1 class="nm-error-title"></h1>
-              <p class="nm-error-message"></p>
-              <ul class="nm-error-details"></ul>
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
       </div>`;
 
@@ -96,8 +100,9 @@ export class Shell {
     };
     this.structurePanel = new SidePanel('left', layout.structureWidth, saveWidths);
     this.inspectorPanel = new SidePanel('right', layout.inspectorWidth, saveWidths);
-    this.viewport.before(this.structurePanel.element);
-    this.viewport.after(this.inspectorPanel.element);
+    this.center = find('.nm-center');
+    this.center.before(this.structurePanel.element);
+    this.center.after(this.inspectorPanel.element);
     this.toggles.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (button?.dataset.action === 'frame') return this.events.frame();
@@ -170,6 +175,11 @@ export class Shell {
       }),
     );
     this.measureBadge.classList.toggle('nm-measure-selection', selection);
+  }
+
+  /** Puts a bar below the viewport, the full width of the view. */
+  addBelowViewport(element: HTMLElement): void {
+    this.center.append(element);
   }
 
   /** Shows the side panels, as the layout has them, once there is a structure to put in them. */

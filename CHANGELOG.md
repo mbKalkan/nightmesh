@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection when something is selected: a node along its own axes, so a turned part keeps its
   real length. The Inspector gives the dimensions of the model, scenes and nodes, and each
   mesh's size, before the geometry has loaded. Selection boxes turn with what they outline.
+- Animations play from a bar below the view: pick a clip (or select it in the structure),
+  play and pause (Space), scrub the time line, change the speed. Clips loop; switching clips
+  puts the model back in its rest pose first. When the file changes, the clip stays.
 - Textures show their size in pixels, mip levels and estimated GPU memory, read from each
   image's header as the model opens, and a preview of the image once the model is drawn. The
   Statistics tab adds up the texture memory of the scene.
