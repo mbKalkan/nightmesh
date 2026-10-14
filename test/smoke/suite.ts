@@ -20,10 +20,26 @@ async function waitFor<T>(probe: () => T | undefined, timeoutMs = 30_000): Promi
       return value;
     }
     if (Date.now() - start > timeoutMs) {
-      throw new Error('Timed out waiting for condition');
+      throw new Error(`Timed out waiting for condition. ${describeEditors()}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+}
+
+/** What the workbench shows, for the message of a failed wait. */
+function describeEditors(): string {
+  const tabs = vscode.window.tabGroups.all.flatMap((group) =>
+    group.tabs.map((tab) => {
+      const input = tab.input as { uri?: vscode.Uri; viewType?: string } | undefined;
+      const kind = input?.constructor?.name ?? typeof input;
+      const uri = input?.uri?.toString() ?? '';
+      return `${tab.isActive ? '*' : ''}${tab.label} [${kind}${input?.viewType ? ` ${input.viewType}` : ''}] ${uri}`;
+    }),
+  );
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  return `Tabs: ${tabs.length ? tabs.join('; ') : 'none'}. Text editors: ${
+    vscode.window.visibleTextEditors.map((e) => e.document.uri.toString()).join(', ') || 'none'
+  }. Extension ${extension ? (extension.isActive ? 'active' : 'inactive') : 'missing'}.`;
 }
 
 /** Opens a file the way a click in the Explorer does and returns the custom editor tab's input. */
