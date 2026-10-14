@@ -29,34 +29,42 @@ async function expectLookingFrom(page: Page, view: string) {
     .toBeLessThan(0.5);
 }
 
-for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
-  test(`opens the View menu from the toolbar, ${theme} theme`, async ({ page }) => {
-    const viewer = await openViewer(page, theme);
-    await viewer.open('scene.glb');
-    await expect(page.locator('.nm-gizmo')).toBeVisible();
+// One model for all four themes: each load costs seconds of software WebGL in CI.
+test('opens the View menu from the toolbar, in every theme', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  await expect(page.locator('.nm-gizmo')).toBeVisible();
 
-    await viewButton(page).click();
-    await expect(menu(page)).toBeVisible();
-    await expect(viewButton(page)).toHaveAttribute('aria-expanded', 'true');
-    await expect(menu(page).locator('.nm-menu-label')).toHaveText([
-      'Front',
-      'Back',
-      'Right',
-      'Left',
-      'Top',
-      'Bottom',
-      'Perspective',
-      'Orthographic',
-    ]);
-    await expect(item(page, 'Perspective')).toHaveAttribute('aria-checked', 'true');
-    await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'false');
-    await expect(item(page, 'Back')).toHaveAttribute('aria-keyshortcuts', 'Shift+1');
-    await item(page, 'Top').hover();
+  await viewButton(page).click();
+  await expect(menu(page)).toBeVisible();
+  await expect(viewButton(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu(page).locator('.nm-menu-label')).toHaveText([
+    'Front',
+    'Back',
+    'Right',
+    'Left',
+    'Top',
+    'Bottom',
+    'Perspective',
+    'Orthographic',
+    'Grid (1 m squares)',
+    'Origin Axes',
+  ]);
+  await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'true');
+  await expect(item(page, 'Origin Axes')).toHaveAttribute('aria-checked', 'false');
+  await expect(item(page, 'Perspective')).toHaveAttribute('aria-checked', 'true');
+  await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'false');
+  await expect(item(page, 'Back')).toHaveAttribute('aria-keyshortcuts', 'Shift+1');
+  await item(page, 'Top').hover();
+  for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
+    await viewer.setTheme(theme);
+    // The view takes the theme's colors a moment after VS Code switches it.
+    await page.waitForTimeout(200);
     expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `${SCREENS}/view-menu-${theme}.png` });
-    expect(viewer.problems).toEqual([]);
-  });
-}
+  }
+  expect(viewer.problems).toEqual([]);
+});
 
 test('works the View menu with the keyboard', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
@@ -65,6 +73,9 @@ test('works the View menu with the keyboard', async ({ page }) => {
   await page.keyboard.press('ArrowDown');
   await expect(item(page, 'Front')).toBeFocused();
   await page.keyboard.press('End');
+  await expect(item(page, 'Origin Axes')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
   await expect(item(page, 'Orthographic')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(menu(page)).toBeHidden();
@@ -72,7 +83,7 @@ test('works the View menu with the keyboard', async ({ page }) => {
 
   await page.keyboard.press('ArrowUp');
   await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'true');
-  await expect(item(page, 'Orthographic')).toBeFocused();
+  await expect(item(page, 'Origin Axes')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu(page)).toBeHidden();
 
@@ -130,5 +141,56 @@ test('orbits with the arrows, zooms with + and -, and switches projection with 5
   await expect(item(page, 'Orthographic')).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Escape');
   await page.screenshot({ path: `${SCREENS}/view-orthographic.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
+/** The last preferences the viewer gave the host to keep. */
+async function savedPreferences(viewer: Awaited<ReturnType<typeof openViewer>>) {
+  const sent = (await viewer.sent()) as { type: string; preferences?: Record<string, unknown> }[];
+  return sent.filter((message) => message.type === 'preferences').at(-1)?.preferences;
+}
+
+test('shows a ground grid unless hidden, and the origin axes when asked, and keeps the choice', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('scene.glb');
+  const canvas = page.locator('.nm-canvas');
+  const withGrid = await canvas.screenshot();
+
+  await viewButton(page).click();
+  await item(page, 'Grid (1 m squares)').click();
+  await expect.poll(() => savedPreferences(viewer)).toMatchObject({ grid: false });
+  await expect.poll(async () => (await canvas.screenshot()).equals(withGrid)).toBe(false);
+  await viewButton(page).click();
+  await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'false');
+  await item(page, 'Origin Axes').click();
+  await expect.poll(() => savedPreferences(viewer)).toMatchObject({ grid: false, axes: true });
+  await page.screenshot({ path: `${SCREENS}/view-axes.png` });
+
+  // Hiding a panel is kept the same way.
+  await page.locator('[data-panel="inspector"]').click();
+  await expect
+    .poll(() => savedPreferences(viewer))
+    .toMatchObject({ axes: true, layout: { inspector: false } });
+  expect(viewer.problems).toEqual([]);
+});
+
+test('starts with what the host kept from the viewers before', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.post({
+    ...viewer.openMessage('scene.glb'),
+    preferences: { grid: false, axes: true, layout: { inspector: false, structureWidth: 320 } },
+  } as Parameters<typeof viewer.post>[0]);
+  for (const message of await viewer.messages('scene.glb')) await viewer.post(message);
+  await page.waitForSelector('.nm-viewport[data-state]');
+  await expect(page.locator('.nm-gizmo')).toBeVisible();
+
+  await expect(page.locator('.nm-panel-right')).toBeHidden();
+  await expect(page.locator('[data-panel="inspector"]')).toHaveAttribute('aria-pressed', 'false');
+  expect(Math.round((await page.locator('.nm-panel-left').boundingBox())!.width)).toBe(320);
+  await viewButton(page).click();
+  await expect(item(page, 'Grid (1 m squares)')).toHaveAttribute('aria-checked', 'false');
+  await expect(item(page, 'Origin Axes')).toHaveAttribute('aria-checked', 'true');
   expect(viewer.problems).toEqual([]);
 });

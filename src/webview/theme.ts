@@ -1,3 +1,5 @@
+import type { HelperColors } from './scene/helpers';
+
 /**
  * The viewport's background as sRGB channels from 0 to 1. It comes from CSS (`--nm-viewport`,
  * the editor background, a shade darker in light themes so white models stand out).
@@ -8,12 +10,27 @@ export function viewportBackground(element: HTMLElement): [number, number, numbe
 
 /** The color the selection is drawn in: the theme's focus border, as sRGB channels from 0 to 1. */
 export function highlightColor(): [number, number, number] {
-  const probe = document.createElement('span');
-  probe.style.color = 'var(--vscode-focusBorder, #0078d4)';
-  document.body.append(probe);
-  const color = getComputedStyle(probe).color;
-  probe.remove();
-  return channels(color);
+  return probe('var(--vscode-focusBorder, #0078d4)', document.body);
+}
+
+/** The grid in the theme's text color, the axes in the colors the view's labels use. */
+export function helperColors(viewport: HTMLElement): HelperColors {
+  return {
+    grid: probe('var(--vscode-foreground, #cccccc)', viewport),
+    x: probe('var(--nm-axis-x)', viewport),
+    y: probe('var(--nm-axis-y)', viewport),
+    z: probe('var(--nm-axis-z)', viewport),
+  };
+}
+
+/** What a CSS color comes to inside `parent`, as sRGB channels from 0 to 1. */
+function probe(color: string, parent: HTMLElement): [number, number, number] {
+  const element = document.createElement('span');
+  element.style.color = color;
+  parent.append(element);
+  const computed = getComputedStyle(element).color;
+  element.remove();
+  return channels(computed);
 }
 
 function channels(color: string): [number, number, number] {

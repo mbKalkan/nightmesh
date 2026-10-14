@@ -35,6 +35,10 @@ export class SidePanel {
     this.setUpSash();
   }
 
+  setWidth(width: number): void {
+    this.element.style.flexBasis = `${width}px`;
+  }
+
   setLabels(title: string, sashLabel: string): void {
     if (!this.tabbed) this.title.textContent = title;
     this.element.setAttribute('aria-label', title);

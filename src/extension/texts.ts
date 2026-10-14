@@ -42,6 +42,9 @@ export function viewerStrings(t: Translate): ViewerStrings {
         bottom: t('Bottom'),
       },
       projections: { perspective: t('Perspective'), orthographic: t('Orthographic') },
+      grid: t('Grid'),
+      gridCell: t('Grid ({0} squares)', '{0}'),
+      axes: t('Origin Axes'),
     },
   };
 }
