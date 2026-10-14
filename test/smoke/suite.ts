@@ -1,7 +1,12 @@
 // Runs inside a real VS Code instance (see scripts/smoke.mjs).
 import * as assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { gitSibling, readGitBlob } from '../../src/extension/gitBlob';
 
 const EXTENSION_ID = 'MBKDevStudio.nightmesh';
 const VIEW_TYPE = 'nightmesh.viewer';
@@ -32,6 +37,69 @@ async function openInEditor(name: string): Promise<vscode.TabInputCustom> {
   });
 }
 
+interface Repository {
+  git(...args: string[]): Buffer;
+  /** Writes a file in the repository and returns its path. */
+  write(name: string, content: string | Buffer): string;
+  /** Writes a file as Git LFS keeps it: a pointer in the repository, the bytes in its store. */
+  writeLfs(name: string, bytes: Buffer): void;
+}
+
+/**
+ * Commits what `setup` writes into a new repository, then runs `check` with the URI VS Code's
+ * Git extension uses for the committed version of a file in it.
+ */
+async function withRepository(
+  setup: (repository: Repository) => Promise<void>,
+  check: (head: (name: string) => vscode.Uri) => Promise<void>,
+): Promise<void> {
+  const root = mkdtempSync(path.join(tmpdir(), 'nightmesh-git-'));
+  try {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: root });
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    const write = (name: string, content: string | Buffer) => {
+      writeFileSync(path.join(root, name), content);
+      return path.join(root, name);
+    };
+    const writeLfs = (name: string, bytes: Buffer) => {
+      const oid = createHash('sha256').update(bytes).digest('hex');
+      write(
+        name,
+        `version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize ${bytes.length}\n`,
+      );
+      const store = path.join(root, '.git', 'lfs', 'objects', oid.slice(0, 2), oid.slice(2, 4));
+      mkdirSync(store, { recursive: true });
+      writeFileSync(path.join(store, oid), bytes);
+    };
+    await setup({ git, write, writeLfs });
+    git('add', '.');
+    git('commit', '-q', '-m', 'Add a model');
+
+    const api = (await vscode.extensions.getExtension('vscode.git')!.activate()).getAPI(1);
+    await api.openRepository(vscode.Uri.file(root));
+    await check((name) => api.toGitUri(vscode.Uri.file(path.join(root, name)), 'HEAD'));
+  } finally {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      // The Git extension keeps watching the repository; the temp folder can stay.
+    }
+  }
+}
+
+const isGlb = (bytes: Uint8Array | undefined) =>
+  Buffer.from(bytes ?? [])
+    .subarray(0, 4)
+    .toString() === 'glTF';
+
+/** VS Code's own read gets something else; Nightmesh's gets the model. */
+async function assertReadsModel(head: vscode.Uri): Promise<void> {
+  assert.equal(isGlb(await vscode.workspace.fs.readFile(head)), false);
+  assert.equal(isGlb(await readGitBlob(head)), true);
+}
+
 const tests: Record<string, () => Promise<void>> = {
   async 'opens .glb files in the viewer by default'() {
     const input = await openInEditor('triangle.glb');
@@ -60,6 +128,54 @@ const tests: Record<string, () => Promise<void>> = {
     } finally {
       await vscode.env.clipboard.writeText(saved);
     }
+  },
+
+  async 'reads models from Git even where git converts them to text'() {
+    // VS Code reads versions with `git show --textconv`; a conversion set up for *.glb turned
+    // the model into text.
+    await withRepository(
+      async ({ git, write }) => {
+        git('config', 'diff.astextplain.textconv', 'echo converted');
+        write('.gitattributes', '*.glb diff=astextplain\n');
+        copyFileSync(path.join(FIXTURES, 'triangle.glb'), write('robot.glb', ''));
+      },
+      (head) => assertReadsModel(head('robot.glb')),
+    );
+  },
+
+  async 'reads models kept in Git LFS, and the files next to them'() {
+    await withRepository(
+      async ({ write, writeLfs }) => {
+        writeLfs('robot.glb', readFileSync(path.join(FIXTURES, 'triangle.glb')));
+        write('robot.gltf', readFileSync(path.join(FIXTURES, 'triangle.gltf')));
+        writeLfs('triangle.bin', readFileSync(path.join(FIXTURES, 'triangle.bin')));
+      },
+      async (head) => {
+        await assertReadsModel(head('robot.glb'));
+        // The .bin of a .gltf, at the same version, from the store too.
+        const bin = gitSibling(head('robot.gltf'), head('triangle.bin').path);
+        const bytes = readFileSync(path.join(FIXTURES, 'triangle.bin'));
+        assert.notDeepEqual(Buffer.from(await vscode.workspace.fs.readFile(bin)), bytes);
+        assert.deepEqual(Buffer.from((await readGitBlob(bin)) ?? []), bytes);
+
+        // And the viewer shows that version: its structure comes into a copied reference.
+        await vscode.commands.executeCommand('vscode.openWith', head('robot.glb'), VIEW_TYPE);
+        const saved = await vscode.env.clipboard.readText();
+        try {
+          await vscode.env.clipboard.writeText('');
+          let copied = '';
+          for (const start = Date.now(); !copied.includes('\n') && Date.now() - start < 30_000;) {
+            await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            copied = await vscode.env.clipboard.readText();
+          }
+          assert.match(copied, /^robot\.glb:\nModel\n/);
+          assert.match(copied, /\n- Container: GLB\n/);
+        } finally {
+          await vscode.env.clipboard.writeText(saved);
+        }
+      },
+    );
   },
 
   async 'keeps .gltf files JSON when opened as text'() {

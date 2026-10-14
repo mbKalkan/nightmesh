@@ -4,6 +4,9 @@ import { formatForPath } from '../shared/formats';
 import type { HostToWebviewMessage, Preferences, WebviewToHostMessage } from '../shared/protocol';
 import { composeReference } from '../shared/reference';
 import { watchFile } from './fileWatcher';
+import { gitSibling, readGitBlob } from './gitBlob';
+import { lfsObjectId } from './gitObject';
+import { sniff } from './model/container';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { resolveResourceUri } from './model/resources';
@@ -192,7 +195,24 @@ function readFailure(loadId: number, reload: boolean): HostToWebviewMessage {
 /** Local files are read in place; other schemes (Git, remote file systems) only as a whole. */
 async function openSource(uri: vscode.Uri): Promise<ByteSource> {
   if (uri.scheme === 'file') return fileSource(uri.fsPath);
-  return memorySource(await vscode.workspace.fs.readFile(uri));
+  // A model is a GLB or JSON; anything else from Git is text converted from it, or a pointer.
+  return memorySource(
+    await readVersion(uri, (data) => sniff(data) === 'unknown' || sniff(data) === 'lfsPointer'),
+  );
+}
+
+/**
+ * Reads a file of another scheme whole. A version from Git can come back converted to text by a
+ * `textconv`, or as a Git LFS pointer; when `converted` says so, Git itself is asked for the
+ * bytes as committed.
+ */
+async function readVersion(
+  uri: vscode.Uri,
+  converted: (data: Uint8Array) => boolean,
+): Promise<Uint8Array> {
+  const data = await vscode.workspace.fs.readFile(uri);
+  if (uri.scheme !== 'git' || !converted(data)) return data;
+  return (await readGitBlob(uri)) ?? data;
 }
 
 /** Resources may come from the model's workspace folder, or its own folder outside one. */
@@ -206,8 +226,10 @@ function resourceOpener(uri: vscode.Uri): ResourceOpener {
     const resolution = resolveResourceUri(reference, modelFolder, root);
     if (resolution.kind === 'refused') return resolution.reason;
     if (resolution.kind === 'data') return memorySource(resolution.bytes);
+    const resource =
+      uri.scheme === 'git' ? gitSibling(uri, resolution.path) : uri.with({ path: resolution.path });
     try {
-      return memorySource(await vscode.workspace.fs.readFile(uri.with({ path: resolution.path })));
+      return memorySource(await readVersion(resource, (data) => lfsObjectId(data) !== undefined));
     } catch (error) {
       return error instanceof vscode.FileSystemError && error.code === 'FileNotFound'
         ? 'missing'
