@@ -4,9 +4,11 @@ import type {
   HostToWebviewMessage,
   ModelMessage,
   OpenMessage,
+  StructureMessage,
   ViewerStrings,
 } from '../shared/protocol';
-import { Shell } from './shell';
+import { Shell, type PanelLayout } from './shell';
+import { StructureView } from './structure/structureView';
 import { viewportBackground, watchTheme } from './theme';
 import { vscode } from './vscodeApi';
 
@@ -20,8 +22,14 @@ interface Arrival {
   received: number;
 }
 
-const shell = new Shell(document.getElementById('app') as HTMLElement);
+const shell = new Shell(document.getElementById('app') as HTMLElement, savedLayout(), (layout) =>
+  vscode.setState({ layout }),
+);
+let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
+let structure: StructureView | undefined;
+/** The load whose structure the panels show. */
+let structureLoad = -1;
 let view: Promise<View | undefined> | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
@@ -32,6 +40,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
   switch (message.type) {
     case 'open':
       open(message);
+      break;
+    case 'structure':
+      receiveStructure(message);
       break;
     case 'model':
       receiveModel(message);
@@ -58,9 +69,25 @@ watchTheme(
 vscode.postMessage({ type: 'ready' });
 
 function open(message: OpenMessage): void {
+  opened = message;
   strings = message.strings;
   shell.setDocument(message.fileName, message.format, strings);
+  structure ??= new StructureView(shell, strings, message.locale);
   view ??= createView(strings);
+}
+
+/** The panels' layout as the user left it in this editor, or the default. */
+function savedLayout(): PanelLayout {
+  const saved = (vscode.getState() as { layout?: Partial<PanelLayout> } | undefined)?.layout;
+  return { structure: true, inspector: true, structureWidth: 240, inspectorWidth: 300, ...saved };
+}
+
+function receiveStructure(message: StructureMessage): void {
+  if (message.loadId < latestLoad || !opened) return;
+  latestLoad = message.loadId;
+  structureLoad = message.loadId;
+  structure?.setStructure(message, opened.fileName, opened.format);
+  shell.setPanelsAvailable(true);
 }
 
 /** Probes WebGL 2 first, so a machine without it gets a message and not a stack of errors. */
@@ -150,6 +177,8 @@ function fail(message: FailedMessage): void {
   arrival = undefined;
   shell.setProgress(undefined);
   if (message.reload && hasModel) return;
+  // A file that isn't a model has no structure to show either.
+  if (structureLoad !== message.loadId) shell.setPanelsAvailable(false);
   shell.showError(strings?.errorTitle ?? '', message.message, message.details);
 }
 

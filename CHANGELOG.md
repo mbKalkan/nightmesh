@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a network connection. meshopt-compressed and quantized models open too.
 - Draco-compressed meshes and KTX2 (Basis Universal) textures open too. Their decoders ship
   with the extension and load only when a model needs them.
+- A Structure panel lists the model's scenes and node hierarchy, then its meshes, materials,
+  textures, animations, skins, cameras and lights. It shows as soon as the file is opened,
+  before the geometry has loaded, and also for models that can't be drawn.
+- An Inspector panel shows what is selected: the file and its contents, a node's transform and
+  mesh, primitive counts and attributes, material values with color swatches, texture samplers,
+  animation channels and more, with links between them. Values can be selected and copied.
+- Both panels can be hidden from the toolbar and resized; the tree works with the keyboard
+  (arrow keys, Home/End, type to find) and stays fast with tens of thousands of nodes.
 - Files that can't be shown say why: an empty file, a file that isn't glTF, a Git LFS pointer
   whose model isn't downloaded, an extension Nightmesh can't draw yet. When only part of a
   model can be loaded (a missing `.bin` or texture, a file cut off while copying), the rest is

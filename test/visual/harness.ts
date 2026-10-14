@@ -91,7 +91,14 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       Object.assign(window, {
         __sent: sent,
         __applyTheme: applyTheme,
-        acquireVsCodeApi: () => ({ postMessage: (message: unknown) => sent.push(message) }),
+        acquireVsCodeApi: () => {
+          let state: unknown;
+          return {
+            postMessage: (message: unknown) => sent.push(message),
+            getState: () => state,
+            setState: (value: unknown) => void (state = value),
+          };
+        },
       });
       if (withoutWebGL) {
         const getContext = HTMLCanvasElement.prototype.getContext;
@@ -134,32 +141,36 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
      * fixtures folder stands in for the workspace, so resources can't reach outside it.
      */
     async open(fixture: string, { reload = false } = {}) {
-      if (!reload) {
-        await this.post({
-          type: 'open',
-          fileName: fixture,
-          format: formatForPath(fixture) ?? 'glb',
-          strings,
-        });
-      }
+      if (!reload) await this.post(this.openMessage(fixture));
       // Cleared here, so waiting for it below waits for this load and not the one before.
       await page.evaluate(() => {
         delete (document.querySelector('.nm-viewport') as HTMLElement).dataset.state;
       });
+      for (const message of await this.messages(fixture, { reload })) await this.post(message);
+      await page.waitForSelector('.nm-viewport[data-state]');
+      await page.waitForSelector('.nm-progress', { state: 'hidden' });
+    },
+    openMessage: (fixture: string): HostToWebviewMessage => ({
+      type: 'open',
+      fileName: fixture,
+      format: formatForPath(fixture) ?? 'glb',
+      locale: 'en',
+      strings,
+    }),
+    /** The messages the host sends for one load of a fixture, to post some or all of them. */
+    async messages(fixture: string, { reload = false } = {}) {
       const source = await fileSource(join(FIXTURES, fixture));
       const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
         join(FIXTURES, path.slice('/fixtures'.length)),
       );
+      const messages: HostToWebviewMessage[] = [];
       try {
         const options = { loadId: ++loadId, reload, texts: loadTexts(english) };
-        for await (const message of loadMessages(source, opener, options)) {
-          await this.post(message);
-        }
+        for await (const message of loadMessages(source, opener, options)) messages.push(message);
       } finally {
         await source.close();
       }
-      await page.waitForSelector('.nm-viewport[data-state]');
-      await page.waitForSelector('.nm-progress', { state: 'hidden' });
+      return messages;
     },
     /** Switches the theme the way VS Code does: CSS variables plus body classes. */
     async setTheme(name: ThemeName) {

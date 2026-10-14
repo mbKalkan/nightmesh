@@ -1,0 +1,74 @@
+import type { ModelFormat, StructureMessage, ViewerStrings } from '../../shared/protocol';
+import type { Shell } from '../shell';
+import { inspect, type InspectContext } from './details';
+import { Formatter } from './format';
+import { GltfModel } from './gltf';
+import { InspectorView } from './inspectorView';
+import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
+import { StructureTree } from './tree';
+
+/**
+ * The structure tree on the left and the inspector on the right, filled from the model's JSON as
+ * soon as it arrives. Selecting in the tree, or following a link in the inspector, shows that
+ * entry's details.
+ */
+export class StructureView {
+  private readonly tree: StructureTree;
+  private readonly inspector: InspectorView;
+  private readonly format: Formatter;
+  private context: InspectContext | undefined;
+  private json: string | undefined;
+  private selected: EntryKey = 'model';
+
+  constructor(
+    shell: Shell,
+    private readonly strings: ViewerStrings,
+    locale: string,
+  ) {
+    this.format = new Formatter(locale);
+    this.tree = new StructureTree(strings.structure.structure, (key) => this.show(key));
+    this.inspector = new InspectorView((key) => this.select(key));
+    shell.structurePanel.body.replaceChildren(this.tree.element);
+    shell.inspectorPanel.body.replaceChildren(this.inspector.element);
+  }
+
+  /**
+   * Shows a model's structure. When the file changed on disk, what was open and selected stays
+   * open and selected, as far as the new structure still has it.
+   */
+  setStructure(message: StructureMessage, fileName: string, format: ModelFormat): void {
+    if (message.reload && message.json === this.json) return;
+    let json: unknown;
+    try {
+      json = JSON.parse(message.json);
+    } catch {
+      json = {};
+    }
+    const model = new GltfModel(json);
+    const keep = message.reload && this.context !== undefined;
+    this.context = {
+      model,
+      strings: this.strings.structure,
+      format: this.format,
+      file: { name: fileName, size: message.fileSize, container: format, chunks: message.chunks },
+    };
+    this.json = message.json;
+    if (!keep || !inspect(this.context, this.selected)) this.selected = 'model';
+    const expanded = keep ? this.tree.expandedKeys() : initiallyExpanded(model);
+    this.tree.setEntries(outline(model, this.strings.structure), expanded, this.selected, keep);
+    this.show(this.selected, keep);
+  }
+
+  /** Selects `key` in the tree, opening what holds it, and shows its details. */
+  select(key: EntryKey): void {
+    if (!this.context) return;
+    this.tree.select(key, ancestors(this.context.model, key));
+    this.show(key);
+  }
+
+  private show(key: EntryKey, sameEntry = false): void {
+    if (!this.context) return;
+    this.selected = key;
+    this.inspector.show(inspect(this.context, key), sameEntry);
+  }
+}
