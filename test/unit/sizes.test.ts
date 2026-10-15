@@ -65,6 +65,14 @@ describe('sizeAnalysis', () => {
     expect(analysis.largest[0].key).toMatch(/^mesh:\d+$/);
   });
 
+  it('counts only what a GLB cut short still holds', async () => {
+    const analysis = await analyse('truncated.glb');
+    expect(analysis.total).toBe(statSync(join(FIXTURES, 'truncated.glb')).size);
+    expect(Math.abs(sum(analysis) - analysis.total)).toBeLessThanOrEqual(
+      analysis.categories.length,
+    );
+  });
+
   it('counts the files a .gltf uses', async () => {
     const analysis = await analyse('textured.gltf');
     const own = statSync(join(FIXTURES, 'textured.gltf')).size;

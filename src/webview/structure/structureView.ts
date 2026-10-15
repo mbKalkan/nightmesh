@@ -15,6 +15,7 @@ import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
 import { entryAt, entryPointer } from './pointers';
+import { buildReport } from './report';
 import { sizeAnalysis } from './sizes';
 import { SizeView } from './sizeView';
 import { statistics } from './statistics';
@@ -236,6 +237,25 @@ export class StructureView {
    */
   reference(key: EntryKey, details: boolean): Reference | undefined {
     return this.context && referenceOf(this.context, key, this.locale, details);
+  }
+
+  /** A report on the model, in Markdown and JSON, from what the panels show. */
+  report(): { markdown: string; json: string } | undefined {
+    if (!this.context) return undefined;
+    const { model, images, motion, file } = this.context;
+    return buildReport({
+      context: this.context,
+      strings: this.strings,
+      statistics: statistics(model, images, motion),
+      size: sizeAnalysis(model, this.modelUsage(), {
+        fileName: file.name,
+        fileSize: file.size,
+        chunks: file.chunks,
+        images,
+        imageBytes: this.imageBytes,
+      }),
+      validation: this.validation.report,
+    });
   }
 
   /** The JSON pointer of an entry, to show it in the glTF JSON. */

@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beside the viewer, laid out for reading and read-only, at what is selected; for a GLB, this is
   the JSON chunk. It follows the selection, and moving through it selects what the cursor is in.
   Each validation issue can be shown in it, where its JSON pointer points.
+- An **Export** menu in the toolbar, and commands in the Command Palette: **Save Screenshot…**
+  saves the 3D view as a PNG, **Save Report…** saves a report on the model (its details,
+  statistics, size breakdown, suggestions and validation issues) as Markdown or JSON. Both go to
+  a new file you pick; the model is never written.
 
 ## [0.1.0] - 2026-10-14
 

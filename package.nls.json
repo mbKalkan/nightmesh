@@ -5,5 +5,7 @@
   "category": "Nightmesh",
   "command.copyReference": "Copy Reference",
   "command.copyReferenceWithDetails": "Copy Reference with Details",
-  "command.showJson": "Show glTF JSON"
+  "command.showJson": "Show glTF JSON",
+  "command.saveScreenshot": "Save Screenshot…",
+  "command.saveReport": "Save Report…"
 }

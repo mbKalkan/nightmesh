@@ -68,6 +68,7 @@ let view: Promise<View | undefined> | undefined;
 let shownView: View | undefined;
 let viewOptions: MenuButton | undefined;
 let shadingOptions: MenuButton | undefined;
+let exportOptions: MenuButton | undefined;
 let arrival: Arrival | undefined;
 let latestLoad = 0;
 let hasModel = false;
@@ -128,6 +129,10 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       if (message.atPointer && menuPointer !== undefined)
         vscode.postMessage({ type: 'json', pointer: menuPointer });
       else showJson(message.atPointer ? (menuKey ?? selectedKey) : selectedKey);
+      break;
+    case 'export':
+      if (message.what === 'screenshot') void saveScreenshot();
+      else saveReport();
       break;
     case 'select': {
       const key = structure?.entryAt(message.pointer);
@@ -210,6 +215,18 @@ document.addEventListener('keydown', (event) => {
 
 vscode.postMessage({ type: 'ready' });
 
+/** Hands the view, as a PNG, to the host to save where the user picks. */
+async function saveScreenshot(): Promise<void> {
+  const data = hasModel ? await shownView?.screenshot() : undefined;
+  vscode.postMessage({ type: 'save', what: 'screenshot', data });
+}
+
+/** Hands a report on the model to the host to save, as Markdown or JSON. */
+function saveReport(): void {
+  const report = structure?.report();
+  if (report) vscode.postMessage({ type: 'save', what: 'report', ...report });
+}
+
 /** Opens the glTF JSON beside the viewer, at an entry. */
 function showJson(key: string): void {
   if (structure) vscode.postMessage({ type: 'json', pointer: structure.pointerOf(key) });
@@ -238,6 +255,13 @@ function open(message: OpenMessage): void {
   shell.setDocument(message.fileName, message.format, strings);
   if (!hasModel) shell.startLoading(strings.loading);
   viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
+  exportOptions ??= new MenuButton(shell.exportButton, document.getElementById('app')!, () => {
+    const text = strings!.export;
+    return [
+      ...(shownView ? [{ label: text.screenshot, run: () => void saveScreenshot() }] : []),
+      { label: text.report, run: saveReport },
+    ];
+  });
   shadingOptions ??= new MenuButton(
     shell.shadingButton,
     document.getElementById('app')!,
