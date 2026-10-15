@@ -57,6 +57,79 @@ export function viewerStrings(t: Translate): ViewerStrings {
       },
       badge: t('Errors: {0}, warnings: {1}', '{0}', '{1}'),
     },
+    size: {
+      tab: t('Size'),
+      totalOne: t('{0} in one file', '{0}'),
+      totalMany: t('{0} in {1} files', '{0}', '{1}'),
+      breakdown: t('Where the bytes go'),
+      categories: {
+        json: t('JSON'),
+        vertices: t('Vertex data'),
+        indices: t('Indices'),
+        morphTargets: t('Morph targets'),
+        animation: t('Animations'),
+        skins: t('Skins'),
+        instancing: t('Instancing'),
+        textures: t('Textures'),
+        unused: t('Unused data'),
+        other: t('Headers and padding'),
+      },
+      compression: t('Compression'),
+      geometry: t('Geometry'),
+      draco: t('Draco: {0} of {1} primitives', '{0}', '{1}'),
+      meshopt: t('meshopt: {0} of {1} buffer views', '{0}', '{1}'),
+      quantized: t('Quantized'),
+      none: t('None'),
+      gpuMemory: t('Estimated GPU memory'),
+      largest: t('Largest'),
+      images: t('Images'),
+      imageWarnings: {
+        large: t("Larger than 4096 pixels: many mobile GPUs can't load it."),
+        notPowerOfTwo: t(
+          "Not a power of two wide and high: some GPUs can't repeat it or make its mipmaps.",
+        ),
+      },
+      unusedImage: t('Not used by any texture'),
+      suggestions: t('Suggestions'),
+      suggestionsNote: t(
+        'Only suggestions: Nightmesh never changes the file. Each command writes a new file with glTF Transform, which needs Node.js.',
+      ),
+      suggestion: {
+        geometry: {
+          title: t('Compress the geometry'),
+          text: t(
+            '{0} of vertex and index data is stored uncompressed. meshopt compression usually makes it several times smaller and decodes fast.',
+            '{0}',
+          ),
+        },
+        textureMemory: {
+          title: t('Keep textures compressed on the GPU'),
+          text: t(
+            'Textures take about {0} of GPU memory, four bytes a pixel. KTX2 textures stay compressed on the GPU, at about a quarter of that. The command needs KTX-Software; use uastc in place of etc1s for normal maps.',
+            '{0}',
+          ),
+        },
+        textureDownload: {
+          title: t('Make the textures smaller to download'),
+          text: t(
+            'PNG and JPEG textures take {0} of the file. WebP usually takes much less, and they take the same memory on the GPU.',
+            '{0}',
+          ),
+        },
+        textureSize: {
+          title: t('Scale down the largest textures'),
+          text: t(
+            "Some textures are larger than 4096 pixels, which many mobile GPUs can't load. Together they take about {0} of GPU memory.",
+            '{0}',
+          ),
+        },
+        unused: {
+          title: t('Remove unused data'),
+          text: t("{0} of the file isn't used by anything in the model.", '{0}'),
+        },
+      },
+      copy: t('Copy Command'),
+    },
     animation: {
       bar: t('Animation playback'),
       clip: t('Animation'),

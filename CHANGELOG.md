@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hints; buttons above the list show how many there are of each and hide or show them. An
   issue's JSON pointer selects what it is about in the structure, and the tab counts the errors
   and warnings.
+- A **Size** tab shows where a model's bytes go: JSON, vertex data, indices, morph targets,
+  animations, skins, textures, unused data, and the files a `.gltf` uses. It says how the
+  geometry and textures are compressed, estimates GPU memory, lists the largest meshes, textures
+  and animations, and every image with its format, size and what may be wrong with it (larger
+  than 4096 pixels, not a power of two, unused).
+- Suggestions in the Size tab, each with a glTF Transform command to copy, for models that
+  could be lighter: compressing geometry, KTX2 or WebP textures, scaling down very large
+  textures, removing unused data. Nightmesh itself never changes the file.
 
 ## [0.1.0] - 2026-10-14
 

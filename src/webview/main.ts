@@ -93,7 +93,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       receiveStructure(message);
       break;
     case 'images':
-      if (message.loadId === structureLoad) structure?.setImages(message.images);
+      if (message.loadId === structureLoad) structure?.setImages(message.images, message.bytes);
       break;
     case 'animations':
       if (message.loadId === structureLoad) receiveMotion(message.motion);
@@ -240,6 +240,7 @@ function open(message: OpenMessage): void {
     },
     activated: () => void view?.then((target) => target?.frameSelection()),
     preview: async (texture) => (await view)?.textureImage(texture),
+    copy: (text) => vscode.postMessage({ type: 'copy', text }),
   });
 }
 

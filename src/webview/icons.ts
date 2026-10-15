@@ -21,6 +21,9 @@ export const icons = {
   issueHint: svg(
     '<path d="M6.25 12.5h3.5"/><path d="M6 10.75C5.25 10 4.5 9 4.5 7.5a3.5 3.5 0 0 1 7 0c0 1.5-.75 2.5-1.5 3.25z"/>',
   ),
+  copy: svg(
+    '<rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/>',
+  ),
   check: svg('<circle cx="8" cy="8" r="6"/><path d="M5.25 8.25l1.75 1.75 3.75-4"/>'),
   chevron: svg('<path d="M6 4l4 4-4 4"/>'),
   play: svg('<path d="M5 3.5v9l7.5-4.5z" fill="currentColor"/>'),
