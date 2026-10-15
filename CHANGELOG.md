@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A **Validation** tab runs the Khronos glTF Validator on the model once it has loaded, in the
+  background and without a network connection. Errors come first, then warnings, infos and
+  hints; buttons above the list show how many there are of each and hide or show them. An
+  issue's JSON pointer selects what it is about in the structure, and the tab counts the errors
+  and warnings.
+
 ## [0.1.0] - 2026-10-14
 
 First preview release.

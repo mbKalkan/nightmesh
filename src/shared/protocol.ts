@@ -93,6 +93,8 @@ export interface StructureStrings {
     more: string;
     /** Where a node is in a copied reference: `under {0}`, the nodes above it. */
     under: string;
+    /** What the glTF Validator found, in the model's details. */
+    validation: string;
   };
 }
 
@@ -191,9 +193,70 @@ export interface ViewerStrings {
   modelSize: string;
   selectionSize: string;
   structure: StructureStrings;
+  validation: ValidationStrings;
   animation: AnimationStrings;
   view: ViewStrings;
   shading: ShadingStrings;
+}
+
+/** How much a validation issue matters, from the glTF Validator's report. */
+export type Severity = 'error' | 'warning' | 'info' | 'hint';
+
+/** One thing the glTF Validator found: where in the JSON (`pointer`) or in a GLB (`offset`). */
+export interface ValidationIssue {
+  code: string;
+  message: string;
+  severity: Severity;
+  /** A JSON pointer into the model's glTF JSON, as `/meshes/0/primitives/1`. */
+  pointer?: string;
+  /** A byte offset in a GLB file, for problems with its container. */
+  offset?: number;
+}
+
+/** What the Khronos glTF Validator says about a model. */
+export interface ValidationReport {
+  /** The validator's version. */
+  validator: string;
+  counts: Record<Severity, number>;
+  /** Errors first, then warnings, infos and hints; the validator's order within each. */
+  issues: ValidationIssue[];
+  /** The validator stopped reporting at its limit: there are more issues than listed. */
+  truncated: boolean;
+}
+
+/**
+ * The validation of a load: `running` while the validator reads the model, then its report;
+ * `tooLarge` past the bytes the validator can hold, `failed` when it couldn't read the file.
+ */
+export type ValidationMessage = { type: 'validation'; loadId: number } & (
+  | { state: 'running' }
+  | { state: 'done'; report: ValidationReport }
+  | { state: 'tooLarge'; bytes: number }
+  | { state: 'failed' }
+);
+
+/** Words for the validation tab. */
+export interface ValidationStrings {
+  tab: string;
+  /** Before the validator has started: the model is still loading. */
+  waiting: string;
+  running: string;
+  /** `{0}`: the validator's version. */
+  validator: string;
+  /** `{0}`: the model's size. */
+  tooLarge: string;
+  failed: string;
+  noIssues: string;
+  /** `{0}`: how many issues were listed before the validator stopped. */
+  truncated: string;
+  /** Where an issue is in a GLB file: `Byte {0}`. */
+  offset: string;
+  /** The filter buttons, with a count: `Errors`. */
+  severities: Record<Severity, string>;
+  /** One issue's severity, for screen readers. */
+  severity: Record<Severity, string>;
+  /** What the count on the tab is: `Errors: {0}, warnings: {1}`. */
+  badge: string;
 }
 
 /** Sent once the webview is ready: what file this is. */
@@ -319,6 +382,7 @@ export type HostToWebviewMessage =
   | PartMessage
   | PartsMessage
   | FailedMessage
+  | ValidationMessage
   | CopyReferenceMessage;
 
 /**

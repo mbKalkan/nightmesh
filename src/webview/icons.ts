@@ -12,6 +12,16 @@ export const icons = {
   ),
   warning: svg('<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.5M8 11.75v.25"/>'),
   close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+  // Validation issues, by severity, as VS Code's Problems panel marks them.
+  issueError: svg(
+    '<circle cx="8" cy="8" r="6"/><path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5"/>',
+  ),
+  issueWarning: svg('<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.5M8 11.75v.25"/>'),
+  issueInfo: svg('<circle cx="8" cy="8" r="6"/><path d="M8 7.25v4M8 4.75v.25"/>'),
+  issueHint: svg(
+    '<path d="M6.25 12.5h3.5"/><path d="M6 10.75C5.25 10 4.5 9 4.5 7.5a3.5 3.5 0 0 1 7 0c0 1.5-.75 2.5-1.5 3.25z"/>',
+  ),
+  check: svg('<circle cx="8" cy="8" r="6"/><path d="M5.25 8.25l1.75 1.75 3.75-4"/>'),
   chevron: svg('<path d="M6 4l4 4-4 4"/>'),
   play: svg('<path d="M5 3.5v9l7.5-4.5z" fill="currentColor"/>'),
   pause: svg('<path d="M5.5 3.5v9M10.5 3.5v9" stroke-width="2"/>'),

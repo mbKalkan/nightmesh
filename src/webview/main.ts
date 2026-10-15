@@ -98,6 +98,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'animations':
       if (message.loadId === structureLoad) receiveMotion(message.motion);
       break;
+    case 'validation':
+      if (message.loadId === structureLoad) structure?.setValidation(message);
+      break;
     case 'model':
       receiveModel(message);
       break;

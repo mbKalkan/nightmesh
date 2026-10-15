@@ -14,6 +14,7 @@ export class SidePanel {
   readonly body: HTMLElement;
   private title: HTMLElement;
   private tabbed = false;
+  private tabButtons = new Map<string, HTMLButtonElement>();
   private readonly sash: HTMLElement;
 
   constructor(
@@ -65,6 +66,7 @@ export class SidePanel {
       button.dataset.tab = id;
       button.textContent = label;
       button.setAttribute('role', 'tab');
+      this.tabButtons.set(id, button);
       button.setAttribute('aria-controls', `nm-tabpanel-${id}`);
       content.id = `nm-tabpanel-${id}`;
       content.setAttribute('role', 'tabpanel');
@@ -110,6 +112,31 @@ export class SidePanel {
     this.tabbed = true;
     this.body.replaceChildren(...tabs.map((tab) => tab.content));
     select(active);
+  }
+
+  /**
+   * Shows a count after a tab's label, as VS Code's Problems tab does; undefined takes it away.
+   * `description` says what it counts, for screen readers and as a tooltip.
+   */
+  setBadge(id: string, count: string | undefined, description = ''): void {
+    const button = this.tabButtons.get(id);
+    if (!button) return;
+    let badge = button.querySelector<HTMLElement>('.nm-badge');
+    if (count === undefined) {
+      badge?.remove();
+      button.removeAttribute('title');
+      button.removeAttribute('aria-label');
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'nm-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      button.append(badge);
+    }
+    badge.textContent = count;
+    button.title = description;
+    button.setAttribute('aria-label', `${button.firstChild?.textContent ?? ''}, ${description}`);
   }
 
   get width(): number {

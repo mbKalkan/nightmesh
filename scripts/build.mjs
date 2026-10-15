@@ -30,6 +30,14 @@ const extension = {
   external: ['vscode'],
 };
 
+/** The glTF Validator runs in a worker thread of the extension host, from a file of its own. */
+/** @type {import('esbuild').BuildOptions} */
+const validator = {
+  ...extension,
+  entryPoints: ['src/extension/validatorWorker.ts'],
+  outfile: 'dist/validator.js',
+};
+
 /** Changes made to embedded text files on the way in, by file name. */
 const PATCHES = { 'basis_transcoder.js': embindWithoutEval };
 
@@ -72,9 +80,11 @@ const webview = {
 };
 
 if (watch) {
-  const contexts = await Promise.all([esbuild.context(extension), esbuild.context(webview)]);
+  const contexts = await Promise.all(
+    [extension, validator, webview].map((options) => esbuild.context(options)),
+  );
   await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
   rmSync('dist', { recursive: true, force: true });
-  await Promise.all([esbuild.build(extension), esbuild.build(webview)]);
+  await Promise.all([extension, validator, webview].map((options) => esbuild.build(options)));
 }

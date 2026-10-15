@@ -3,18 +3,23 @@ import type {
   ModelFormat,
   Motion,
   StructureMessage,
+  ValidationMessage,
   ViewerStrings,
 } from '../../shared/protocol';
+import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
 import { inspect, type InspectContext } from './details';
 import { referenceOf, type Reference } from './reference';
-import { Formatter } from './format';
+import { fill, Formatter } from './format';
 import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
+import { entryAt } from './pointers';
 import { statistics } from './statistics';
 import { StatisticsView } from './statisticsView';
 import { StructureTree } from './tree';
+import { ModelUsage } from './usage';
+import { ValidationView } from './validationView';
 
 export interface StructureEvents {
   /** The selection changed: in the tree, through a link, or from the 3D view. */
@@ -34,8 +39,12 @@ export class StructureView {
   private readonly tree: StructureTree;
   private readonly inspector: InspectorView;
   private readonly statistics: StatisticsView;
+  private readonly validation: ValidationView;
+  private readonly panel: SidePanel;
   private readonly format: Formatter;
   private context: InspectContext | undefined;
+  /** Who uses accessors, bufferViews and images: read when first asked for. */
+  private usage: ModelUsage | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
 
@@ -57,11 +66,18 @@ export class StructureView {
       strings.structure.labels.noPreview,
     );
     this.statistics = new StatisticsView(strings.structure, this.format, (key) => this.select(key));
+    this.validation = new ValidationView(strings.validation, this.format, {
+      entryAt: (pointer) => this.context && entryAt(this.context.model, this.modelUsage(), pointer),
+      describe: (key) => this.describe(key),
+      select: (key) => this.select(key),
+    });
+    this.panel = shell.inspectorPanel;
     shell.structurePanel.body.replaceChildren(this.tree.element);
     shell.inspectorPanel.setTabs(
       [
         { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
         { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
+        { id: 'validation', label: strings.validation.tab, content: this.validation.element },
       ],
       shell.inspectorTab,
       (tab) => (shell.inspectorTab = tab),
@@ -87,8 +103,15 @@ export class StructureView {
       strings: this.strings.structure,
       format: this.format,
       file: { name: fileName, size: message.fileSize, container: format, chunks: message.chunks },
+      // A changed file keeps its last report until it is validated again.
+      validation: keep ? this.context?.validation : undefined,
     };
     this.json = message.json;
+    this.usage = undefined;
+    if (!keep) {
+      this.validation.reset();
+      this.showBadge();
+    }
     if (!keep || !inspect(this.context, this.selected)) this.selected = 'model';
     const expanded = keep ? this.tree.expandedKeys() : initiallyExpanded(model);
     this.tree.setEntries(outline(model, this.strings.structure), expanded, this.selected, keep);
@@ -116,6 +139,37 @@ export class StructureView {
     this.context.motion = motion;
     this.showStatistics();
     this.render(true);
+  }
+
+  /** What the glTF Validator says about the model, from the host. */
+  setValidation(message: ValidationMessage): void {
+    this.validation.set(message);
+    this.showBadge();
+    if (!this.context) return;
+    const counts = this.validation.report?.counts;
+    const strings = this.strings.validation;
+    this.context.validation =
+      counts &&
+      (Object.values(counts).every((count) => count === 0)
+        ? strings.noIssues
+        : fill(strings.badge, counts.error, counts.warning));
+    this.render(true);
+  }
+
+  /** Errors and warnings, counted on the validation tab. */
+  private showBadge(): void {
+    const counts = this.validation.report?.counts;
+    const problems = counts ? counts.error + counts.warning : 0;
+    this.panel.setBadge(
+      'validation',
+      problems > 0 ? this.format.count(problems) : undefined,
+      counts && fill(this.strings.validation.badge, counts.error, counts.warning),
+    );
+  }
+
+  private modelUsage(): ModelUsage {
+    this.usage ??= new ModelUsage(this.context!.model);
+    return this.usage;
   }
 
   /** Shows the selected entry's details again, now that the 3D view can preview more of it. */

@@ -154,16 +154,23 @@ body {
   user-select: none;
 }
 
-/* Tabs in a panel's title, like VS Code's panel: uppercase, the open one underlined. */
+/* Tabs in a panel's title, like VS Code's panel: uppercase, the open one underlined. In a narrow
+   panel they scroll sideways rather than wrap. */
 .nm-panel-tabs {
   display: flex;
   flex: none;
   gap: 4px;
   padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
   user-select: none;
 }
 
 .nm-panel-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
   padding: 0 4px;
   border: 0;
   border-bottom: 1px solid transparent;
@@ -189,6 +196,20 @@ body {
 .nm-panel-tab:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
+}
+
+/* A count after a tab's label, like the one on VS Code's Problems tab. */
+.nm-badge {
+  min-width: 8px;
+  padding: 0 4px;
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 14px;
+  text-align: center;
 }
 
 .nm-panel-body {
@@ -527,7 +548,8 @@ body.vscode-high-contrast .nm-tree-description {
 
 /* Statistics */
 
-.nm-statistics {
+.nm-statistics,
+.nm-validation {
   flex: 1;
   min-height: 0;
   padding: 0 12px 16px;
@@ -536,7 +558,8 @@ body.vscode-high-contrast .nm-tree-description {
   user-select: text;
 }
 
-.nm-statistics:focus-visible {
+.nm-statistics:focus-visible,
+.nm-validation:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
@@ -1196,4 +1219,120 @@ body.vscode-light .nm-gizmo {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* Validation */
+
+.nm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+
+.nm-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 4px;
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 3px;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.nm-filter:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Shown severities are outlined, as VS Code's toggles are; hidden ones are dimmed. */
+.nm-filter[aria-pressed='true'] {
+  border-color: var(--vscode-inputOption-activeBorder, var(--vscode-focusBorder));
+}
+
+.nm-filter[aria-pressed='false'] {
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-filter[aria-pressed='false'] svg {
+  opacity: 0.6;
+}
+
+.nm-filter:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.nm-filter svg,
+.nm-issue-icon svg,
+.nm-validation-clean svg {
+  flex: none;
+}
+
+.nm-severity-error svg {
+  color: var(--vscode-problemsErrorIcon-foreground, var(--vscode-editorError-foreground));
+}
+
+.nm-severity-warning svg {
+  color: var(--vscode-problemsWarningIcon-foreground, var(--vscode-editorWarning-foreground));
+}
+
+.nm-severity-info svg {
+  color: var(--vscode-problemsInfoIcon-foreground, var(--vscode-editorInfo-foreground));
+}
+
+.nm-severity-hint svg {
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The icon in a column of its own; the message and where it is beside it. */
+.nm-issue {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 0 6px;
+  padding: 4px 0;
+  border-top: 1px solid var(--nm-border);
+  line-height: 18px;
+}
+
+.nm-issue-icon {
+  display: inline-flex;
+  padding-top: 1px;
+}
+
+.nm-issue-message {
+  overflow-wrap: anywhere;
+}
+
+.nm-issue-where {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2;
+  gap: 0 8px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-issue-where .nm-mono {
+  overflow-wrap: anywhere;
+}
+
+.nm-validation-clean {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.nm-validation-clean svg {
+  color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
 }

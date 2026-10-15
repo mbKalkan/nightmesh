@@ -69,6 +69,8 @@ export interface InspectContext {
   images?: readonly (ImageInfo | null)[];
   /** Whether each animation moves anything, once the host has read its keyframes. */
   motion?: readonly (Motion | null)[];
+  /** What the glTF Validator found, in a few words, once it has run. */
+  validation?: string;
 }
 
 /** Lists longer than this are cut short, with a count of the rest. */
@@ -210,6 +212,7 @@ function inspectModel(context: InspectContext): Inspection {
       fileRows.push({ label: labels.binaryChunk, text: format.bytes(file.chunks.bin), mono: true });
     }
   }
+  if (context.validation) fileRows.push({ label: labels.validation, text: context.validation });
 
   const primitives = model
     .items('meshes')
