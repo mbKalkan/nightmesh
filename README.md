@@ -91,6 +91,8 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
   errors and warnings. Click an issue's JSON pointer to select what it is about, or show it in
   the glTF JSON.
 
+![The Validation tab lists two warnings and an info for a toy car, each with its code and JSON pointer, on a light theme](docs/images/validation-light.png)
+
 ### Size and optimization
 
 - The **Size** tab breaks the file down into JSON, vertex data, indices, morph targets,
@@ -101,6 +103,8 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
   when it is larger than 4096 pixels or not a power of two.
 - Suggestions for a lighter model, with the [glTF Transform](https://gltf-transform.dev) command
   that writes an improved copy. Nightmesh never changes the file itself.
+
+![The Size tab of a concept car: bars for vertex data, textures, indices and JSON, the compression, the estimated GPU memory and the largest entries](docs/images/size-dark.png)
 
 ### Shading and materials
 
@@ -163,20 +167,20 @@ If another extension also opens these files, right-click the file and choose
 
 ## Mouse and keyboard
 
-| Action                                     | Mouse or key                                                |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| Orbit                                      | Drag, or the arrow keys in the view                         |
-| Pan                                        | Right-drag, or <kbd>Shift</kbd>+drag                        |
-| Zoom                                       | Mouse wheel, or <kbd>+</kbd> / <kbd>-</kbd>                 |
-| Select what is under the pointer           | Click                                                       |
-| Frame the selection                        | <kbd>F</kbd>, or double-click                               |
-| Let go of the selection                    | <kbd>Esc</kbd>, or click empty space                        |
-| Look from the front, right or top          | <kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>                    |
-| Look from the back, left or bottom         | <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>   |
-| Look from the other side                   | <kbd>9</kbd>                                                |
-| Switch between perspective and orthographic | <kbd>5</kbd>                                               |
-| Look through the next camera in the model  | <kbd>0</kbd>                                                |
-| Play or pause the animation                | <kbd>Space</kbd>                                            |
+| Action                                      | Mouse or key                                              |
+| ------------------------------------------- | --------------------------------------------------------- |
+| Orbit                                       | Drag, or the arrow keys in the view                       |
+| Pan                                         | Right-drag, or <kbd>Shift</kbd>+drag                      |
+| Zoom                                        | Mouse wheel, or <kbd>+</kbd> / <kbd>-</kbd>               |
+| Select what is under the pointer            | Click                                                     |
+| Frame the selection                         | <kbd>F</kbd>, or double-click                             |
+| Let go of the selection                     | <kbd>Esc</kbd>, or click empty space                      |
+| Look from the front, right or top           | <kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>                  |
+| Look from the back, left or bottom          | <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd> |
+| Look from the other side                    | <kbd>9</kbd>                                              |
+| Switch between perspective and orthographic | <kbd>5</kbd>                                              |
+| Look through the next camera in the model   | <kbd>0</kbd>                                              |
+| Play or pause the animation                 | <kbd>Space</kbd>                                          |
 
 The number keys work on the main keyboard and the number pad. Nightmesh doesn't use
 <kbd>Ctrl</kbd> shortcuts in the view, so VS Code's own stay as they are.
