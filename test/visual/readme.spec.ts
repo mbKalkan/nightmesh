@@ -41,6 +41,24 @@ test('the statistics of a model', async ({ page }) => {
   expect(viewer.problems).toEqual([]);
 });
 
+test('where the bytes of a model go, and how it could be lighter', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await openSample(page, viewer, 'CarConcept.glb');
+  await tab(page, 'Size').click();
+  await settle(page);
+  await page.screenshot({ path: `${IMAGES}/size-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
+test('what the glTF Validator found, in a light theme', async ({ page }) => {
+  const viewer = await openViewer(page, 'light');
+  await openSample(page, viewer, 'ToyCar.glb', { validate: true });
+  await tab(page, 'Validation').click();
+  await settle(page);
+  await page.screenshot({ path: `${IMAGES}/validation-light.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
 test('a material variant and a wireframe from the Shading menu', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await openSample(page, viewer, 'SheenChair.glb');
