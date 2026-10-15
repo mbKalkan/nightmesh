@@ -4,6 +4,8 @@ import type { Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
+import { validationMessage } from '../../src/extension/model/validation';
+import { runValidator } from '../../src/extension/model/validator';
 import { loadTexts, viewerStrings, type Translate } from '../../src/extension/texts';
 import { buildWebviewHtml } from '../../src/extension/webviewHtml';
 import { formatForPath } from '../../src/shared/formats';
@@ -164,17 +166,31 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       { reload = false, largeBytes = undefined as number | undefined } = {},
     ) {
       const source = await fileSource(join(FIXTURES, fixture));
-      const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
-        join(FIXTURES, path.slice('/fixtures'.length)),
-      );
       const messages: HostToWebviewMessage[] = [];
       try {
         const options = { loadId: ++loadId, reload, texts: loadTexts(english), largeBytes };
-        for await (const message of loadMessages(source, opener, options)) messages.push(message);
+        for await (const message of loadMessages(source, fixtureOpener(), options)) {
+          messages.push(message);
+        }
       } finally {
         await source.close();
       }
       return messages;
+    },
+    /** What the host sends once it has validated a fixture, for the last load. */
+    async validation(fixture: string) {
+      const source = await fileSource(join(FIXTURES, fixture));
+      try {
+        return await validationMessage(
+          source,
+          fixtureOpener(),
+          runValidator,
+          loadId,
+          loadTexts(english),
+        );
+      } finally {
+        await source.close();
+      }
     },
     /** Switches the theme the way VS Code does: CSS variables plus body classes. */
     async setTheme(name: ThemeName) {
@@ -185,4 +201,11 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
     },
     sent: () => page.evaluate(() => (window as unknown as { __sent: { type: string }[] }).__sent),
   };
+}
+
+/** Resources of a fixture: the fixtures folder stands in for the workspace. */
+function fixtureOpener() {
+  return fileResourceOpener('/fixtures', '/fixtures', (path) =>
+    join(FIXTURES, path.slice('/fixtures'.length)),
+  );
 }

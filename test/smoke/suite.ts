@@ -146,6 +146,27 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
+  async 'validates a model in the background, with its resources'() {
+    await openInEditor('missing-resource.gltf');
+    const saved = await vscode.env.clipboard.readText();
+    try {
+      let copied = '';
+      // The validator runs in a worker thread once the model has loaded.
+      for (
+        const start = Date.now();
+        !copied.includes('Validation') && Date.now() - start < 30_000;
+      ) {
+        await vscode.env.clipboard.writeText('');
+        await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        copied = await vscode.env.clipboard.readText();
+      }
+      assert.match(copied, /\n- Validation: Errors: 1, warnings: 0\n/);
+    } finally {
+      await vscode.env.clipboard.writeText(saved);
+    }
+  },
+
   async 'reads models from Git even where git converts them to text'() {
     // VS Code reads versions with `git show --textconv`; a conversion set up for *.glb turned
     // the model into text.

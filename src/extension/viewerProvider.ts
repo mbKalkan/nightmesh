@@ -1,4 +1,4 @@
-import { posix } from 'node:path';
+import { join, posix } from 'node:path';
 import * as vscode from 'vscode';
 import { formatForPath } from '../shared/formats';
 import type { HostToWebviewMessage, Preferences, WebviewToHostMessage } from '../shared/protocol';
@@ -11,8 +11,10 @@ import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { resolveResourceUri } from './model/resources';
 import { fileSource, memorySource, type ByteSource } from './model/sources';
+import { validationMessage } from './model/validation';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
+import { workerValidator } from './workerValidator';
 
 const PREFERENCES = 'nightmesh.preferences';
 
@@ -86,11 +88,14 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     let largeApproved = false;
     /** Lets a load waiting for the user's word on a large model go on. */
     let drawRequest: (() => void) | undefined;
+    const validator = workerValidator(join(this.extensionUri.fsPath, 'dist', 'validator.js'));
     const load = async (reload: boolean) => {
       const id = ++loadId;
       // A load still waiting gives way to this one: it ends, and closes its file.
       drawRequest?.();
+      validator.stop();
       const current = () => id === loadId && !disposed;
+      let structured = false;
       let source: ByteSource;
       try {
         source = await openSource(uri);
@@ -109,6 +114,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         for await (const message of messages) {
           if (!current()) break;
           await post(message);
+          if (message.type === 'structure') structured = true;
           if (message.type === 'large') {
             await new Promise<void>((resolve) => (drawRequest = resolve));
             drawRequest = undefined;
@@ -119,6 +125,29 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         if (current()) await post(readFailure(id, reload));
       } finally {
         await source.close();
+      }
+      // Validation comes once the model is drawn, so the two don't compete; any glTF JSON gets
+      // it, also a model that couldn't be drawn.
+      if (structured && current()) await validate(id);
+    };
+    const validate = async (id: number) => {
+      const current = () => id === loadId && !disposed;
+      await post({ type: 'validation', loadId: id, state: 'running' });
+      let source: ByteSource | undefined;
+      try {
+        source = await openSource(uri);
+        const message = await validationMessage(
+          source,
+          resourceOpener(uri),
+          validator.validate,
+          id,
+          loadTexts(vscode.l10n.t),
+        );
+        if (current()) await post(message);
+      } catch {
+        if (current()) await post({ type: 'validation', loadId: id, state: 'failed' });
+      } finally {
+        await source?.close();
       }
     };
 
@@ -162,6 +191,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     panel.onDidDispose(() => {
       disposed = true;
       drawRequest?.();
+      validator.stop();
       if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });

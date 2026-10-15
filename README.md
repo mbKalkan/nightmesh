@@ -80,6 +80,13 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 
 ![The statistics of a concept car: totals for the scene and its meshes sorted by triangles](docs/images/statistics-dark.png)
 
+### Validation
+
+- The **Validation** tab runs the official Khronos glTF Validator on the model, in the
+  background once it has loaded. Its `.bin` files and textures are checked too.
+- Errors, warnings, infos and hints are counted and can be hidden or shown; the tab counts the
+  errors and warnings. Click an issue's JSON pointer to select what it is about.
+
 ### Shading and materials
 
 - The **Shading** menu draws the model lit as its materials say, unlit in their base colors and
@@ -159,8 +166,10 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
 
 ## Limitations
 
-- Only glTF 2.0 is supported for now: OBJ, STL, PLY and 3D Tiles are planned. So are a glTF
-  Validator report and a breakdown of where a file's bytes go.
+- Only glTF 2.0 is supported for now: OBJ, STL, PLY and 3D Tiles are planned. So is a
+  breakdown of where a file's bytes go.
+- The glTF Validator doesn't know some extensions, such as `KHR_texture_basisu` and
+  `EXT_meshopt_compression`: it says so, and may warn about what they change.
 - Models that require `KHR_materials_pbrSpecularGlossiness` or `KHR_node_visibility` can't be
   drawn yet; Nightmesh says so and still shows their structure.
 - One animation clip plays at a time.

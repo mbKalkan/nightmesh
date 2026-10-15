@@ -33,6 +33,30 @@ export function viewerStrings(t: Translate): ViewerStrings {
     modelSize: t('Size of the model in metres: width (X), height (Y) and depth (Z)'),
     selectionSize: t('Size of the selection in metres: width (X), height (Y) and depth (Z)'),
     structure: structureStrings(t),
+    validation: {
+      tab: t('Validation'),
+      waiting: t('The model is validated once it has loaded.'),
+      running: t('Validating…'),
+      validator: t('Checked by the Khronos glTF Validator {0}.', '{0}'),
+      tooLarge: t('This model is too large to validate here: {0}.', '{0}'),
+      failed: t("The glTF Validator couldn't read this model."),
+      noIssues: t('No issues found.'),
+      truncated: t('The validator stopped after {0} issues; there are more.', '{0}'),
+      offset: t('Byte {0}', '{0}'),
+      severities: {
+        error: t('Errors'),
+        warning: t('Warnings'),
+        info: t('Infos'),
+        hint: t('Hints'),
+      },
+      severity: {
+        error: t('Error'),
+        warning: t('Warning'),
+        info: t('Info'),
+        hint: t('Hint'),
+      },
+      badge: t('Errors: {0}, warnings: {1}', '{0}', '{1}'),
+    },
     animation: {
       bar: t('Animation playback'),
       clip: t('Animation'),
@@ -154,6 +178,7 @@ function structureStrings(t: Translate): StructureStrings {
       required: t('Required'),
       more: t('{0} more', '{0}'),
       under: t('under {0}', '{0}'),
+      validation: t('Validation'),
     },
   };
 }
