@@ -36,7 +36,11 @@ export class Shell {
   constructor(
     container: HTMLElement,
     private readonly layout: PanelLayout,
-    private readonly events: { layoutChanged(layout: PanelLayout): void; frame(): void },
+    private readonly events: {
+      layoutChanged(layout: PanelLayout): void;
+      frame(): void;
+      json(): void;
+    },
   ) {
     container.innerHTML = `
       <div class="nm-shell">
@@ -49,6 +53,7 @@ export class Shell {
             <button class="nm-icon-button nm-menu-button" data-action="shading" type="button" hidden>${icons.shading}${icons.chevronDown}</button>
             <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
+            <button class="nm-icon-button" data-action="json" type="button">${icons.json}</button>
             <span class="nm-separator"></span>
             <button class="nm-icon-button" data-panel="structure" type="button">${icons.panelLeft}</button>
             <button class="nm-icon-button" data-panel="inspector" type="button">${icons.panelRight}</button>
@@ -127,6 +132,7 @@ export class Shell {
     this.toggles.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (button?.dataset.action === 'frame') return this.events.frame();
+      if (button?.dataset.action === 'json') return this.events.json();
       const panel = button?.dataset.panel as 'structure' | 'inspector' | undefined;
       if (!panel) return;
       this.layout[panel] = !this.layout[panel];
@@ -158,9 +164,11 @@ export class Shell {
             ? strings.shading.menu
             : button.dataset.action === 'frame'
               ? strings.frame
-              : button.dataset.panel === 'structure'
-                ? structure.structure
-                : structure.inspector;
+              : button.dataset.action === 'json'
+                ? strings.showJson
+                : button.dataset.panel === 'structure'
+                  ? structure.structure
+                  : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }

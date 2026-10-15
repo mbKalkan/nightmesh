@@ -1445,3 +1445,15 @@ body.vscode-high-contrast .nm-bar::before {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Beside an issue's JSON pointer: smaller than a toolbar button. */
+.nm-show-json {
+  height: 18px;
+  min-width: 18px;
+  border-radius: 3px;
+}
+
+.nm-show-json svg {
+  width: 14px;
+  height: 14px;
+}

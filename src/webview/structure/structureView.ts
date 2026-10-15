@@ -14,7 +14,7 @@ import { fill, Formatter } from './format';
 import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
-import { entryAt } from './pointers';
+import { entryAt, entryPointer } from './pointers';
 import { sizeAnalysis } from './sizes';
 import { SizeView } from './sizeView';
 import { statistics } from './statistics';
@@ -30,6 +30,8 @@ export interface StructureEvents {
   activated(key: EntryKey): void;
   /** Text to put on the clipboard. */
   copy(text: string): void;
+  /** The user asked to see a place in the glTF JSON. */
+  showJson(pointer: string): void;
   /** A texture's image as the 3D view has it, for the inspector to show. */
   preview(texture: number): Promise<TexturePreview>;
 }
@@ -74,9 +76,10 @@ export class StructureView {
     );
     this.statistics = new StatisticsView(strings.structure, this.format, (key) => this.select(key));
     this.validation = new ValidationView(strings.validation, this.format, {
-      entryAt: (pointer) => this.context && entryAt(this.context.model, this.modelUsage(), pointer),
+      entryAt: (pointer) => this.entryAt(pointer),
       describe: (key) => this.describe(key),
       select: (key) => this.select(key),
+      showJson: (pointer) => events.showJson(pointer),
     });
     this.size = new SizeView(
       strings.size,
@@ -233,6 +236,16 @@ export class StructureView {
    */
   reference(key: EntryKey, details: boolean): Reference | undefined {
     return this.context && referenceOf(this.context, key, this.locale, details);
+  }
+
+  /** The JSON pointer of an entry, to show it in the glTF JSON. */
+  pointerOf(key: EntryKey): string {
+    return entryPointer(key);
+  }
+
+  /** The entry a JSON pointer is in, or leads to. */
+  entryAt(pointer: string): EntryKey | undefined {
+    return this.context && entryAt(this.context.model, this.modelUsage(), pointer);
   }
 
   /** Selects `key` in the tree, opening what holds it, and shows its details. */

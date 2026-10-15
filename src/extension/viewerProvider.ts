@@ -5,6 +5,7 @@ import type { HostToWebviewMessage, Preferences, WebviewToHostMessage } from '..
 import { composeReference } from '../shared/reference';
 import { watchFile } from './fileWatcher';
 import { gitSibling, readGitBlob } from './gitBlob';
+import { JsonDocuments } from './jsonDocuments';
 import { lfsObjectId } from './gitObject';
 import { sniff } from './model/container';
 import { fileResourceOpener } from './model/fileResources';
@@ -23,16 +24,24 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
   /** The viewer in front, which commands act on. */
   private active: vscode.WebviewPanel | undefined;
+  /** Numbers the viewers, for their glTF JSON documents. */
+  private viewers = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     /** Where the viewers' preferences are kept, for every window and session. */
     private readonly globalState: vscode.Memento,
+    private readonly jsonDocuments: JsonDocuments,
   ) {}
 
   static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new ViewerProvider(context.extensionUri, context.globalState);
+    const json = JsonDocuments.register();
+    const provider = new ViewerProvider(context.extensionUri, context.globalState, json.documents);
     return vscode.Disposable.from(
+      json.disposable,
+      vscode.commands.registerCommand('nightmesh.showJson', (menu?: unknown) =>
+        provider.showJson(menu),
+      ),
       vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
         // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
         webviewOptions: { retainContextWhenHidden: true },
@@ -61,6 +70,15 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     } satisfies HostToWebviewMessage);
   }
 
+  /** Asks the viewer in front what to show in its glTF JSON, as for a reference. */
+  private showJson(menu: unknown): void {
+    const atPointer = typeof menu === 'object' && menu !== null && 'webview' in menu;
+    void this.active?.webview.postMessage({
+      type: 'showJson',
+      atPointer,
+    } satisfies HostToWebviewMessage);
+  }
+
   openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
     return { uri, dispose: () => {} };
   }
@@ -82,6 +100,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     });
 
     const post = (message: HostToWebviewMessage) => panel.webview.postMessage(message);
+    const viewer = String(++this.viewers);
+    const fileName = uri.path.slice(uri.path.lastIndexOf('/') + 1);
     let loadId = 0;
     let disposed = false;
     /** Once the user drew a large model here, its next loads don't ask again. */
@@ -114,7 +134,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         for await (const message of messages) {
           if (!current()) break;
           await post(message);
-          if (message.type === 'structure') structured = true;
+          if (message.type === 'structure') {
+            structured = true;
+            this.jsonDocuments.set(viewer, fileName, message.json);
+          }
           if (message.type === 'large') {
             await new Promise<void>((resolve) => (drawRequest = resolve));
             drawRequest = undefined;
@@ -156,7 +179,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         if (message.type === 'ready') {
           void post({
             type: 'open',
-            fileName: uri.path.slice(uri.path.lastIndexOf('/') + 1),
+            fileName,
             format,
             locale: vscode.env.language,
             strings: viewerStrings(vscode.l10n.t),
@@ -168,6 +191,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         } else if (message.type === 'draw') {
           largeApproved = true;
           drawRequest?.();
+        } else if (message.type === 'json') {
+          void this.jsonDocuments.show(viewer, message.pointer);
+        } else if (message.type === 'selected') {
+          this.jsonDocuments.reveal(viewer, message.pointer);
         } else if (message.type === 'copy') {
           void vscode.env.clipboard
             .writeText(message.text)
@@ -189,6 +216,16 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
       }),
       watchFile(uri, () => void load(true)),
+      // Moving through the glTF JSON with the keyboard or mouse selects what the cursor is in; a
+      // selection the viewer made there itself is left alone.
+      vscode.window.onDidChangeTextEditorSelection((event) => {
+        const { document } = event.textEditor;
+        if (JsonDocuments.viewerOf(document.uri) !== viewer) return;
+        const { Keyboard, Mouse } = vscode.TextEditorSelectionChangeKind;
+        if (event.kind !== Keyboard && event.kind !== Mouse) return;
+        const pointer = this.jsonDocuments.pointerAt(viewer, document, event.selections[0].active);
+        void post({ type: 'select', pointer });
+      }),
       panel.onDidChangeViewState(() => this.track(panel)),
     ];
     this.track(panel);
@@ -196,6 +233,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       disposed = true;
       drawRequest?.();
       validator.stop();
+      this.jsonDocuments.delete(viewer);
       if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });

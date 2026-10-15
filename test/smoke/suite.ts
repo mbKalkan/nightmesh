@@ -167,6 +167,24 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
+  async 'shows the glTF JSON of a GLB beside the viewer'() {
+    await openInEditor('scene.glb');
+    const editor = await waitFor(() => {
+      void vscode.commands.executeCommand('nightmesh.showJson');
+      return vscode.window.visibleTextEditors.find(
+        (each) => each.document.uri.scheme === 'nightmesh-json',
+      );
+    });
+    const { document } = editor;
+    assert.equal(document.languageId, 'json');
+    assert.match(document.uri.path, /\/scene\.glb\.json$/);
+    const bytes = readFileSync(path.join(FIXTURES, 'scene.glb'));
+    const json = bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString('utf8');
+    assert.deepEqual(JSON.parse(document.getText()), JSON.parse(json));
+    assert.equal(document.lineAt(1).text, '  "asset": {');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  },
+
   async 'reads models from Git even where git converts them to text'() {
     // VS Code reads versions with `git show --textconv`; a conversion set up for *.glb turned
     // the model into text.

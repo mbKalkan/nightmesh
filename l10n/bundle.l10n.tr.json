@@ -186,5 +186,7 @@
   "Remove unused data": "Kullanılmayan veriyi kaldırın",
   "{0} of the file isn't used by anything in the model.": "Dosyanın {0} kadarını modeldeki hiçbir şey kullanmıyor.",
   "Copy Command": "Komutu Kopyala",
-  "Copied": "Kopyalandı"
+  "Copied": "Kopyalandı",
+  "Show glTF JSON": "glTF JSON'unu Göster",
+  "Show in glTF JSON": "glTF JSON'unda Göster"
 }
