@@ -549,7 +549,8 @@ body.vscode-high-contrast .nm-tree-description {
 /* Statistics */
 
 .nm-statistics,
-.nm-validation {
+.nm-validation,
+.nm-size {
   flex: 1;
   min-height: 0;
   padding: 0 12px 16px;
@@ -559,7 +560,8 @@ body.vscode-high-contrast .nm-tree-description {
 }
 
 .nm-statistics:focus-visible,
-.nm-validation:focus-visible {
+.nm-validation:focus-visible,
+.nm-size:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
@@ -1335,4 +1337,111 @@ body.vscode-light .nm-gizmo {
 
 .nm-validation-clean svg {
   color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+/* Size */
+
+.nm-size-total {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+.nm-bars,
+.nm-images {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Name and value on one line, the bar below them; one hue, as the rows are labelled. */
+.nm-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 2px 8px;
+  padding: 3px 0;
+  line-height: 18px;
+}
+
+.nm-bar-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nm-bar-value {
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+}
+
+.nm-bar::before {
+  content: '';
+  display: block;
+  width: var(--nm-bar, 0%);
+  height: 100%;
+  border-radius: 2px;
+  background: var(--vscode-charts-blue, var(--vscode-focusBorder));
+}
+
+/* Without color, high-contrast themes see the bar as an outline. */
+body.vscode-high-contrast .nm-bar::before {
+  outline: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+.nm-images li {
+  padding: 4px 0;
+  border-top: 1px solid var(--nm-border);
+  line-height: 18px;
+}
+
+.nm-image-facts {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.nm-image-warning {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.nm-image-warning svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--vscode-problemsWarningIcon-foreground, var(--vscode-editorWarning-foreground));
+}
+
+.nm-suggestion {
+  margin: 0 0 12px;
+}
+
+.nm-suggestion-title {
+  margin: 8px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nm-suggestion-text {
+  margin: 0 0 4px;
+  line-height: 18px;
+}
+
+.nm-command {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.nm-command .nm-json {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

@@ -144,7 +144,11 @@ export async function* loadMessages(
       const format = infos[index]?.format;
       if (!image.mimeType && format) image.mimeType = `image/${format}`;
     });
-    yield { type: 'images', loadId, images: infos };
+    const imageParts = new Map(plan.parts.map((part) => [part.key, part.length]));
+    const imageBytes = (plan.json.images ?? []).map(
+      (image) => imageParts.get(`bufferView:${image.bufferView}`) ?? null,
+    );
+    yield { type: 'images', loadId, images: infos, bytes: imageBytes };
     if (plan.json.animations?.length) {
       yield { type: 'animations', loadId, motion: await animationMotion(plan) };
     }

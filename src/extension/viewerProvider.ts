@@ -168,6 +168,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         } else if (message.type === 'draw') {
           largeApproved = true;
           drawRequest?.();
+        } else if (message.type === 'copy') {
+          void vscode.env.clipboard
+            .writeText(message.text)
+            .then(() => vscode.window.setStatusBarMessage(vscode.l10n.t('Copied'), 3000));
         } else if (message.type === 'preferences') {
           void this.globalState.update(PREFERENCES, message.preferences);
         } else if (message.type === 'reference') {

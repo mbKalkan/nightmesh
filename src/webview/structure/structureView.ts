@@ -15,6 +15,8 @@ import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
 import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
 import { entryAt } from './pointers';
+import { sizeAnalysis } from './sizes';
+import { SizeView } from './sizeView';
 import { statistics } from './statistics';
 import { StatisticsView } from './statisticsView';
 import { StructureTree } from './tree';
@@ -26,6 +28,8 @@ export interface StructureEvents {
   selected(key: EntryKey): void;
   /** The user asked to see an entry in the 3D view. */
   activated(key: EntryKey): void;
+  /** Text to put on the clipboard. */
+  copy(text: string): void;
   /** A texture's image as the 3D view has it, for the inspector to show. */
   preview(texture: number): Promise<TexturePreview>;
 }
@@ -40,6 +44,9 @@ export class StructureView {
   private readonly inspector: InspectorView;
   private readonly statistics: StatisticsView;
   private readonly validation: ValidationView;
+  private readonly size: SizeView;
+  /** Each image's own bytes, from the host. */
+  private imageBytes: readonly (number | null)[] | undefined;
   private readonly panel: SidePanel;
   private readonly format: Formatter;
   private context: InspectContext | undefined;
@@ -71,6 +78,13 @@ export class StructureView {
       describe: (key) => this.describe(key),
       select: (key) => this.select(key),
     });
+    this.size = new SizeView(
+      strings.size,
+      strings.structure,
+      this.format,
+      (key) => this.select(key),
+      (text) => events.copy(text),
+    );
     this.panel = shell.inspectorPanel;
     shell.structurePanel.body.replaceChildren(this.tree.element);
     shell.inspectorPanel.setTabs(
@@ -78,6 +92,7 @@ export class StructureView {
         { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
         { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
         { id: 'validation', label: strings.validation.tab, content: this.validation.element },
+        { id: 'size', label: strings.size.tab, content: this.size.element },
       ],
       shell.inspectorTab,
       (tab) => (shell.inspectorTab = tab),
@@ -115,16 +130,33 @@ export class StructureView {
     if (!keep || !inspect(this.context, this.selected)) this.selected = 'model';
     const expanded = keep ? this.tree.expandedKeys() : initiallyExpanded(model);
     this.tree.setEntries(outline(model, this.strings.structure), expanded, this.selected, keep);
+    this.imageBytes = undefined;
     this.statistics.show(statistics(model), model);
+    this.showSize();
     this.show(this.selected, keep);
   }
 
   /** Image sizes from the host: they fill in texture details and the texture memory. */
-  setImages(images: readonly (ImageInfo | null)[]): void {
+  setImages(images: readonly (ImageInfo | null)[], bytes: readonly (number | null)[]): void {
     if (!this.context) return;
     this.context.images = images;
+    this.imageBytes = bytes;
     this.showStatistics();
+    this.showSize();
     this.render(true);
+  }
+
+  private showSize(): void {
+    if (!this.context) return;
+    const { model, file, images } = this.context;
+    const analysis = sizeAnalysis(model, this.modelUsage(), {
+      fileName: file.name,
+      fileSize: file.size,
+      chunks: file.chunks,
+      images,
+      imageBytes: this.imageBytes,
+    });
+    this.size.show(analysis, model);
   }
 
   private showStatistics(): void {

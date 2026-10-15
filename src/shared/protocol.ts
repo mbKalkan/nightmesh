@@ -194,6 +194,7 @@ export interface ViewerStrings {
   selectionSize: string;
   structure: StructureStrings;
   validation: ValidationStrings;
+  size: SizeStrings;
   animation: AnimationStrings;
   view: ViewStrings;
   shading: ShadingStrings;
@@ -259,6 +260,52 @@ export interface ValidationStrings {
   badge: string;
 }
 
+/** Where a model's bytes go, by what they are for. */
+export type SizeCategory =
+  | 'json'
+  | 'vertices'
+  | 'indices'
+  | 'morphTargets'
+  | 'animation'
+  | 'skins'
+  | 'instancing'
+  | 'textures'
+  | 'unused'
+  | 'other';
+
+/** What a suggestion in the size tab is about. */
+export type SuggestionKind =
+  'geometry' | 'textureMemory' | 'textureDownload' | 'textureSize' | 'unused';
+
+/** Words for the size tab. `{0}` and `{1}` are filled in by the webview. */
+export interface SizeStrings {
+  tab: string;
+  /** `{0}`: the bytes. */
+  totalOne: string;
+  /** `{0}`: the bytes, `{1}`: how many files. */
+  totalMany: string;
+  breakdown: string;
+  categories: Record<SizeCategory, string>;
+  compression: string;
+  geometry: string;
+  /** `{0}` of `{1}` primitives. */
+  draco: string;
+  /** `{0}` of `{1}` bufferViews. */
+  meshopt: string;
+  quantized: string;
+  none: string;
+  gpuMemory: string;
+  largest: string;
+  images: string;
+  imageWarnings: { large: string; notPowerOfTwo: string };
+  unusedImage: string;
+  suggestions: string;
+  suggestionsNote: string;
+  /** Each suggestion's title and why, `{0}` the bytes it is about. */
+  suggestion: Record<SuggestionKind, { title: string; text: string }>;
+  copy: string;
+}
+
 /** Sent once the webview is ready: what file this is. */
 export interface OpenMessage {
   type: 'open';
@@ -299,6 +346,8 @@ export interface ImagesMessage {
   type: 'images';
   loadId: number;
   images: (ImageInfo | null)[];
+  /** How many bytes each image takes in its file, or its own; null where it couldn't be had. */
+  bytes: (number | null)[];
 }
 
 /**
@@ -406,5 +455,7 @@ export type WebviewToHostMessage =
    * host puts the file's path first. No `location` means the model itself.
    */
   | { type: 'reference'; location?: string; details?: string }
+  /** Text for the clipboard, such as a command the size tab suggests. */
+  | { type: 'copy'; text: string }
   /** The user changed a preference; the host keeps them all for the next viewer. */
   | { type: 'preferences'; preferences: Preferences };

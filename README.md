@@ -87,6 +87,17 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 - Errors, warnings, infos and hints are counted and can be hidden or shown; the tab counts the
   errors and warnings. Click an issue's JSON pointer to select what it is about.
 
+### Size and optimization
+
+- The **Size** tab breaks the file down into JSON, vertex data, indices, morph targets,
+  animations, skins and textures, with the files a `.gltf` uses, and finds data nothing uses.
+- How the geometry (Draco, meshopt, quantization) and the textures (KTX2, WebP, PNG, JPEG) are
+  compressed, and the GPU memory they are estimated to take.
+- The largest meshes, textures and animations, and each image's format, size and bytes, marked
+  when it is larger than 4096 pixels or not a power of two.
+- Suggestions for a lighter model, with the [glTF Transform](https://gltf-transform.dev) command
+  that writes an improved copy. Nightmesh never changes the file itself.
+
 ### Shading and materials
 
 - The **Shading** menu draws the model lit as its materials say, unlit in their base colors and
@@ -166,8 +177,7 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
 
 ## Limitations
 
-- Only glTF 2.0 is supported for now: OBJ, STL, PLY and 3D Tiles are planned. So is a
-  breakdown of where a file's bytes go.
+- Only glTF 2.0 is supported for now: OBJ, STL, PLY and 3D Tiles are planned.
 - The glTF Validator doesn't know some extensions, such as `KHR_texture_basisu` and
   `EXT_meshopt_compression`: it says so, and may warn about what they change.
 - Models that require `KHR_materials_pbrSpecularGlossiness` or `KHR_node_visibility` can't be
