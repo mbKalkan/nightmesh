@@ -91,6 +91,9 @@ const COMPONENTS: Record<string, number> = {
   MAT4: 16,
 };
 const MESHOPT = ['EXT_meshopt_compression', 'KHR_meshopt_compression'];
+/** A GLB's own header, and each chunk's. */
+const GLB_HEADER = 12;
+const CHUNK_HEADER = 8;
 /** Formats that stay compressed on the GPU. */
 const GPU_COMPRESSED = new Set(['ktx2']);
 
@@ -125,6 +128,17 @@ export function sizeAnalysis(
   const buffers = model.items('buffers');
   const hasData = (buffer: number | undefined) =>
     buffer !== undefined && (text(buffers[buffer].uri) !== undefined || (glb && buffer === 0));
+  // A GLB cut short holds less of its binary chunk than its JSON says: count what is there.
+  const binary = inputs.chunks
+    ? Math.max(0, inputs.fileSize - (GLB_HEADER + 2 * CHUNK_HEADER + inputs.chunks.json))
+    : Infinity;
+  const storedIn = (buffer: number | undefined, offset: unknown, length: unknown) => {
+    if (!hasData(buffer)) return 0;
+    const start = num(offset) ?? 0;
+    const end = start + (num(length) ?? 0);
+    const available = glb && buffer === 0 && text(buffers[0].uri) === undefined ? binary : Infinity;
+    return Math.max(0, Math.min(end, available) - start);
+  };
   const accessors = model.items('accessors');
   let meshopt = 0;
 
@@ -132,12 +146,12 @@ export function sizeAnalysis(
     const compressed = MESHOPT.map((name) => model.extension(view, name)).find(Boolean);
     if (compressed) meshopt++;
     const stored = compressed
-      ? hasData(model.ref('buffers', compressed.buffer))
-        ? (num(compressed.byteLength) ?? 0)
-        : 0
-      : hasData(model.ref('buffers', view.buffer))
-        ? (num(view.byteLength) ?? 0)
-        : 0;
+      ? storedIn(
+          model.ref('buffers', compressed.buffer),
+          compressed.byteOffset,
+          compressed.byteLength,
+        )
+      : storedIn(model.ref('buffers', view.buffer), view.byteOffset, view.byteLength);
     if (stored === 0) return;
     const contents = usage.views[index];
     if (contents.images.length > 0) {

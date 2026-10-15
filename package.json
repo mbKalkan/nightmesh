@@ -121,6 +121,16 @@
         "command": "nightmesh.showJson",
         "title": "%command.showJson%",
         "category": "%category%"
+      },
+      {
+        "command": "nightmesh.saveScreenshot",
+        "title": "%command.saveScreenshot%",
+        "category": "%category%"
+      },
+      {
+        "command": "nightmesh.saveReport",
+        "title": "%command.saveReport%",
+        "category": "%category%"
       }
     ],
     "menus": {
@@ -135,6 +145,14 @@
         },
         {
           "command": "nightmesh.showJson",
+          "when": "activeCustomEditorId == nightmesh.viewer"
+        },
+        {
+          "command": "nightmesh.saveScreenshot",
+          "when": "activeCustomEditorId == nightmesh.viewer"
+        },
+        {
+          "command": "nightmesh.saveReport",
           "when": "activeCustomEditorId == nightmesh.viewer"
         }
       ],

@@ -42,6 +42,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       vscode.commands.registerCommand('nightmesh.showJson', (menu?: unknown) =>
         provider.showJson(menu),
       ),
+      vscode.commands.registerCommand('nightmesh.saveScreenshot', () =>
+        provider.askToExport('screenshot'),
+      ),
+      vscode.commands.registerCommand('nightmesh.saveReport', () => provider.askToExport('report')),
       vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
         // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
         webviewOptions: { retainContextWhenHidden: true },
@@ -77,6 +81,11 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       type: 'showJson',
       atPointer,
     } satisfies HostToWebviewMessage);
+  }
+
+  /** Asks the viewer in front for a screenshot or a report, which it sends back to save. */
+  private askToExport(what: 'screenshot' | 'report'): void {
+    void this.active?.webview.postMessage({ type: 'export', what } satisfies HostToWebviewMessage);
   }
 
   openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
@@ -195,6 +204,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           void this.jsonDocuments.show(viewer, message.pointer);
         } else if (message.type === 'selected') {
           this.jsonDocuments.reveal(viewer, message.pointer);
+        } else if (message.type === 'save') {
+          void save(uri, message);
         } else if (message.type === 'copy') {
           void vscode.env.clipboard
             .writeText(message.text)
@@ -243,6 +254,65 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     if (panel.active) this.active = panel;
     else if (this.active === panel) this.active = undefined;
   }
+}
+
+/**
+ * Saves a screenshot or a report where the user picks, by default next to the model. The model
+ * itself is never written: Nightmesh is read-only.
+ */
+async function save(
+  model: vscode.Uri,
+  message: Extract<WebviewToHostMessage, { type: 'save' }>,
+): Promise<void> {
+  const t = vscode.l10n.t;
+  if (message.what === 'screenshot' && !message.data) {
+    void vscode.window.showInformationMessage(t('There is no drawn model to take a picture of.'));
+    return;
+  }
+  const name = posix.basename(model.path);
+  const base = name.slice(0, name.lastIndexOf('.')) || name;
+  const screenshot = message.what === 'screenshot';
+  const target = await vscode.window.showSaveDialog({
+    title: screenshot ? t('Save Screenshot') : t('Save Report'),
+    saveLabel: t('Save'),
+    defaultUri: saveLocation(model, screenshot ? `${base}.png` : `${base}-report.md`),
+    filters: screenshot
+      ? { [t('PNG Image')]: ['png'] }
+      : { [t('Markdown')]: ['md'], [t('JSON')]: ['json'] },
+  });
+  if (!target) return;
+  const same =
+    target.scheme === model.scheme &&
+    (target.scheme === 'file'
+      ? target.fsPath.toLowerCase() === model.fsPath.toLowerCase()
+      : target.path === model.path);
+  if (same) {
+    void vscode.window.showErrorMessage(
+      t("Nightmesh doesn't write to the model it shows. Pick another file."),
+    );
+    return;
+  }
+  const bytes =
+    message.what === 'screenshot'
+      ? message.data!
+      : new TextEncoder().encode(
+          target.path.toLowerCase().endsWith('.json') ? message.json : message.markdown,
+        );
+  const saved = posix.basename(target.path);
+  try {
+    await vscode.workspace.fs.writeFile(target, bytes);
+    vscode.window.setStatusBarMessage(t('Saved {0}', saved), 3000);
+  } catch {
+    void vscode.window.showErrorMessage(t("{0} couldn't be saved.", saved));
+  }
+}
+
+/** Where a saved file goes unless the user picks elsewhere: next to the model, if it is a file. */
+function saveLocation(model: vscode.Uri, name: string): vscode.Uri | undefined {
+  if (model.scheme === 'file')
+    return model.with({ path: posix.join(posix.dirname(model.path), name) });
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+  return folder && vscode.Uri.joinPath(folder, name);
 }
 
 /**

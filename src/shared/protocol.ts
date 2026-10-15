@@ -197,6 +197,8 @@ export interface ViewerStrings {
   structure: StructureStrings;
   validation: ValidationStrings;
   size: SizeStrings;
+  report: ReportStrings;
+  export: ExportStrings;
   animation: AnimationStrings;
   view: ViewStrings;
   shading: ShadingStrings;
@@ -307,6 +309,29 @@ export interface SizeStrings {
   /** Each suggestion's title and why, `{0}` the bytes it is about. */
   suggestion: Record<SuggestionKind, { title: string; text: string }>;
   copy: string;
+}
+
+/** Words in a saved report that the tabs don't already have. */
+export interface ReportStrings {
+  generated: string;
+  name: string;
+  share: string;
+  format: string;
+  pixels: string;
+  notes: string;
+  severity: string;
+  code: string;
+  message: string;
+  where: string;
+  /** The report was saved before the validator had run. */
+  notValidated: string;
+}
+
+/** The Export menu in the toolbar. */
+export interface ExportStrings {
+  menu: string;
+  screenshot: string;
+  report: string;
 }
 
 /** Sent once the webview is ready: what file this is. */
@@ -439,7 +464,9 @@ export type HostToWebviewMessage =
   /** Asks for what to show in the glTF JSON: as `copyReference` does for a reference. */
   | { type: 'showJson'; atPointer: boolean }
   /** The cursor moved in the glTF JSON document: select what it is in. */
-  | { type: 'select'; pointer: string };
+  | { type: 'select'; pointer: string }
+  /** A command asks for a screenshot or a report to save. */
+  | { type: 'export'; what: 'screenshot' | 'report' };
 
 /**
  * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
@@ -466,6 +493,10 @@ export type WebviewToHostMessage =
   | { type: 'json'; pointer: string }
   /** The selection changed: an open glTF JSON document follows it. */
   | { type: 'selected'; pointer: string }
+  /** A screenshot to save, as a PNG; no data when there is no 3D view. */
+  | { type: 'save'; what: 'screenshot'; data?: Uint8Array }
+  /** A report to save, in both formats: the user picks one in the save dialog. */
+  | { type: 'save'; what: 'report'; markdown: string; json: string }
   /** Text for the clipboard, such as a command the size tab suggests. */
   | { type: 'copy'; text: string }
   /** The user changed a preference; the host keeps them all for the next viewer. */

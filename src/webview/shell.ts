@@ -14,6 +14,8 @@ export class Shell {
   /** Open the Shading and View menus, once there is a 3D view. */
   readonly shadingButton: HTMLButtonElement;
   readonly viewButton: HTMLButtonElement;
+  /** Opens the Export menu. */
+  readonly exportButton: HTMLButtonElement;
   readonly structurePanel: SidePanel;
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
@@ -54,6 +56,7 @@ export class Shell {
             <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
             <button class="nm-icon-button" data-action="json" type="button">${icons.json}</button>
+            <button class="nm-icon-button nm-menu-button" data-action="export" type="button">${icons.export}${icons.chevronDown}</button>
             <span class="nm-separator"></span>
             <button class="nm-icon-button" data-panel="structure" type="button">${icons.panelLeft}</button>
             <button class="nm-icon-button" data-panel="inspector" type="button">${icons.panelRight}</button>
@@ -114,6 +117,7 @@ export class Shell {
     });
     this.viewButton = find('[data-action="view"]');
     this.shadingButton = find('[data-action="shading"]');
+    this.exportButton = find('[data-action="export"]');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -166,9 +170,11 @@ export class Shell {
               ? strings.frame
               : button.dataset.action === 'json'
                 ? strings.showJson
-                : button.dataset.panel === 'structure'
-                  ? structure.structure
-                  : structure.inspector;
+                : button.dataset.action === 'export'
+                  ? strings.export.menu
+                  : button.dataset.panel === 'structure'
+                    ? structure.structure
+                    : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }

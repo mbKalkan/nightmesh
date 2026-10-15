@@ -471,6 +471,18 @@ export class ModelView {
     this.viewpoint.zoom(factor);
   }
 
+  /**
+   * The view as it is now, as a PNG. WebGL keeps no copy of what it showed, so the model is
+   * drawn again and read in the same task.
+   */
+  async screenshot(): Promise<Uint8Array | undefined> {
+    this.render();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      this.renderer.domElement.toBlob(resolve, 'image/png'),
+    );
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : undefined;
+  }
+
   requestRender(): void {
     if (this.frameRequest) return;
     this.frameRequest = requestAnimationFrame(() => {

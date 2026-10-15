@@ -126,6 +126,8 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 
 ### Everywhere
 
+- **Export** the view as a PNG, or a report on the model (details, statistics, size, suggestions
+  and validation) as Markdown or JSON, to a new file you pick.
 - **Copy Reference** in the right-click menu, for a part in the view, a row in the structure or a
   link in the inspector. **Copy Reference with Details** adds what the inspector says about it.
   Both are in the Command Palette too, where they refer to the selection.

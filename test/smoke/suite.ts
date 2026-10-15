@@ -44,8 +44,18 @@ function describeEditors(): string {
 
 /** Opens a file the way a click in the Explorer does and returns the custom editor tab's input. */
 async function openInEditor(name: string): Promise<vscode.TabInputCustom> {
-  await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(FIXTURES, name)));
+  const uri = vscode.Uri.file(path.join(FIXTURES, name));
+  await vscode.commands.executeCommand('vscode.open', uri);
+  let tries = 0;
   return waitFor(() => {
+    // Opened while the window is still starting, a file can get the binary file editor before
+    // the extension's editor is known; opened again a moment later, it gets the viewer.
+    const open = vscode.window.tabGroups.activeTabGroup.activeTab;
+    if (++tries % 50 === 0 && open && !(open.input instanceof vscode.TabInputCustom)) {
+      void Promise.resolve(vscode.window.tabGroups.close(open)).then(() =>
+        vscode.commands.executeCommand('vscode.open', uri),
+      );
+    }
     const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
     return tab?.input instanceof vscode.TabInputCustom && tab.input.uri.path.endsWith(`/${name}`)
       ? tab.input
