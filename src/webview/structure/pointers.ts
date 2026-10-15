@@ -72,3 +72,34 @@ export function entryAt(
       return 'model';
   }
 }
+
+/** Collections in the JSON, by the kind of entry in them and the group that lists them. */
+const COLLECTIONS: Record<string, string> = {
+  scene: '/scenes',
+  node: '/nodes',
+  mesh: '/meshes',
+  material: '/materials',
+  texture: '/textures',
+  animation: '/animations',
+  skin: '/skins',
+  camera: '/cameras',
+  light: '/extensions/KHR_lights_punctual/lights',
+  nodes: '/nodes',
+  otherNodes: '/nodes',
+  meshes: '/meshes',
+  materials: '/materials',
+  textures: '/textures',
+  animations: '/animations',
+  skins: '/skins',
+  cameras: '/cameras',
+  lights: '/extensions/KHR_lights_punctual/lights',
+};
+
+/** The JSON pointer of a structure entry: `node:3` is `/nodes/3`, the model the whole JSON. */
+export function entryPointer(key: EntryKey): string {
+  const group = /^group:(\w+)$/.exec(key);
+  if (group) return COLLECTIONS[group[1]] ?? '';
+  const entry = /^([a-z]+):(\d+)$/.exec(key);
+  if (!entry || !COLLECTIONS[entry[1]]) return '';
+  return `${COLLECTIONS[entry[1]]}/${entry[2]}`;
+}

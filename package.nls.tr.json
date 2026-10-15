@@ -4,5 +4,6 @@
   "customEditor.displayName": "Nightmesh",
   "category": "Nightmesh",
   "command.copyReference": "Referansı Kopyala",
-  "command.copyReferenceWithDetails": "Referansı Ayrıntılarla Kopyala"
+  "command.copyReferenceWithDetails": "Referansı Ayrıntılarla Kopyala",
+  "command.showJson": "glTF JSON'unu Göster"
 }

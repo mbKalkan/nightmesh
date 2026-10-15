@@ -31,6 +31,7 @@ export interface ValidationLinks {
   /** An entry as a tooltip names it. */
   describe(key: EntryKey): string | undefined;
   select(key: EntryKey): void;
+  showJson(pointer: string): void;
 }
 
 /**
@@ -53,6 +54,8 @@ export class ValidationView {
     this.element.tabIndex = 0;
     this.element.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
+      const json = target.closest<HTMLElement>('[data-json]')?.dataset.json;
+      if (json !== undefined) return this.links.showJson(json);
       const key = target.closest<HTMLElement>('[data-key]')?.dataset.key;
       if (key !== undefined) return this.links.select(key);
       const severity = target.closest<HTMLElement>('[data-severity]')?.dataset.severity;
@@ -186,7 +189,15 @@ export class ValidationView {
         const location =
           key === undefined ? element('span', 'nm-mono', '') : this.link(pointer, key);
         if (key === undefined) location.append(...breakable(pointer));
-        where.append(location);
+        // Right-clicked, it is shown in the glTF JSON as it is, not as the entry it leads to.
+        location.dataset.pointer = issue.pointer;
+        const json = element('button', 'nm-icon-button nm-show-json', '');
+        json.innerHTML = icons.json;
+        json.setAttribute('type', 'button');
+        json.title = this.strings.showInJson;
+        json.setAttribute('aria-label', this.strings.showInJson);
+        json.dataset.json = issue.pointer;
+        where.append(location, json);
       } else if (issue.offset !== undefined) {
         where.append(element('span', 'nm-mono', fill(this.strings.offset, issue.offset)));
       }

@@ -50,6 +50,7 @@ const shell = new Shell(
   {
     layoutChanged: (layout) => savePreferences({ layout: { ...layout } }),
     frame: () => void view?.then((target) => target?.frameSelection()),
+    json: () => showJson(selectedKey),
   },
 );
 let opened: OpenMessage | undefined;
@@ -72,6 +73,10 @@ let latestLoad = 0;
 let hasModel = false;
 /** What the context menu's reference commands name: what was right-clicked last. */
 let menuKey: string | undefined;
+/** A JSON pointer right-clicked last, in the validation tab: shown in the JSON as it is. */
+let menuPointer: string | undefined;
+/** True while the glTF JSON document selects in the viewer, which needn't be told back. */
+let selectingFromJson = false;
 /** The context menu the 3D view opened, having set `menuKey` to what is under the pointer. */
 let viewContextMenu: Event | undefined;
 /** The row or link the context menu was opened on, outlined while the menu shows. */
@@ -119,6 +124,19 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'large':
       askToDraw(message.loadId, message.bytes);
       break;
+    case 'showJson':
+      if (message.atPointer && menuPointer !== undefined)
+        vscode.postMessage({ type: 'json', pointer: menuPointer });
+      else showJson(message.atPointer ? (menuKey ?? selectedKey) : selectedKey);
+      break;
+    case 'select': {
+      const key = structure?.entryAt(message.pointer);
+      if (key === undefined || key === selectedKey) break;
+      selectingFromJson = true;
+      structure?.select(key);
+      selectingFromJson = false;
+      break;
+    }
     case 'copyReference': {
       const key = message.atPointer ? (menuKey ?? selectedKey) : selectedKey;
       vscode.postMessage({ type: 'reference', ...structure?.reference(key, message.details) });
@@ -138,6 +156,7 @@ document.addEventListener('contextmenu', (event) => {
     target?.closest<HTMLElement>('[data-key]') ??
     target?.querySelector<HTMLElement>('.nm-tree-row.nm-focused');
   menuKey = entry?.dataset.key ?? selectedKey;
+  menuPointer = target?.closest<HTMLElement>('[data-pointer]')?.dataset.pointer;
   markMenuTarget(entry ?? undefined);
 });
 
@@ -191,6 +210,11 @@ document.addEventListener('keydown', (event) => {
 
 vscode.postMessage({ type: 'ready' });
 
+/** Opens the glTF JSON beside the viewer, at an entry. */
+function showJson(key: string): void {
+  if (structure) vscode.postMessage({ type: 'json', pointer: structure.pointerOf(key) });
+}
+
 /** A large model waits for the user's word; meanwhile the panels show its structure. */
 function askToDraw(loadId: number, bytes: number): void {
   if (loadId < latestLoad || !strings) return;
@@ -230,7 +254,12 @@ function open(message: OpenMessage): void {
   }
   structure ??= new StructureView(shell, strings, message.locale, {
     selected: (key) => {
+      const changed = key !== selectedKey;
       selectedKey = key;
+      // An open glTF JSON document follows the selection, when it changes in the viewer.
+      if (changed && !selectingFromJson) {
+        vscode.postMessage({ type: 'selected', pointer: structure?.pointerOf(key) ?? '' });
+      }
       void view?.then((target) => {
         target?.select(key);
         // Picking an animation in the structure makes it the one the bar plays.
@@ -241,6 +270,7 @@ function open(message: OpenMessage): void {
     activated: () => void view?.then((target) => target?.frameSelection()),
     preview: async (texture) => (await view)?.textureImage(texture),
     copy: (text) => vscode.postMessage({ type: 'copy', text }),
+    showJson: (pointer) => vscode.postMessage({ type: 'json', pointer }),
   });
 }
 

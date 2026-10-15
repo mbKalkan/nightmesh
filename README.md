@@ -62,6 +62,9 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 - The **Inspector** shows what is selected: a node's transform and mesh, a mesh's primitives,
   vertices and attributes, material values with color swatches, texture size, mip levels and
   GPU memory with a preview of the image, animation channels and more, with links between them.
+- **Show glTF JSON** opens the model's JSON beside the viewer, a GLB's too, at what is
+  selected. It follows the selection both ways: move through the JSON and the viewer selects
+  what the cursor is in.
 - What is selected is outlined in the 3D view: a node, every node that uses a mesh, every part
   drawn with a material. Click the model to select what is under the pointer, and the tree opens
   to it. Frame Selection (F, or a double-click) brings it into view.
@@ -85,7 +88,8 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 - The **Validation** tab runs the official Khronos glTF Validator on the model, in the
   background once it has loaded. Its `.bin` files and textures are checked too.
 - Errors, warnings, infos and hints are counted and can be hidden or shown; the tab counts the
-  errors and warnings. Click an issue's JSON pointer to select what it is about.
+  errors and warnings. Click an issue's JSON pointer to select what it is about, or show it in
+  the glTF JSON.
 
 ### Size and optimization
 

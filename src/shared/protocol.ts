@@ -187,6 +187,8 @@ export interface ViewerStrings {
   close: string;
   /** The toolbar button that frames the selection, with its shortcut. */
   frame: string;
+  /** The toolbar button that opens the glTF JSON beside the viewer. */
+  showJson: string;
   /** What the keys do in the view, for screen readers when it takes the focus. */
   viewKeys: string;
   /** What the size in the corner of the view measures. */
@@ -258,6 +260,7 @@ export interface ValidationStrings {
   severity: Record<Severity, string>;
   /** What the count on the tab is: `Errors: {0}, warnings: {1}`. */
   badge: string;
+  showInJson: string;
 }
 
 /** Where a model's bytes go, by what they are for. */
@@ -432,7 +435,11 @@ export type HostToWebviewMessage =
   | PartsMessage
   | FailedMessage
   | ValidationMessage
-  | CopyReferenceMessage;
+  | CopyReferenceMessage
+  /** Asks for what to show in the glTF JSON: as `copyReference` does for a reference. */
+  | { type: 'showJson'; atPointer: boolean }
+  /** The cursor moved in the glTF JSON document: select what it is in. */
+  | { type: 'select'; pointer: string };
 
 /**
  * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
@@ -455,6 +462,10 @@ export type WebviewToHostMessage =
    * host puts the file's path first. No `location` means the model itself.
    */
   | { type: 'reference'; location?: string; details?: string }
+  /** Show the glTF JSON beside the viewer, at what a JSON pointer names. */
+  | { type: 'json'; pointer: string }
+  /** The selection changed: an open glTF JSON document follows it. */
+  | { type: 'selected'; pointer: string }
   /** Text for the clipboard, such as a command the size tab suggests. */
   | { type: 'copy'; text: string }
   /** The user changed a preference; the host keeps them all for the next viewer. */

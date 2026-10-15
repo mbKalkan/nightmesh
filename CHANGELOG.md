@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Suggestions in the Size tab, each with a glTF Transform command to copy, for models that
   could be lighter: compressing geometry, KTX2 or WebP textures, scaling down very large
   textures, removing unused data. Nightmesh itself never changes the file.
+- **Show glTF JSON** (toolbar, right-click menu, Command Palette) opens the model's glTF JSON
+  beside the viewer, laid out for reading and read-only, at what is selected; for a GLB, this is
+  the JSON chunk. It follows the selection, and moving through it selects what the cursor is in.
+  Each validation issue can be shown in it, where its JSON pointer points.
 
 ## [0.1.0] - 2026-10-14
 

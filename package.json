@@ -116,6 +116,11 @@
         "command": "nightmesh.copyReferenceWithDetails",
         "title": "%command.copyReferenceWithDetails%",
         "category": "%category%"
+      },
+      {
+        "command": "nightmesh.showJson",
+        "title": "%command.showJson%",
+        "category": "%category%"
       }
     ],
     "menus": {
@@ -126,6 +131,10 @@
         },
         {
           "command": "nightmesh.copyReferenceWithDetails",
+          "when": "activeCustomEditorId == nightmesh.viewer"
+        },
+        {
+          "command": "nightmesh.showJson",
           "when": "activeCustomEditorId == nightmesh.viewer"
         }
       ],
@@ -139,6 +148,11 @@
           "command": "nightmesh.copyReferenceWithDetails",
           "when": "webviewId == 'nightmesh.viewer'",
           "group": "9_cutcopypaste@2"
+        },
+        {
+          "command": "nightmesh.showJson",
+          "when": "webviewId == 'nightmesh.viewer'",
+          "group": "navigation@1"
         }
       ]
     }
