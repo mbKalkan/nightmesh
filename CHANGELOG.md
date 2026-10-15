@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
+Validation, size analysis, the glTF JSON and export.
+
 ### Added
 
 - A **Validation** tab runs the Khronos glTF Validator on the model once it has loaded, in the
@@ -117,5 +121,6 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mbKalkan/nightmesh/releases/tag/v0.1.0
