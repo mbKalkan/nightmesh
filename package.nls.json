@@ -1,5 +1,5 @@
 {
-  "displayName": "Nightmesh — 3D Model Viewer for glTF & GLB",
+  "displayName": "Nightmesh — 3D Model Viewer for glTF, GLB, OBJ, STL & PLY",
   "description": "View and inspect glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your dark theme. Fast, offline and read-only.",
   "customEditor.displayName": "Nightmesh",
   "category": "Nightmesh",
