@@ -229,8 +229,9 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
   such as TGA, are left out; Nightmesh says so.
 - The glTF Validator doesn't know some extensions, such as `KHR_texture_basisu` and
   `EXT_meshopt_compression`: it says so, and may warn about what they change.
-- Models that require `KHR_materials_pbrSpecularGlossiness` or `KHR_node_visibility` can't be
-  drawn yet; Nightmesh says so and still shows their structure.
+- Models that require `KHR_materials_pbrSpecularGlossiness` can't be drawn yet; Nightmesh says
+  so and still shows their structure. Animations of material and node properties
+  (`KHR_animation_pointer`) don't play.
 - One animation clip plays at a time.
 - A `.gltf`'s `.bin` files and textures are read only from the model's folder and workspace:
   never from the network or an absolute path.

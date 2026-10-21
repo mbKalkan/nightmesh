@@ -172,7 +172,7 @@ export class ModelView {
   /** Fits the bounding box to the model as it is posed now, when it shows. */
   private updateBounds(): void {
     if (this.helpers.boundsShown && this.model) {
-      this.helpers.setBounds(new Box3().setFromObject(this.model));
+      this.helpers.setBounds(visibleBox(this.model));
     }
   }
 
@@ -563,12 +563,12 @@ export class ModelView {
       objects.length === 1 && this.selected.startsWith('node:') ? ownSize(objects[0]) : undefined;
     if (!size && objects.length > 0) size = worldSize(boundsOf(objects));
     const selection = size !== undefined;
-    if (!size && this.model) size = worldSize(new Box3().setFromObject(this.model));
+    if (!size && this.model) size = worldSize(visibleBox(this.model));
     this.events.measured(size, selection);
   }
 
   private modelBox(): Box3 {
-    const box = this.model ? new Box3().setFromObject(this.model) : new Box3();
+    const box = this.model ? visibleBox(this.model) : new Box3();
     if (box.isEmpty()) box.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
     return box;
   }
@@ -700,4 +700,32 @@ function disposeMaterial(material: Material): void {
     if ((value as Texture | null)?.isTexture) (value as Texture).dispose();
   }
   material.dispose();
+}
+
+/**
+ * The world box around what is drawn of `root`: as three.js measures objects, but without those
+ * hidden, as KHR_node_visibility hides them, so the view frames what can be seen.
+ */
+function visibleBox(root: Object3D): Box3 {
+  const box = new Box3();
+  const part = new Box3();
+  root.updateWorldMatrix(true, true);
+  root.traverseVisible((object) => {
+    const drawn = object as Object3D & {
+      geometry?: BufferGeometry;
+      boundingBox?: Box3 | null;
+      computeBoundingBox?: () => void;
+    };
+    if (!drawn.geometry) return;
+    // Instanced and skinned meshes measure themselves, with their instances and pose.
+    if (drawn.boundingBox !== undefined) {
+      if (drawn.boundingBox === null) drawn.computeBoundingBox!();
+      part.copy(drawn.boundingBox!);
+    } else {
+      if (!drawn.geometry.boundingBox) drawn.geometry.computeBoundingBox();
+      part.copy(drawn.geometry.boundingBox!);
+    }
+    box.union(part.applyMatrix4(object.matrixWorld));
+  });
+  return box;
 }

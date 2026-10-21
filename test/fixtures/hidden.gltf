@@ -1,0 +1,190 @@
+{
+  "asset": {
+    "generator": "Nightmesh fixture generator",
+    "version": "2.0",
+    "copyright": "Public domain (CC0 1.0)"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "min": [
+        -0.5,
+        -0.5,
+        -0.5
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 24,
+      "bufferView": 0,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 24,
+      "bufferView": 0,
+      "byteOffset": 24
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 36,
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 36,
+      "bufferView": 1,
+      "byteOffset": 72
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "min": [
+        -0.5,
+        -0.5,
+        -0.5
+      ],
+      "bufferView": 2,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 24,
+      "bufferView": 2,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 24,
+      "bufferView": 2,
+      "byteOffset": 24
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 768,
+      "byteStride": 32,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 768,
+      "byteLength": 144,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 912,
+      "byteLength": 768,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "hidden.bin",
+      "byteLength": 1680
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Shown",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "mode": 4,
+          "indices": 3
+        }
+      ]
+    },
+    {
+      "name": "Inside Hidden",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 5,
+            "NORMAL": 6,
+            "TEXCOORD_0": 7
+          },
+          "mode": 4,
+          "indices": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Shown",
+      "translation": [
+        0,
+        0.5,
+        0
+      ],
+      "mesh": 0
+    },
+    {
+      "name": "Hidden",
+      "translation": [
+        10,
+        0.5,
+        0
+      ],
+      "children": [
+        2
+      ],
+      "extensions": {
+        "KHR_node_visibility": {
+          "visible": false
+        }
+      }
+    },
+    {
+      "name": "Inside Hidden",
+      "mesh": 1
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Hidden",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "scene": 0,
+  "extensionsUsed": [
+    "KHR_node_visibility"
+  ],
+  "extensionsRequired": [
+    "KHR_node_visibility"
+  ]
+}
