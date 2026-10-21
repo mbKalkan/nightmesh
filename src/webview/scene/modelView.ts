@@ -28,7 +28,7 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
-import { Picker, type PickRegion } from './picking';
+import { Picker, type PickRegion, type SurfacePoint } from './picking';
 import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
@@ -86,6 +86,15 @@ const MEASURE_INTERVAL = 500;
 /** A press that moves less than this, in CSS pixels, is a click rather than a drag. */
 const CLICK_SLOP = 4;
 
+/** While measuring, a click this many CSS pixels from a vertex places the end on it. */
+const SNAP_RADIUS = 8;
+
+/**
+ * While measuring, the vertex a click would snap to is looked for once the pointer rests this
+ * long, in milliseconds: looking draws the model again, too costly at every move.
+ */
+const SNAP_HOVER_DELAY = 60;
+
 /**
  * The 3D view: a model lit by a built-in environment, orbited with the mouse. It draws only
  * when something changes, so an idle view costs nothing. What is selected in the structure shows
@@ -105,6 +114,7 @@ export class ModelView {
   private measuring = false;
   /** The measurement last told, to tell only changes. */
   private ruledAs: string | undefined;
+  private snapTimer: ReturnType<typeof setTimeout> | undefined;
   private model: Object3D | undefined;
   private index: SelectionIndex | undefined;
   /** The structure entry selected, whose objects are highlighted. */
@@ -188,6 +198,7 @@ export class ModelView {
   setMeasuring(measuring: boolean): void {
     if (measuring === this.measuring) return;
     this.measuring = measuring;
+    clearTimeout(this.snapTimer);
     this.ruler.clear();
     this.render();
   }
@@ -581,6 +592,7 @@ export class ModelView {
     void this.draco?.then((loader) => loader.dispose());
     void this.ktx2?.then((loader) => loader.dispose());
     cancelAnimationFrame(this.frameRequest);
+    clearTimeout(this.snapTimer);
     this.resizeObserver.disconnect();
     this.viewpoint.dispose();
     this.picker.dispose();
@@ -637,6 +649,41 @@ export class ModelView {
     this.canvas.addEventListener('dblclick', (event) => {
       if (!this.measuring) this.events.picked(this.pickAt(event), true);
     });
+    // While measuring, a ring shows the vertex a click would snap to.
+    this.canvas.addEventListener('pointermove', (event) => {
+      clearTimeout(this.snapTimer);
+      if (!this.measuring) return;
+      if (event.buttons !== 0) return this.showSnap(undefined);
+      const { clientX, clientY } = event;
+      this.snapTimer = setTimeout(
+        () => this.showSnap(this.vertexAt({ clientX, clientY })?.point),
+        SNAP_HOVER_DELAY,
+      );
+    });
+    this.canvas.addEventListener('pointerleave', () => {
+      clearTimeout(this.snapTimer);
+      this.showSnap(undefined);
+    });
+  }
+
+  private showSnap(point: Vector3 | undefined): void {
+    if (this.ruler.setSnap(point)) this.requestRender();
+  }
+
+  /** The vertex near the pointer that a click would snap to, while measuring. */
+  private vertexAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): SurfacePoint | undefined {
+    if (!this.model || !this.measuring) return undefined;
+    const region = this.regionAt(event);
+    const scale = region.width / Math.max(1, this.canvas.getBoundingClientRect().width);
+    return this.picker.nearestVertex(
+      this.renderer,
+      this.scene,
+      this.viewpoint.camera,
+      this.model,
+      [this.highlight.group, this.helpers.group, this.ruler.group],
+      region,
+      Math.max(1, Math.round(SNAP_RADIUS * scale)),
+    );
   }
 
   /** The node drawn under the pointer, if any. */
@@ -653,24 +700,29 @@ export class ModelView {
     return object ? this.index.node(object) : undefined;
   }
 
-  /** Places an end of the measurement where the pointer is on the model; nothing off it. */
+  /**
+   * Places an end of the measurement on the vertex near the pointer, or else where the pointer
+   * is on the model; nothing off it.
+   */
   private placeEnd(event: MouseEvent): void {
     if (!this.model) return;
-    const hit = this.picker.surfacePoint(
-      this.renderer,
-      this.scene,
-      this.viewpoint.camera,
-      this.model,
-      [this.highlight.group, this.helpers.group, this.ruler.group],
-      this.regionAt(event),
-    );
+    const hit =
+      this.vertexAt(event) ??
+      this.picker.surfacePoint(
+        this.renderer,
+        this.scene,
+        this.viewpoint.camera,
+        this.model,
+        [this.highlight.group, this.helpers.group, this.ruler.group],
+        this.regionAt(event),
+      );
     if (!hit) return;
     this.ruler.add(hit.point, hit.object);
     this.render();
   }
 
   /** The drawing-buffer pixel under the pointer. */
-  private regionAt(event: MouseEvent): PickRegion {
+  private regionAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): PickRegion {
     const rect = this.canvas.getBoundingClientRect();
     const scale = this.canvas.width / Math.max(1, rect.width);
     return {

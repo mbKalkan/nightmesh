@@ -16,6 +16,8 @@ import {
 
 /** The ends of a measurement are dots this many CSS pixels across. */
 const DOT_SIZE = 9;
+/** The ring around the vertex a click would snap to, in CSS pixels across. */
+const RING_SIZE = 17;
 
 /** A measurement as far as it has come: its ends, and once both are placed how far apart. */
 export interface Measurement {
@@ -51,26 +53,43 @@ export class Ruler {
   });
   private readonly dots: PointsMaterial;
   private readonly lines: Line[];
+  private readonly points: Points;
+  /** A ring around the vertex a click would snap to. */
+  private readonly ring: Points;
   private readonly label: HTMLElement;
 
   constructor(container: HTMLElement) {
     this.group.name = 'Nightmesh ruler';
-    this.group.visible = false;
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', this.positions);
     this.dots = new PointsMaterial({
       size: DOT_SIZE * window.devicePixelRatio,
       sizeAttenuation: false,
-      map: dot(),
+      map: circle(false),
       alphaTest: 0.5,
       depthTest: false,
       depthWrite: false,
       toneMapped: false,
     });
     this.lines = [new Line(geometry, this.behind), new Line(geometry, this.front)];
-    const points = new Points(geometry, this.dots);
-    // Over the model, the dots over the line.
-    [...this.lines, points].forEach((object, index) => {
+    this.points = new Points(geometry, this.dots);
+    const ringGeometry = new BufferGeometry();
+    ringGeometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
+    this.ring = new Points(
+      ringGeometry,
+      new PointsMaterial({
+        size: RING_SIZE * window.devicePixelRatio,
+        sizeAttenuation: false,
+        map: circle(true),
+        alphaTest: 0.5,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    this.ring.visible = false;
+    // Over the model, the dots over the line, the ring over them all.
+    [...this.lines, this.points, this.ring].forEach((object, index) => {
       object.frustumCulled = false;
       object.renderOrder = 1000 + index;
       this.group.add(object);
@@ -85,8 +104,28 @@ export class Ruler {
 
   /** The theme's focus color, as sRGB channels from 0 to 1. */
   setColor([r, g, b]: readonly [number, number, number]): void {
-    for (const material of [this.front, this.behind, this.dots])
+    for (const material of [
+      this.front,
+      this.behind,
+      this.dots,
+      this.ring.material as PointsMaterial,
+    ])
       material.color.setRGB(r, g, b, SRGBColorSpace);
+  }
+
+  /** Rings the vertex a click would snap to; undefined takes the ring away. */
+  setSnap(point: Vector3 | undefined): boolean {
+    const was = this.ring.visible
+      ? new Vector3().fromBufferAttribute(this.ring.geometry.attributes.position, 0)
+      : undefined;
+    if (point === was || (point && was?.equals(point))) return false;
+    this.ring.visible = point !== undefined;
+    if (point) {
+      const position = this.ring.geometry.attributes.position as BufferAttribute;
+      position.setXYZ(0, point.x, point.y, point.z);
+      position.needsUpdate = true;
+    }
+    return true;
   }
 
   /** Places an end where `point` is on `object`; after two, a third starts a new measurement. */
@@ -98,7 +137,9 @@ export class Ruler {
 
   clear(): void {
     this.ends.length = 0;
-    this.group.visible = false;
+    this.points.visible = false;
+    for (const line of this.lines) line.visible = false;
+    this.ring.visible = false;
     this.label.hidden = true;
   }
 
@@ -113,10 +154,10 @@ export class Ruler {
     const points = this.ends.map(({ object, local }) => object.localToWorld(local.clone()));
     points.forEach((point, index) => this.positions.setXYZ(index, point.x, point.y, point.z));
     this.positions.needsUpdate = true;
-    this.group.visible = points.length > 0;
+    this.points.visible = points.length > 0;
+    this.points.geometry.setDrawRange(0, points.length);
     const [a, b] = points;
     for (const line of this.lines) line.visible = b !== undefined;
-    (this.group.children[2] as Points).geometry.setDrawRange(0, points.length);
     if (!a || !b) {
       this.label.hidden = true;
       return { ends: points.length };
@@ -138,21 +179,32 @@ export class Ruler {
   }
 
   dispose(): void {
-    (this.group.children[0] as Line).geometry.dispose();
-    this.dots.map?.dispose();
-    for (const material of [this.front, this.behind, this.dots]) material.dispose();
+    this.points.geometry.dispose();
+    this.ring.geometry.dispose();
+    const ring = this.ring.material as PointsMaterial;
+    for (const material of [this.front, this.behind, this.dots, ring]) {
+      material.map?.dispose();
+      material.dispose();
+    }
     this.label.remove();
   }
 }
 
-/** A round dot, white, for the points' color to tint. */
-function dot(): CanvasTexture {
+/** A white disc, or a ring, for the points' color to tint. */
+function circle(ring: boolean): CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 32;
+  canvas.width = canvas.height = 64;
   const context = canvas.getContext('2d')!;
-  context.fillStyle = '#ffffff';
   context.beginPath();
-  context.arc(16, 16, 15, 0, Math.PI * 2);
-  context.fill();
+  if (ring) {
+    context.strokeStyle = '#ffffff';
+    context.lineWidth = 8;
+    context.arc(32, 32, 27, 0, Math.PI * 2);
+    context.stroke();
+  } else {
+    context.fillStyle = '#ffffff';
+    context.arc(32, 32, 30, 0, Math.PI * 2);
+    context.fill();
+  }
   return new CanvasTexture(canvas);
 }

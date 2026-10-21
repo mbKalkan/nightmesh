@@ -1,20 +1,23 @@
 import {
   Color,
+  FloatType,
   LineBasicMaterial,
   LinearSRGBColorSpace,
   MeshBasicMaterial,
+  Points,
   PointsMaterial,
+  Scene,
   Vector2,
   Vector3,
   WebGLRenderTarget,
+  type InstancedMesh,
   type Line,
   type Material,
   type Mesh,
   type Object3D,
   type OrthographicCamera,
   type PerspectiveCamera,
-  type Points,
-  type Scene,
+  type SkinnedMesh,
   type WebGLRenderer,
 } from 'three';
 
@@ -55,6 +58,10 @@ const DISTANCE_FRAGMENT = `#include <premultiplied_alpha_fragment>
 \tfloat nmMiddle = floor((nmLevel - nmHigh * 65536.0) / 256.0);
 \tgl_FragColor = vec4(vec3(nmHigh, nmMiddle, nmLevel - nmHigh * 65536.0 - nmMiddle * 256.0) / 255.0, 1.0);`;
 
+/** Writes each vertex's view-space position, and the number of its object, as floats. */
+const VERTEX_FRAGMENT = `#include <premultiplied_alpha_fragment>
+\tgl_FragColor = vec4(nmView, nmObject);`;
+
 /**
  * Finds what is drawn under the pointer by drawing the scene again, a few pixels of it, with
  * every object in a flat color that encodes its number. Vertex data has left memory once it is
@@ -66,7 +73,12 @@ export class Picker {
   private readonly pixels = new Uint8Array(SIZE * SIZE * 4);
   private readonly materials = new WeakMap<Object3D, PickMaterial>();
   private readonly distanceMaterials = new WeakMap<Object3D, PickMaterial>();
+  private readonly depthMaterials = new WeakMap<Object3D, PickMaterial>();
+  private readonly vertexMaterials: PointsMaterial[] = [];
   private readonly made: PickMaterial[] = [];
+  /** Where vertices near the pointer are drawn, as floats, and how many pixels across. */
+  private vertexTarget: WebGLRenderTarget | undefined;
+  private vertexPixels = new Float32Array(0);
   private readonly clearColor = new Color();
   /** The distances the distance drawing spans, and whether the camera is orthographic. */
   private readonly range = { value: new Vector2() };
@@ -131,6 +143,88 @@ export class Picker {
     return { point, object: picked.object };
   }
 
+  /**
+   * The vertex nearest the pixel of `region`, at most `radius` pixels from it, that the model
+   * doesn't hide: exactly where it is, and its object. Each mesh, line and point cloud is drawn
+   * once more as its vertices alone, one pixel each, over the depth of the model, and each pixel
+   * written gets its vertex's position. Skinned and instanced meshes are left out, as their
+   * vertices can't be drawn as points the way they are posed; so are GPUs that can't draw floats.
+   */
+  nearestVertex(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: Camera,
+    model: Object3D,
+    hidden: readonly Object3D[],
+    region: PickRegion,
+    radius: number,
+  ): SurfacePoint | undefined {
+    if (!renderer.extensions.has('EXT_color_buffer_float')) return undefined;
+    const size = radius * 2 + 1;
+    if (this.vertexTarget?.width !== size) {
+      this.vertexTarget?.dispose();
+      this.vertexTarget = new WebGLRenderTarget(size, size, { type: FloatType });
+      this.vertexPixels = new Float32Array(size * size * 4);
+    }
+    const target = this.vertexTarget;
+    const vertices = new Scene();
+    const sources: Object3D[] = [];
+    model.traverseVisible((object) => {
+      const drawable = object as Partial<Mesh & Line & Points & SkinnedMesh & InstancedMesh>;
+      if (!(drawable.isMesh || drawable.isLine || drawable.isPoints)) return;
+      if (drawable.isSkinnedMesh || drawable.isInstancedMesh || !drawable.geometry) return;
+      sources.push(object);
+      const points = new Points(drawable.geometry, this.vertexMaterial(sources.length));
+      points.matrixAutoUpdate = false;
+      points.matrixWorldAutoUpdate = false;
+      points.matrixWorld.copy(object.matrixWorld);
+      points.frustumCulled = false;
+      if (drawable.morphTargetInfluences) {
+        points.morphTargetInfluences = drawable.morphTargetInfluences;
+        points.morphTargetDictionary = drawable.morphTargetDictionary;
+      }
+      vertices.add(points);
+    });
+    if (sources.length === 0) return undefined;
+
+    this.inRegion(renderer, camera, hidden, target, region, size, () => {
+      // The model's depth first, pushed back a hair so its own vertices aren't hidden by it.
+      this.withMaterials(
+        model,
+        (object) => this.depthMaterialFor(object),
+        () => renderer.render(scene, camera),
+      );
+      const autoClear = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.render(vertices, camera);
+      renderer.autoClear = autoClear;
+      renderer.readRenderTargetPixels(target, 0, 0, size, size, this.vertexPixels);
+    });
+
+    const pixels = this.vertexPixels;
+    let best: number | undefined;
+    let bestDistance = radius * radius + 1e-9;
+    for (let row = 0; row < size; row++) {
+      for (let column = 0; column < size; column++) {
+        const offset = (row * size + column) * 4;
+        if (pixels[offset + 3] < 0.5) continue;
+        const distance = (row - radius) ** 2 + (column - radius) ** 2;
+        if (distance < bestDistance) {
+          best = offset;
+          bestDistance = distance;
+        }
+      }
+    }
+    if (best === undefined) return undefined;
+    const object = sources[Math.round(pixels[best + 3]) - 1];
+    if (!object) return undefined;
+    camera.updateMatrixWorld();
+    const point = new Vector3(pixels[best], pixels[best + 1], pixels[best + 2]).applyMatrix4(
+      camera.matrixWorld,
+    );
+    return { point, object };
+  }
+
   /** Draws the patch with each object in an id color, and finds the pixel nearest the middle. */
   private pickPixel(
     renderer: WebGLRenderer,
@@ -182,9 +276,60 @@ export class Picker {
     camera: Camera,
     model: Object3D,
     hidden: readonly Object3D[],
-    { x, y, width, height }: PickRegion,
+    region: PickRegion,
     materialOf: (object: Object3D, id: number) => PickMaterial,
   ): Object3D[] {
+    return this.inRegion(renderer, camera, hidden, this.target, region, SIZE, () =>
+      this.withMaterials(model, materialOf, (drawn) => {
+        renderer.render(scene, camera);
+        renderer.readRenderTargetPixels(this.target, 0, 0, SIZE, SIZE, this.pixels);
+        return drawn;
+      }),
+    );
+  }
+
+  /**
+   * Runs `draw` with the camera seeing only the `size` × `size` pixels around the one of
+   * `region`, drawn into `target`, cleared to nothing, and the helpers in `hidden` hidden.
+   */
+  private inRegion<T>(
+    renderer: WebGLRenderer,
+    camera: Camera,
+    hidden: readonly Object3D[],
+    target: WebGLRenderTarget,
+    { x, y, width, height }: PickRegion,
+    size: number,
+    draw: () => T,
+  ): T {
+    const wasVisible = hidden.map((object) => object.visible);
+    hidden.forEach((object) => (object.visible = false));
+    const clearColor = renderer.getClearColor(this.clearColor);
+    const clearAlpha = renderer.getClearAlpha();
+    const previousTarget = renderer.getRenderTarget();
+    const half = size >> 1;
+    camera.setViewOffset(width, height, x - half, y - half, size, size);
+    renderer.setClearColor(0x000000, 0);
+    renderer.setRenderTarget(target);
+    renderer.clear();
+    try {
+      return draw();
+    } finally {
+      renderer.setRenderTarget(previousTarget);
+      renderer.setClearColor(clearColor, clearAlpha);
+      camera.clearViewOffset();
+      hidden.forEach((object, index) => (object.visible = wasVisible[index]));
+    }
+  }
+
+  /**
+   * Runs `draw` with every mesh, line and point cloud of `model` in the material `materialOf`
+   * gives it, numbered from 1, and its own material back afterwards.
+   */
+  private withMaterials<T>(
+    model: Object3D,
+    materialOf: (object: Object3D, id: number) => PickMaterial,
+    draw: (drawn: Object3D[]) => T,
+  ): T {
     const drawn: Object3D[] = [];
     const originals: (Material | Material[])[] = [];
     model.traverseVisible((object) => {
@@ -198,31 +343,19 @@ export class Picker {
         ? drawable.material.map(() => material)
         : material;
     });
-    const wasVisible = hidden.map((object) => object.visible);
-    hidden.forEach((object) => (object.visible = false));
-    const clearColor = renderer.getClearColor(this.clearColor);
-    const clearAlpha = renderer.getClearAlpha();
-    const previousTarget = renderer.getRenderTarget();
-
-    camera.setViewOffset(width, height, x - (SIZE >> 1), y - (SIZE >> 1), SIZE, SIZE);
-    renderer.setClearColor(0x000000, 0);
-    renderer.setRenderTarget(this.target);
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.readRenderTargetPixels(this.target, 0, 0, SIZE, SIZE, this.pixels);
-
-    renderer.setRenderTarget(previousTarget);
-    renderer.setClearColor(clearColor, clearAlpha);
-    camera.clearViewOffset();
-    hidden.forEach((object, index) => (object.visible = wasVisible[index]));
-    drawn.forEach((object, index) => ((object as Mesh).material = originals[index]));
-    return drawn;
+    try {
+      return draw(drawn);
+    } finally {
+      drawn.forEach((object, index) => ((object as Mesh).material = originals[index]));
+    }
   }
 
   dispose(): void {
     this.target.dispose();
-    for (const material of this.made) material.dispose();
+    this.vertexTarget?.dispose();
+    for (const material of [...this.made, ...this.vertexMaterials]) material.dispose();
     this.made.length = 0;
+    this.vertexMaterials.length = 0;
   }
 
   /** A flat material for an object, drawn like its own: same sides, point size and so on. */
@@ -254,6 +387,47 @@ export class Picker {
     };
     material.customProgramCacheKey = () => 'nightmesh-distance';
     this.distanceMaterials.set(object, material);
+    return material;
+  }
+
+  /**
+   * A material that draws an object's depth and no color, pushed back a hair: its vertices,
+   * drawn over it, aren't hidden by its own faces.
+   */
+  private depthMaterialFor(object: Object3D): PickMaterial {
+    let material = this.depthMaterials.get(object);
+    if (material) return material;
+    material = this.flatMaterial(object);
+    material.colorWrite = false;
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
+    this.depthMaterials.set(object, material);
+    return material;
+  }
+
+  /** Draws vertices a pixel each, writing their view-space position and object `id`. */
+  private vertexMaterial(id: number): PointsMaterial {
+    let material = this.vertexMaterials[id - 1];
+    if (material) return material;
+    const object = { value: id };
+    material = new PointsMaterial({ size: 1, sizeAttenuation: false });
+    material.toneMapped = false;
+    material.fog = false;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.nmObject = object;
+      shader.vertexShader = `varying vec3 nmView;\n${shader.vertexShader}`.replace(
+        '#include <project_vertex>',
+        DISTANCE_VERTEX,
+      );
+      shader.fragmentShader =
+        `varying vec3 nmView;\nuniform float nmObject;\n${shader.fragmentShader}`.replace(
+          '#include <premultiplied_alpha_fragment>',
+          VERTEX_FRAGMENT,
+        );
+    };
+    material.customProgramCacheKey = () => 'nightmesh-vertex';
+    this.vertexMaterials[id - 1] = material;
     return material;
   }
 
