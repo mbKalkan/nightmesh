@@ -11,6 +11,27 @@ export type ModelFormat = 'glb' | 'gltf' | MeshFormat;
  */
 export type SourceFacts = StlFacts | PlyFacts | ObjFacts;
 
+/**
+ * What a 3D printing check finds in an OBJ, STL or PLY file's triangles, with corners at the same
+ * place taken as one vertex. Lengths are in the file's own units.
+ */
+export interface MeshCheck {
+  triangles: number;
+  area: number;
+  /** What the surface holds, when it is closed and its faces wound alike: negative inside out. */
+  volume?: number;
+  /** Pieces that share no vertex. */
+  shells: number;
+  /** Triangles with a corner twice, which have no area and no edges. */
+  degenerate: number;
+  /** Edges of one face only: the rims of holes. */
+  openEdges: number;
+  /** Edges of more than two faces. */
+  nonManifoldEdges: number;
+  /** Edges whose two faces are wound the same way along it: one of them faces the wrong way. */
+  flippedEdges: number;
+}
+
 export interface StlFacts {
   format: 'stl';
   encoding: 'binary' | 'ascii';
@@ -164,6 +185,20 @@ export interface SourceStrings {
   statements: string;
   /** Next to statements that are read but not drawn. */
   notDrawn: string;
+  /** The check of the triangles, as a section, and its rows. */
+  check: string;
+  area: string;
+  volume: string;
+  /** Next to a volume whose faces point inward. */
+  insideOut: string;
+  watertight: string;
+  yes: string;
+  no: string;
+  openEdges: string;
+  nonManifoldEdges: string;
+  flippedEdges: string;
+  shells: string;
+  degenerate: string;
   /** A material an OBJ file uses that its libraries don't define. */
   notDefined: string;
 }
@@ -545,12 +580,20 @@ export interface FailedMessage {
   details: string[];
 }
 
+/** The check of an OBJ, STL or PLY model's triangles, once its parts are sent. */
+export interface MeshCheckMessage {
+  type: 'meshCheck';
+  loadId: number;
+  check: MeshCheck;
+}
+
 export type HostToWebviewMessage =
   | OpenMessage
   | StructureMessage
   | ProgressMessage
   | ImagesMessage
   | AnimationsMessage
+  | MeshCheckMessage
   | ModelMessage
   | LargeMessage
   | PartMessage

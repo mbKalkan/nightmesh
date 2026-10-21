@@ -2,6 +2,8 @@
 // in a worker thread in the extension (workerMesh.ts), which runs the same readers.
 import type { MeshFormat, SourceFacts } from '../../../shared/protocol';
 import type { ByteSource } from '../sources';
+import type { MeshCheck } from '../../../shared/protocol';
+import { checkMesh, trianglesOf } from './check';
 import { MeshFormatError, type MeshReader, type ParsedMesh } from './geometry';
 import { ObjReader } from './obj';
 import { PlyReader, plyHeaderFacts } from './ply';
@@ -11,8 +13,14 @@ import { utf16 } from './text';
 /** Pieces of this size are read and handed to the reader in turn. */
 export const CHUNK = 4 * 1024 * 1024;
 
-/** How far reading has come, then what was read. */
-export type MeshEvent = { type: 'progress'; done: number } | { type: 'done'; mesh: ParsedMesh };
+/**
+ * How far reading has come, then what was read, then the check of its triangles: last, so it
+ * never holds up showing the model.
+ */
+export type MeshEvent =
+  | { type: 'progress'; done: number }
+  | { type: 'done'; mesh: ParsedMesh }
+  | { type: 'check'; check: MeshCheck | undefined };
 
 /**
  * Reads a file of a format into geometry, saying how far it has come. Throws `MeshFormatError`
@@ -40,7 +48,9 @@ export const parseInThread: MeshParser = async function* (format, source) {
     offset += length;
     yield { type: 'progress', done: offset };
   }
-  yield { type: 'done', mesh: reader.finish() };
+  const mesh = reader.finish();
+  yield { type: 'done', mesh };
+  yield { type: 'check', check: checkMesh(trianglesOf(mesh)) };
 };
 
 /** Bytes from the start of a file that `looksLike` and `headerFacts` look at. */

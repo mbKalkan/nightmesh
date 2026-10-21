@@ -3,6 +3,7 @@
 import { parentPort } from 'node:worker_threads';
 import type { MeshReader } from './model/mesh/geometry';
 import { MeshFormatError } from './model/mesh/geometry';
+import { checkMesh, trianglesOf } from './model/mesh/check';
 import { createReader, meshBuffers } from './model/mesh/parse';
 import type { MeshRequest, MeshResponse } from './workerMesh';
 
@@ -22,8 +23,15 @@ port.on('message', (message: MeshRequest) => {
       send({ type: 'next' });
     } else {
       const mesh = reader!.finish();
+      reader = undefined;
+      // The check comes after the mesh, from a copy of its triangles, so the model shows first.
+      const triangles = trianglesOf(mesh).map(({ positions, indices }) => ({
+        positions: positions.slice(),
+        indices: indices?.slice(),
+      }));
       // The arrays move to the extension rather than being copied.
       send({ type: 'done', mesh }, meshBuffers(mesh));
+      send({ type: 'check', check: checkMesh(triangles) });
     }
   } catch (error) {
     send({

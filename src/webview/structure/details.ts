@@ -1,5 +1,6 @@
 import type {
   ImageInfo,
+  MeshCheck,
   ModelFormat,
   Motion,
   SourceFacts,
@@ -80,6 +81,8 @@ export interface InspectContext {
   validation?: string;
   /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
   source?: SourceFacts;
+  /** The check of an OBJ, STL or PLY model's triangles, once the host has made it. */
+  check?: MeshCheck;
 }
 
 /** Lists longer than this are cut short, with a count of the rest. */
@@ -372,11 +375,43 @@ function inspectSource(context: InspectContext, source: SourceFacts): Inspection
     });
   }
   sections.splice(1, 0, contentsSection(context));
+  if (context.check) sections.splice(2, 0, checkSection(context, context.check));
   return {
     title: file.name,
     kind: strings.kinds.model,
     sections: sections.filter((section) => section.rows.length > 0),
   };
+}
+
+/**
+ * What a 3D printing check asks: the surface area, whether the surface is closed and the volume
+ * it holds, and where it isn't closed. Lengths are the file's, in its unit.
+ */
+function checkSection(context: InspectContext, check: MeshCheck): Section {
+  const { format } = context;
+  const words = context.strings.source;
+  const watertight = check.openEdges === 0 && check.nonManifoldEdges === 0;
+  const rows: Row[] = [{ label: words.area, text: format.area(check.area), mono: true }];
+  if (check.volume !== undefined) {
+    rows.push({
+      label: words.volume,
+      text: format.volume(Math.abs(check.volume)),
+      mono: true,
+      note: check.volume < 0 ? words.insideOut : undefined,
+    });
+  }
+  rows.push({ label: words.watertight, text: watertight ? words.yes : words.no });
+  const counts: [string, number][] = [
+    [words.openEdges, check.openEdges],
+    [words.nonManifoldEdges, check.nonManifoldEdges],
+    [words.flippedEdges, check.flippedEdges],
+    [words.degenerate, check.degenerate],
+  ];
+  for (const [label, count] of counts) {
+    if (count > 0) rows.push({ label, text: format.count(count), mono: true });
+  }
+  rows.push({ label: words.shells, text: format.count(check.shells), mono: true });
+  return { title: words.check, rows };
 }
 
 /** The nodes of the scene shown: the default scene's, or the top nodes when there is none. */

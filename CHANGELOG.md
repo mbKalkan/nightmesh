@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For these formats the inspector shows what the file says about itself: an STL's header and
   solids, a PLY's elements, properties and comments, an OBJ's statements and the MTL statements
   of each material.
+- A **mesh check** in the inspector, as for 3D printing: the surface area, whether the model is
+  watertight and the volume it holds (in cubic centimetres too for millimetres), and what keeps
+  it from being so: open edges, edges of more than two faces, edges between faces wound
+  opposite ways, faces without area. It counts the separate shells too. It comes just after the
+  model, so it never holds it up, and goes in Copy Reference with Details and the report.
 - STL files are taken to be in millimetres with Z up, as CAD writes them; OBJ and PLY in metres
   with Y up, or Z up when their coordinates are georeferenced. An OBJ file that names its unit
   in a comment, as Maya's do, opens in that unit. The **View** menu sets the units

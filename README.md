@@ -70,14 +70,18 @@ for files of hundreds of megabytes.
   they do for glTF. The inspector also shows what the file says about itself: an STL's header
   and solids, a PLY's elements, properties and comments, an OBJ's statements and each
   material's MTL statements.
-- These formats don't say what their units are or which way is up. STL opens in millimetres
+- A **mesh check**, as for 3D printing: the surface area, whether the model is watertight and
+  the volume it holds, and what keeps it from being so: open edges, edges of more than two
+  faces, faces wound the wrong way. It counts the separate shells too.
+- These formats seldom say what their units are or which way is up. STL opens in millimetres
   with Z up, as CAD writes it; OBJ and PLY in metres with Y up, or Z up when their coordinates
-  are georeferenced. The **View** menu sets the units and the up axis, and the next file of the
-  same format opens that way. Sizes and the grid follow the file's units.
+  are georeferenced, and an OBJ in the unit its comments name, as Maya writes. The **View** menu
+  sets the units and the up axis, and the next file of the same format opens that way. Sizes and
+  the grid follow the file's units.
 - What can't be shown is listed over the model: a missing material library or texture, faces
   naming vertices the file lacks, a file cut short.
 
-![A Mars 2020 rover wheel from an STL file, set to inches from the View menu: its size in inches in the corner, and its format, facets and colors in the inspector](docs/images/stl-dark.png)
+![A Mars 2020 rover wheel from an STL file, set to inches from the View menu: its size in inches in the corner, its format and facets in the inspector, and the mesh check saying it is watertight and holds 13.88 cubic inches](docs/images/stl-dark.png)
 
 ### Structure and inspector
 

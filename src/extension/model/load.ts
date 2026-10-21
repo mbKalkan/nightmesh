@@ -206,25 +206,59 @@ async function* meshMessages(
     waited = true;
   }
 
-  let mesh: ParsedMesh | undefined;
+  const events = (options.parseMesh ?? parseInThread)(format, source)[Symbol.asyncIterator]();
   try {
-    for await (const event of (options.parseMesh ?? parseInThread)(format, source)) {
-      if (event.type === 'progress') {
-        yield { type: 'progress', loadId, done: event.done, total: source.size };
-      } else {
-        mesh = event.mesh;
+    let mesh: ParsedMesh | undefined;
+    try {
+      for (let next = await events.next(); !next.done; next = await events.next()) {
+        const event = next.value;
+        if (event.type === 'progress') {
+          yield { type: 'progress', loadId, done: event.done, total: source.size };
+        } else if (event.type === 'done') {
+          mesh = event.mesh;
+          break;
+        }
       }
+    } catch (error) {
+      if (error instanceof MeshFormatError)
+        return yield failure(options, texts.notMesh(format, false));
+      throw error;
     }
-  } catch (error) {
-    if (error instanceof MeshFormatError)
-      return yield failure(options, texts.notMesh(format, false));
-    throw error;
+    if (!mesh) return;
+    const drawn = yield* meshModelMessages(mesh, source, resources, options, waited);
+    if (!drawn) return;
+    // The check of the triangles comes last, so it never holds up the model.
+    try {
+      for (let next = await events.next(); !next.done; next = await events.next()) {
+        if (next.value.type !== 'check') continue;
+        if (next.value.check) yield { type: 'meshCheck', loadId, check: next.value.check };
+        break;
+      }
+    } catch {
+      // The model is shown; it only goes without its check.
+    }
+  } finally {
+    await events.return?.();
   }
-  if (!mesh) return;
+}
+
+/** The structure, then the model, of a mesh read from a file; false if it has nothing to draw. */
+async function* meshModelMessages(
+  mesh: ParsedMesh,
+  source: ByteSource,
+  resources: Resources,
+  options: LoadOptions,
+  waited: boolean,
+): AsyncGenerator<HostToWebviewMessage, boolean> {
+  const { loadId, reload, texts } = options;
+  const fileName = options.fileName ?? '';
 
   const materials = await meshMaterials(mesh, resources, texts);
   const { json, buffers } = toGltf(mesh, fileName, materials.specs, materials.images);
-  if (!json.meshes?.length) return yield failure(options, texts.noGeometry);
+  if (!json.meshes?.length) {
+    yield failure(options, texts.noGeometry);
+    return false;
+  }
   yield {
     type: 'structure',
     loadId,
@@ -247,6 +281,7 @@ async function* meshMessages(
   }));
   // The user was asked already, before reading.
   yield* drawMessages(json, data, resources, { ...options, largeBytes: Infinity }, notices);
+  return true;
 }
 
 /** A model with nothing in it but the file's node, while a large file waits to be read. */

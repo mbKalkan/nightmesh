@@ -52,14 +52,20 @@ const modelOf = (messages: HostToWebviewMessage[]) => {
 };
 
 describe('loading OBJ, STL and PLY', () => {
-  it('reads the file, then sends it as glTF: structure, images, model, parts', async () => {
+  it('reads the file, then sends it as glTF: structure, images, model, parts, check', async () => {
     const messages = await loadAll('cube.obj');
     expect(types(messages).filter((type) => type !== 'progress')).toEqual([
       'structure',
       'images',
       'model',
       'parts',
+      'meshCheck',
     ]);
+    // The box is closed; the ground under it, a shell of its own, is open all round.
+    expect(messages.at(-1)).toMatchObject({
+      type: 'meshCheck',
+      check: { triangles: 14, shells: 2, openEdges: 4, nonManifoldEdges: 0, flippedEdges: 0 },
+    });
     const { gltf, source } = structureOf(messages);
     expect(gltf.nodes[0]).toEqual({ name: 'cube.obj', children: [1, 2, 3] });
     expect(gltf.nodes.slice(1).map((node: { name: string }) => node.name)).toEqual([

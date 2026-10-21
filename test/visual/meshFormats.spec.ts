@@ -167,6 +167,49 @@ test('shows what the file says about itself in the inspector', async ({ page }) 
   expect(viewer.problems).toEqual([]);
 });
 
+for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`checks the triangles as 3D printing does, in the ${theme} theme`, async ({ page }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open('solids.stl');
+    // Two closed boxes, in millimetres: their volume in cubic centimetres too.
+    await expect(section(page, 'Mesh check')).toHaveText([
+      'Surface area',
+      '2,736 mm²',
+      'Volume',
+      '4,176 mm³ (4.176 cm³)',
+      'Watertight',
+      'Yes',
+      'Shells',
+      '2',
+    ]);
+    await page.screenshot({ path: `${SCREENS}/mesh-check-${theme}.png` });
+    // The report has it too.
+    await viewer.post({ type: 'export', what: 'report' });
+    await expect
+      .poll(async () => (await viewer.sent()).some((message) => message.type === 'save'))
+      .toBe(true);
+    const saved = (await viewer.sent()).find((message) => message.type === 'save') as unknown as {
+      markdown: string;
+      json: string;
+    };
+    expect(saved.markdown).toContain('## Mesh check');
+    expect(JSON.parse(saved.json).check).toMatchObject({ volume: 4176, shells: 2, unit: 'mm' });
+    // Two boxes stuck together along an edge: four faces on it.
+    await viewer.open('bracket.stl');
+    await expect(section(page, 'Mesh check')).toHaveText([
+      'Surface area',
+      '3,480 mm²',
+      'Watertight',
+      'No',
+      'Non-manifold edges',
+      '1',
+      'Shells',
+      '1',
+    ]);
+    expect(viewer.problems).toEqual([]);
+  });
+}
+
 test('lists what an OBJ file names but could not be had', async ({ page }) => {
   const viewer = await openViewer(page, 'light');
   await viewer.open('problems.obj');
