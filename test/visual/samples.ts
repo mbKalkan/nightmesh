@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
+import { formatForPath } from '../../src/shared/formats';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';
 import { loadTexts } from '../../src/extension/texts';
@@ -31,7 +32,13 @@ export async function openSample(
   await viewer.post(viewer.openMessage(name));
   const source = await fileSource(join(SAMPLES, name));
   try {
-    const options = { loadId: 1, reload: false, texts: loadTexts(english) };
+    const options = {
+      loadId: 1,
+      reload: false,
+      texts: loadTexts(english),
+      format: formatForPath(name),
+      fileName: name,
+    };
     for await (const message of loadMessages(source, opener(), options)) {
       await viewer.post(message);
     }

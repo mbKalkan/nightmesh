@@ -9,15 +9,16 @@
 [![CI](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**View and inspect glTF and GLB 3D models in VS Code, in your dark theme.**
+**View and inspect glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your dark theme.**
 
-Nightmesh is a fast, offline, view-only viewer for glTF models (`.glb`, and `.gltf` with its
-`.bin` files and textures). It shows the model in a 3D view that follows your color theme,
-and next to it what the file holds: its node tree, meshes, materials, textures and animations,
-how many triangles it draws and how big it is in metres. The structure is there as soon as the
-file opens, before the geometry has loaded, even for files of hundreds of megabytes.
+Nightmesh is a fast, offline, view-only viewer for 3D models: glTF (`.glb`, and `.gltf` with
+its `.bin` files and textures), OBJ with its materials and textures, STL and PLY. It shows the
+model in a 3D view that follows your color theme, and next to it what the file holds: its node
+tree, meshes, materials, textures and animations, how many triangles it draws and how big it
+is. A glTF's structure is there as soon as the file opens, before the geometry has loaded, even
+for files of hundreds of megabytes.
 
-> **Preview.** glTF and GLB open today. OBJ, STL, PLY and 3D Tiles are planned.
+> **Preview.** glTF, GLB, OBJ, STL and PLY open today. 3D Tiles may follow.
 
 ![Nightmesh opening a concept car: the structure shows while the model loads, a door picked in the view is selected in the tree and described in the inspector, the paint changes to another variant, a wireframe is drawn over it, and the statistics count the scene](docs/images/demo.gif)
 
@@ -26,9 +27,12 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
 - **Structure first.** The node tree, the inspector and the statistics show right away, read
   from the file's JSON. You can find your way around a large model while its geometry is still
   loading, and also in a model that can't be drawn.
+- **One viewer for the files you have.** glTF from game engines and the web, STL from CAD and
+  3D printing, OBJ and PLY from modelling tools, scanners and photogrammetry, with the same
+  tools for all of them.
 - **Inspect, not just look.** Click a part to see which node it is, where it sits in the
-  hierarchy, its transform, mesh, materials and size in metres. Follow the links from a mesh to
-  its materials and textures, and count what the scene puts on the GPU.
+  hierarchy, its transform, mesh, materials and size. Follow the links from a mesh to its
+  materials and textures, and count what the scene puts on the GPU.
 - **Point an AI assistant at a part.** Right-click a part and choose **Copy Reference** to get
   `models/robot.glb, node "Arm" (nodes[12]), under Root › Body` on the clipboard, ready to paste
   into a chat with Claude Code or any assistant that works in your workspace.
@@ -46,14 +50,34 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
   Blender, and from the other side with Shift. 5 switches between perspective and orthographic.
   An axes gizmo shows which way X, Y and Z point; click an axis to look along it.
 - Look through the cameras saved in the model, with their field of view.
-- A ground grid in squares of a power of ten metres, sized to the model, the world's axes and
-  the model's bounding box. The background can follow your theme or be dark, neutral or light.
-- The size of the model, or of what is selected, in metres in the corner of the view.
+- A ground grid in squares of a power of ten metres (or of the file's unit), sized to the
+  model, the world's axes and the model's bounding box. The background can follow your theme or
+  be dark, neutral or light.
+- The size of the model, or of what is selected, in the corner of the view.
 - Models are lit by a built-in environment, so they look right without any setup.
 - Draco and meshopt compressed meshes, quantized models and KTX2 (Basis Universal) textures open
   too. Their decoders load only when a model needs them.
 
 ![The View menu over a toy car on a light background, with the bounding box drawn and the model's cameras listed](docs/images/view-light.png)
+
+### OBJ, STL and PLY
+
+- **OBJ** with its MTL materials and textures, objects and groups, polygons, lines and points.
+  **STL**, binary and ASCII, with Materialise colors. **PLY**, ASCII and binary, meshes and
+  point clouds, with vertex colors and textures. They are read in a thread of their own, so VS
+  Code stays responsive with files of hundreds of megabytes.
+- The structure, inspector, statistics, selection, shading, Copy Reference and export work as
+  they do for glTF. The inspector also shows what the file says about itself: an STL's header
+  and solids, a PLY's elements, properties and comments, an OBJ's statements and each
+  material's MTL statements.
+- These formats don't say what their units are or which way is up. STL opens in millimetres
+  with Z up, as CAD writes it; OBJ and PLY in metres with Y up, or Z up when their coordinates
+  are georeferenced. The **View** menu sets the units and the up axis, and the next file of the
+  same format opens that way. Sizes and the grid follow the file's units.
+- What can't be shown is listed over the model: a missing material library or texture, faces
+  naming vertices the file lacks, a file cut short.
+
+![A Mars 2020 rover wheel from an STL file, set to inches from the View menu: its size in inches in the corner, and its format, facets and colors in the inspector](docs/images/stl-dark.png)
 
 ### Structure and inspector
 
@@ -153,7 +177,8 @@ file opens, before the geometry has loaded, even for files of hundreds of megaby
    or, in VSCodium and other editors that use it,
    [Open VSX](https://open-vsx.org/extension/MBKDevStudio/nightmesh). Or search for "Nightmesh"
    in the Extensions view.
-2. Open a `.glb` or `.gltf` file. Nightmesh is the default viewer for these files.
+2. Open a `.glb`, `.gltf`, `.obj`, `.stl` or `.ply` file. Nightmesh is the default viewer for
+   these files.
 
 If another extension also opens these files, right-click the file and choose
 **Open With… › Nightmesh**, then **Configure default editor**. Or add this to your settings:
@@ -161,9 +186,15 @@ If another extension also opens these files, right-click the file and choose
 ```json
 "workbench.editorAssociations": {
   "*.glb": "nightmesh.viewer",
-  "*.gltf": "nightmesh.viewer"
+  "*.gltf": "nightmesh.viewer",
+  "*.obj": "nightmesh.viewer",
+  "*.stl": "nightmesh.viewer",
+  "*.ply": "nightmesh.viewer"
 }
 ```
+
+An `.obj` that is a compiler's object file, not a model, is said to be one: open it with
+**Open With… › Text Editor** or another extension.
 
 ## Mouse and keyboard
 
@@ -187,7 +218,11 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
 
 ## Limitations
 
-- Only glTF 2.0 is supported for now: OBJ, STL, PLY and 3D Tiles are planned.
+- Nightmesh opens glTF 2.0, OBJ, STL and PLY. Other formats, such as FBX, USD, STEP and
+  3D Tiles, don't open.
+- The Validation and Size tabs and Show glTF JSON are for glTF files.
+- OBJ's free-form curves and surfaces aren't drawn, and textures in formats browsers can't show,
+  such as TGA, are left out; Nightmesh says so.
 - The glTF Validator doesn't know some extensions, such as `KHR_texture_basisu` and
   `EXT_meshopt_compression`: it says so, and may warn about what they change.
 - Models that require `KHR_materials_pbrSpecularGlossiness` or `KHR_node_visibility` can't be
@@ -206,4 +241,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to build and test the extension.
 
 [MIT](LICENSE). Third-party components and their licenses are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), along with the credits for the models in the
-screenshots above, from the [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets).
+screenshots above, from the [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets)
+and [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources).

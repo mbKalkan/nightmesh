@@ -96,3 +96,15 @@ test('the View menu in a light theme', async ({ page }) => {
   await page.screenshot({ path: `${IMAGES}/view-light.png` });
   expect(viewer.problems).toEqual([]);
 });
+
+test('an STL, set to inches from the View menu, with what the file says', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await openSample(page, viewer, 'Mars2020Wheel.stl');
+  // A 5 inch wheel: STL files say nothing of their units, and open in millimetres.
+  await menuButton(page, 'view').click();
+  await menuItem(page, 'Inches').click();
+  await expect(page.locator('.nm-measure')).toContainText('5 in');
+  await settle(page);
+  await page.screenshot({ path: `${IMAGES}/stl-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
