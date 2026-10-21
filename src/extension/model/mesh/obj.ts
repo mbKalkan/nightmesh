@@ -15,6 +15,7 @@ import {
   type ParsedMesh,
   type PartMode,
 } from './geometry';
+import { triangulate } from './polygon';
 import { Cursor, LineSplitter, concat, decodeText, utf16 } from './text';
 
 const NONE = -1;
@@ -122,8 +123,10 @@ export class ObjReader implements MeshReader {
   private freeForm = 0;
   /** A line ending in a backslash, waiting for the one it continues on. */
   private continued: Uint8Array | undefined;
-  /** One polygon's corners while it is read. */
+  /** One polygon's corners while it is read, their positions, and the primitive it goes in. */
   private polygon = new Int32Array(3 * 64);
+  private polygonXyz = new Float64Array(3 * 64);
+  private polygonPart: Primitive | undefined;
   private first = true;
   /** For a file in UTF-16, as some Windows tools write text: read as UTF-8. */
   private transcoder: InstanceType<typeof TextDecoder> | undefined;
@@ -298,13 +301,13 @@ export class ObjReader implements MeshReader {
     }
     const primitive = this.current().primitive(mode, this.material);
     const corners = this.polygon;
-    if (mode === 'triangles') {
-      // Polygons as fans from their first corner.
-      for (let i = 1; i + 1 < count; i++) {
-        primitive.corner(corners[0], corners[1], corners[2]);
-        primitive.corner(corners[i * 3], corners[i * 3 + 1], corners[i * 3 + 2]);
-        primitive.corner(corners[i * 3 + 3], corners[i * 3 + 4], corners[i * 3 + 5]);
-      }
+    if (mode === 'triangles' && count === 3) {
+      this.polygonPart = primitive;
+      this.polygonTriangle(0, 1, 2);
+    } else if (mode === 'triangles') {
+      // Fans where convex, ears where not.
+      this.polygonPart = primitive;
+      triangulate(this.polygonPositions(count), count, this.polygonTriangle);
     } else if (mode === 'lines') {
       // Lines and points are drawn without texture coordinates or normals.
       for (let i = 0; i + 1 < count; i++) {
@@ -315,6 +318,28 @@ export class ObjReader implements MeshReader {
       for (let i = 0; i < count; i++) primitive.corner(corners[i * 3], NONE, NONE);
     }
   }
+
+  /** The positions of the polygon's corners, read, in `polygonXyz`. */
+  private polygonPositions(count: number): Float64Array {
+    if (this.polygonXyz.length < count * 3) this.polygonXyz = new Float64Array(count * 6);
+    const xyz = this.polygonXyz;
+    const positions = this.positions.array;
+    for (let i = 0; i < count; i++) {
+      const v = this.polygon[i * 3] * 3;
+      xyz[i * 3] = positions[v];
+      xyz[i * 3 + 1] = positions[v + 1];
+      xyz[i * 3 + 2] = positions[v + 2];
+    }
+    return xyz;
+  }
+
+  /** Adds a triangle of the polygon read, by its corners, to the primitive it is in. */
+  private readonly polygonTriangle = (a: number, b: number, c: number): void => {
+    const { polygon, polygonPart } = this;
+    polygonPart!.corner(polygon[a * 3], polygon[a * 3 + 1], polygon[a * 3 + 2]);
+    polygonPart!.corner(polygon[b * 3], polygon[b * 3 + 1], polygon[b * 3 + 2]);
+    polygonPart!.corner(polygon[c * 3], polygon[c * 3 + 1], polygon[c * 3 + 2]);
+  };
 
   private current(): Node {
     if (this.group) return this.group;
