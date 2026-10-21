@@ -103,8 +103,8 @@ export class Highlight {
   /** Each box sits in a frame that follows its object, so it turns and moves with it. */
   private frames: { frame: Group; object?: Object3D }[] = [];
 
-  constructor() {
-    this.group.name = 'Nightmesh selection';
+  constructor(name = 'Nightmesh selection') {
+    this.group.name = name;
     this.setColor([0, 120 / 255, 212 / 255]);
   }
 

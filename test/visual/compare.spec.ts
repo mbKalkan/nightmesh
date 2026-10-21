@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CameraState, HostToWebviewMessage } from '../../src/shared/protocol';
 import { lowestTextContrast } from './contrast';
 import { openViewer } from './harness';
+import { areaOf } from './pixels';
 import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
@@ -268,3 +269,54 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
     await Promise.all(pages.map((page) => page.close()));
   });
 }
+
+/** Source Control's colors in the dark theme: added, removed and changed. */
+const ADDED = [0x81, 0xb8, 0x8b];
+const REMOVED = [0xc7, 0x4e, 0x39];
+const CHANGED = [0xe2, 0xc0, 0x8d];
+
+test('boxes what changed in the 3D view, in Source Control colors', async ({ browser }) => {
+  const pages = await Promise.all([browser.newPage(), browser.newPage()]);
+  const [original, modified] = await Promise.all(pages.map((page) => openViewer(page, 'dark')));
+  const relay = relayer([original, modified]);
+  await Promise.all([original.open('scene.glb'), modified.open('scene-edited.glb')]);
+  await original.post({ type: 'diff', side: 'original' });
+  await modified.post({ type: 'diff', side: 'modified' });
+  await relay();
+  // The size and the axes gizmo, in colors of their own, set aside.
+  for (const page of pages) {
+    for (const overlay of ['.nm-measure', '.nm-gizmo']) {
+      await page.locator(overlay).evaluate((element) => (element.style.visibility = 'hidden'));
+    }
+  }
+  const boxed = (page: Page, color: readonly number[]) =>
+    areaOf(page, '.nm-canvas', color).then((area) => area?.count ?? 0);
+
+  // The original side has the moved box and the points that went; the modified side has the
+  // moved box and the tall box that came.
+  await expect.poll(() => boxed(pages[0], CHANGED)).toBeGreaterThan(20);
+  await expect.poll(() => boxed(pages[0], REMOVED)).toBeGreaterThan(20);
+  expect(await boxed(pages[0], ADDED)).toBe(0);
+  await expect.poll(() => boxed(pages[1], CHANGED)).toBeGreaterThan(20);
+  await expect.poll(() => boxed(pages[1], ADDED)).toBeGreaterThan(20);
+  expect(await boxed(pages[1], REMOVED)).toBe(0);
+  for (const [index, page] of pages.entries()) {
+    await page.screenshot({
+      path: `${SCREENS}/compare-boxes-${index === 0 ? 'original' : 'modified'}-dark.png`,
+    });
+  }
+
+  // The View menu turns them off.
+  await pages[1].locator('[data-action="view"]').click();
+  await pages[1]
+    .locator('.nm-menu .nm-menu-item', { has: pages[1].getByText('Changes', { exact: true }) })
+    .click();
+  await expect.poll(() => boxed(pages[1], ADDED)).toBe(0);
+
+  // Out of the comparison, they go.
+  await original.post({ type: 'diff', side: undefined });
+  await expect.poll(() => boxed(pages[0], REMOVED)).toBe(0);
+  expect(original.problems).toEqual([]);
+  expect(modified.problems).toEqual([]);
+  await Promise.all(pages.map((page) => page.close()));
+});

@@ -13,6 +13,24 @@ export function highlightColor(): [number, number, number] {
   return probe('var(--vscode-focusBorder, #0078d4)', document.body);
 }
 
+/** Source Control's colors for added, removed and changed files, as sRGB channels from 0 to 1. */
+export function changeColors(): Record<'added' | 'removed' | 'changed', [number, number, number]> {
+  return {
+    added: probe(
+      'var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green, #81b88b))',
+      document.body,
+    ),
+    removed: probe(
+      'var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-charts-red, #c74e39))',
+      document.body,
+    ),
+    changed: probe(
+      'var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow, #e2c08d))',
+      document.body,
+    ),
+  };
+}
+
 /**
  * The grid and the bounding box light on a dark background and dark on a light one, the axes in
  * the colors the view's labels use.

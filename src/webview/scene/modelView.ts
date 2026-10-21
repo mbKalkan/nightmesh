@@ -71,6 +71,16 @@ export interface ViewEvents {
   lengthText(metres: number): string;
 }
 
+/** What a comparison found about a structure entry, to box it in the view. */
+export type ChangeKind = 'added' | 'removed' | 'changed';
+
+export interface ViewChange {
+  key: string;
+  kind: ChangeKind;
+}
+
+const CHANGE_KINDS: readonly ChangeKind[] = ['added', 'removed', 'changed'];
+
 export interface AnimationState {
   /** Each clip's length in seconds, by the glTF animation index. */
   durations: number[];
@@ -110,6 +120,14 @@ export class ModelView {
   private readonly shading = new Shading();
   private readonly picker = new Picker();
   private readonly ruler: Ruler;
+  /** Boxes around what a comparison found added, removed or changed, in Source Control's colors. */
+  private readonly changeBoxes: Record<ChangeKind, Highlight> = {
+    added: new Highlight('Nightmesh changes'),
+    removed: new Highlight('Nightmesh changes'),
+    changed: new Highlight('Nightmesh changes'),
+  };
+  private changes: readonly ViewChange[] = [];
+  private changesBoxed = true;
   /** Whether clicks place the ends of a measurement rather than select. */
   private measuring = false;
   /** The measurement last told, to tell only changes. */
@@ -157,7 +175,12 @@ export class ModelView {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
     this.ruler = new Ruler(container);
-    this.scene.add(this.highlight.group, this.helpers.group, this.ruler.group);
+    this.scene.add(
+      this.highlight.group,
+      this.helpers.group,
+      this.ruler.group,
+      ...CHANGE_KINDS.map((kind) => this.changeBoxes[kind].group),
+    );
 
     this.viewpoint = new Viewpoint(canvas, this.modelSphere, () => this.requestRender());
     this.listenForClicks();
@@ -169,6 +192,7 @@ export class ModelView {
       this.model = undefined;
       this.index = undefined;
       this.highlight.clear();
+      for (const kind of CHANGE_KINDS) this.changeBoxes[kind].clear();
       this.ruler.clear();
       this.stopPlaying();
     });
@@ -189,6 +213,60 @@ export class ModelView {
     this.highlight.setColor(color);
     this.ruler.setColor(color);
     this.requestRender();
+  }
+
+  /**
+   * Boxes what a comparison found added, removed or changed, given as structure entries, in the
+   * colors Source Control marks files with; none takes the boxes away.
+   */
+  setChanges(changes: readonly ViewChange[]): void {
+    this.changes = changes;
+    this.showChanges();
+    this.requestRender();
+  }
+
+  /** Whether the changes a comparison found are boxed. */
+  get changesShown(): boolean {
+    return this.changesBoxed;
+  }
+
+  setChangesShown(shown: boolean): void {
+    this.changesBoxed = shown;
+    this.showChanges();
+    this.requestRender();
+  }
+
+  /** The colors of added, removed and changed, as sRGB channels from 0 to 1. */
+  setChangeColors(colors: Record<ChangeKind, readonly [number, number, number]>): void {
+    for (const kind of CHANGE_KINDS) this.changeBoxes[kind].setColor(colors[kind]);
+    this.requestRender();
+  }
+
+  private showChanges(): void {
+    for (const kind of CHANGE_KINDS) {
+      const objects = this.changesBoxed
+        ? this.changes
+            .filter((change) => change.kind === kind)
+            .flatMap((change) => this.index?.objects(change.key) ?? [])
+        : [];
+      this.changeBoxes[kind].show(objects);
+    }
+  }
+
+  /** Boxes follow their objects, after an animation or a change of units moved them. */
+  private updateBoxes(): void {
+    this.highlight.update();
+    for (const kind of CHANGE_KINDS) this.changeBoxes[kind].update();
+  }
+
+  /** What is drawn over the model: left out when picking what is under the pointer. */
+  private overlays(): Object3D[] {
+    return [
+      this.highlight.group,
+      this.helpers.group,
+      this.ruler.group,
+      ...CHANGE_KINDS.map((kind) => this.changeBoxes[kind].group),
+    ];
   }
 
   /**
@@ -348,6 +426,7 @@ export class ModelView {
     this.framed = true;
     this.startAnimations(model, gltf.animations, keepCamera);
     this.select(this.selected);
+    this.showChanges();
     this.viewpoint.updateClipping();
     this.render();
   }
@@ -365,7 +444,7 @@ export class ModelView {
     this.modelBox().getBoundingSphere(this.modelSphere);
     this.helpers.fit(this.modelBox());
     this.updateBounds();
-    this.highlight.update();
+    this.updateBoxes();
     this.viewpoint.frame(this.modelBox(), this.viewpoint.direction());
     this.viewpoint.updateClipping();
     this.measure();
@@ -441,7 +520,7 @@ export class ModelView {
       if (!this.playback?.playing) return void (this.playRequest = 0);
       this.playback.advance(Math.min((now - this.lastFrame) / 1000, 0.25));
       this.lastFrame = now;
-      this.highlight.update();
+      this.updateBoxes();
       this.render();
       if (now - this.lastMeasure > MEASURE_INTERVAL) {
         this.lastMeasure = now;
@@ -463,7 +542,7 @@ export class ModelView {
   /** After the model moved: boxes follow it, the size is measured again, the view redrawn. */
   private afterPose(): void {
     this.model?.updateMatrixWorld(true);
-    this.highlight.update();
+    this.updateBoxes();
     this.updateBounds();
     this.measure();
     this.requestRender();
@@ -598,6 +677,7 @@ export class ModelView {
     this.picker.dispose();
     this.ruler.dispose();
     this.highlight.dispose();
+    for (const kind of CHANGE_KINDS) this.changeBoxes[kind].dispose();
     this.helpers.dispose();
     this.shading.dispose();
     if (this.model) disposeObject(this.model);
@@ -680,7 +760,7 @@ export class ModelView {
       this.scene,
       this.viewpoint.camera,
       this.model,
-      [this.highlight.group, this.helpers.group, this.ruler.group],
+      this.overlays(),
       region,
       Math.max(1, Math.round(SNAP_RADIUS * scale)),
     );
@@ -694,7 +774,7 @@ export class ModelView {
       this.scene,
       this.viewpoint.camera,
       this.model,
-      [this.highlight.group, this.helpers.group, this.ruler.group],
+      this.overlays(),
       this.regionAt(event),
     );
     return object ? this.index.node(object) : undefined;
@@ -713,7 +793,7 @@ export class ModelView {
         this.scene,
         this.viewpoint.camera,
         this.model,
-        [this.highlight.group, this.helpers.group, this.ruler.group],
+        this.overlays(),
         this.regionAt(event),
       );
     if (!hit) return;
