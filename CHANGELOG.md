@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+OBJ, STL and PLY models, in their own units, with a mesh check for 3D printing.
+
 ### Added
 
 - **OBJ, STL and PLY models** open in Nightmesh by default, read in a thread of their own so
@@ -157,6 +161,7 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mbKalkan/nightmesh/releases/tag/v0.1.0
