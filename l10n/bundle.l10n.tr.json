@@ -245,5 +245,17 @@
   "Centimetres": "Santimetre",
   "Metres": "Metre",
   "Inches": "İnç",
-  "Feet": "Fit"
+  "Feet": "Fit",
+  "Mesh check": "Mesh denetimi",
+  "Surface area": "Yüzey alanı",
+  "Volume": "Hacim",
+  "faces point inward": "yüzler içe bakıyor",
+  "Watertight": "Su geçirmez",
+  "Yes": "Evet",
+  "No": "Hayır",
+  "Open edges": "Açık kenarlar",
+  "Non-manifold edges": "Manifold olmayan kenarlar",
+  "Edges between faces wound opposite ways": "Yüzlerin ters sarıldığı kenarlar",
+  "Shells": "Kabuklar",
+  "Faces without area": "Alanı olmayan yüzler"
 }

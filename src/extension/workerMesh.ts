@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads';
-import type { MeshFormat } from '../shared/protocol';
+import type { MeshCheck, MeshFormat } from '../shared/protocol';
 import { MeshFormatError, type ParsedMesh } from './model/mesh/geometry';
 import { CHUNK, type MeshEvent, type MeshParser } from './model/mesh/parse';
 
@@ -13,6 +13,7 @@ export type MeshRequest =
 export type MeshResponse =
   | { type: 'next' }
   | { type: 'done'; mesh: ParsedMesh }
+  | { type: 'check'; check: MeshCheck | undefined }
   | { type: 'failed'; format: boolean; message: string };
 
 /**
@@ -62,6 +63,8 @@ export function workerMeshParser(script: string): { parse: MeshParser; stop(): v
           );
         } else if (message.type === 'done') {
           push({ type: 'done', mesh: message.mesh });
+        } else if (message.type === 'check') {
+          push({ type: 'check', check: message.check });
         } else {
           push(message.format ? new MeshFormatError(message.message) : new Error(message.message));
         }
@@ -78,7 +81,8 @@ export function workerMeshParser(script: string): { parse: MeshParser; stop(): v
             end();
             throw event;
           }
-          if (event.type === 'done') end();
+          // The check is the last the thread sends.
+          if (event.type === 'check') end();
           return { done: false, value: event };
         },
         return: async (): Promise<IteratorResult<MeshEvent>> => {

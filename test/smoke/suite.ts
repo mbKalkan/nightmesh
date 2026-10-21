@@ -145,16 +145,13 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
-  async 'reads an OBJ model in a worker thread, with its material library'() {
+  async 'reads an OBJ model in a worker thread, with its material library, and checks it'() {
     await openInEditor('cube.obj');
     const saved = await vscode.env.clipboard.readText();
     try {
       let copied = '';
-      // The structure comes once the reading thread has read the file.
-      for (
-        const start = Date.now();
-        !copied.includes('Wavefront OBJ') && Date.now() - start < 30_000;
-      ) {
+      // The structure comes once the reading thread has read the file, the check after it.
+      for (const start = Date.now(); !copied.includes('Shells') && Date.now() - start < 30_000;) {
         await vscode.env.clipboard.writeText('');
         await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -163,6 +160,8 @@ const tests: Record<string, () => Promise<void>> = {
       assert.match(copied, /cube\.obj:\nFile\n- Format: Wavefront OBJ\n/);
       assert.match(copied, /\n- Material libraries: cube\.mtl\n/);
       assert.match(copied, /\n- Materials: 3\n/);
+      assert.match(copied, /\nMesh check\n- Surface area: 15 m²\n/);
+      assert.match(copied, /\n- Shells: 2\n/);
       // OBJ has no glTF JSON to show.
       await vscode.commands.executeCommand('nightmesh.showJson');
       await new Promise((resolve) => setTimeout(resolve, 1000));

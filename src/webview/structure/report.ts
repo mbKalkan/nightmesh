@@ -220,6 +220,8 @@ function json({ context, strings, statistics, size, validation }: ReportInputs):
     return {
       file: { name: file.name, bytes: file.size, format: file.container },
       source: context.source ?? null,
+      // Lengths in the file's own unit.
+      check: context.check ? { ...context.check, unit: context.format.lengthUnit } : null,
       statistics: { ...statistics, meshes },
     };
   }

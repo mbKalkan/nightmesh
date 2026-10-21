@@ -36,6 +36,11 @@ export class Formatter {
     this.unit = unit;
   }
 
+  /** The unit lengths are shown in. */
+  get lengthUnit(): LengthUnit {
+    return this.unit;
+  }
+
   /**
    * A length given in metres, for reading, not copying: in the unit set, to four significant
    * digits, with the user's decimals.
@@ -76,6 +81,21 @@ export class Formatter {
       Number((value / UNIT_METRES[this.unit]).toPrecision(4)),
     );
     return `${this.vector(shown)} ${this.unit}`;
+  }
+
+  /** An area in the file's own unit, squared: an OBJ, STL or PLY file's. */
+  area(value: number): string {
+    return `${this.length.format(Number(value.toPrecision(4)))} ${this.unit}²`;
+  }
+
+  /**
+   * A volume in the file's own unit, cubed, and for millimetres in cubic centimetres too, as
+   * 3D printing gives a print's material.
+   */
+  volume(value: number): string {
+    const cubed = `${this.length.format(Number(value.toPrecision(4)))} ${this.unit}³`;
+    if (this.unit !== 'mm') return cubed;
+    return `${cubed} (${this.length.format(Number((value / 1000).toPrecision(4)))} cm³)`;
   }
 
   degrees(radians: number): string {

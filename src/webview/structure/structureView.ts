@@ -1,6 +1,7 @@
 import type {
   ImageInfo,
   LengthUnit,
+  MeshCheck,
   ModelFormat,
   Motion,
   StructureMessage,
@@ -133,9 +134,10 @@ export class StructureView {
       strings: this.strings.structure,
       format: this.format,
       file: { name: fileName, size: message.fileSize, container: format, chunks: message.chunks },
-      // A changed file keeps its last report until it is validated again.
+      // A changed file keeps its last report until it is validated again, and its check.
       validation: keep ? this.context?.validation : undefined,
       source: message.source,
+      check: keep ? this.context?.check : undefined,
     };
     this.json = message.json;
     this.usage = undefined;
@@ -186,6 +188,13 @@ export class StructureView {
     if (!this.context) return;
     const { model, images, motion } = this.context;
     this.statistics.show(statistics(model, images, motion), model);
+  }
+
+  /** The check of an OBJ, STL or PLY model's triangles, from the host. */
+  setMeshCheck(check: MeshCheck): void {
+    if (!this.context) return;
+    this.context.check = check;
+    this.render(true);
   }
 
   /** Whether each animation moves anything, from the host: the inspector says so. */
