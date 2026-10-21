@@ -230,6 +230,41 @@ describe('OBJ', () => {
     expect(looksLike('obj', file('utf16.obj'), 100)).toBe('yes');
   });
 
+  it('cuts concave polygons into triangles inside their outline', () => {
+    // An L from the end of its foot, as an OBJ face and a PLY one.
+    const corners = ['2 1 0', '1 1 0', '1 2 0', '0 2 0', '0 0 0', '2 0 0'];
+    const obj = [...corners.map((corner) => `v ${corner}`), 'f 1 2 3 4 5 6'];
+    const ply = [
+      'ply',
+      'format ascii 1.0',
+      'element vertex 6',
+      'property float x',
+      'property float y',
+      'property float z',
+      'element face 1',
+      'property list uchar int vertex_indices',
+      'end_header',
+      ...corners,
+      '6 0 1 2 3 4 5',
+    ];
+    for (const [format, lines] of [
+      ['obj', obj],
+      ['ply', ply],
+    ] as const) {
+      const reader = createReader(format, 1000);
+      reader.push(new TextEncoder().encode(`${lines.join('\n')}\n`));
+      const [part] = parts(reader.finish().objects);
+      expect(triangles(part)).toBe(4);
+      // Each faces +z as the L does: a triangle over the notch would face the other way.
+      for (let t = 0; t < 4; t++) {
+        const [a, b, c] = [0, 1, 2].map((i) => part.indices![t * 3 + i] * 3);
+        const p = part.positions;
+        const z = (p[b] - p[a]) * (p[c + 1] - p[a + 1]) - (p[b + 1] - p[a + 1]) * (p[c] - p[a]);
+        expect(z).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('reads UTF-16 text, and UTF-8 after a byte order mark', () => {
     const utf16 = read('utf16.obj', 5);
     expect(triangles(parts(utf16.objects)[0])).toBe(1);

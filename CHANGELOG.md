@@ -12,15 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   VS Code stays responsive, with a progress bar for large files. The structure, inspector,
   statistics, selection, shading modes, Copy Reference, screenshots and reports work as they do
   for glTF.
-  - **OBJ:** objects and groups, a part for each material, polygons, lines and points, negative
-    indices, vertex colors, and MTL material libraries with their textures. A texture given by
-    an absolute path is looked for by its name next to the library and the model; a file that
-    selects no material is drawn in its library's only one. Text in UTF-8, UTF-16 or Latin-1.
+  - **OBJ:** objects and groups, a part for each material, polygons (concave ones and rings
+    written as one polygon too), lines and points, negative indices, vertex colors, and MTL
+    material libraries with their textures. A texture given by an absolute path is looked for
+    by its name next to the library and the model; a file that selects no material is drawn in
+    its library's only one. Text in UTF-8, UTF-16 or Latin-1.
   - **STL:** binary and ASCII, each ASCII solid on its own, and Materialise facet colors.
     Vertices at the same place are welded, so the statistics count them once.
   - **PLY:** ASCII and binary of either byte order; vertex normals, colors and texture
-    coordinates, faces, triangle strips and edges, and MeshLab's textures. A file without faces
-    is drawn as a point cloud, its points the larger the fewer there are.
+    coordinates, faces (concave ones too), triangle strips and edges, and MeshLab's textures. A
+    file without faces is drawn as a point cloud, its points the larger the fewer there are.
 - For these formats the inspector shows what the file says about itself: an STL's header and
   solids, a PLY's elements, properties and comments, an OBJ's statements and the MTL statements
   of each material.

@@ -14,6 +14,7 @@ import {
   type MeshReader,
   type ParsedMesh,
 } from './geometry';
+import { triangulate } from './polygon';
 import { Cursor, LineSplitter, concat, decodeText } from './text';
 
 type ScalarType =
@@ -171,7 +172,7 @@ export class PlyReader implements MeshReader {
       return this.vertices;
     }
     if ((element.name === 'face' || element.name === 'tristrips') && !this.faces) {
-      this.faces = new FaceData(element, element.name === 'tristrips');
+      this.faces = new FaceData(element, element.name === 'tristrips', this.vertices);
       return this.faces;
     }
     if (element.name === 'edge' && !this.edges) {
@@ -508,10 +509,16 @@ class FaceData implements RecordHandler {
   private readonly vertexList: number;
   private readonly texcoordList: number;
   private broken = 0;
+  /** The face being read: its corners, their texture coordinates, and their positions. */
+  private corners: Float64Array<ArrayBufferLike> = new Float64Array(0);
+  private cornerTexcoords: Float64Array | undefined;
+  private xyz = new Float64Array(3 * 64);
 
   constructor(
     element: Element,
     private readonly strips = false,
+    /** The vertices read before the faces, to cut concave polygons by. */
+    private readonly vertices?: VertexData,
   ) {
     this.vertexList = element.properties.findIndex(
       (property) =>
@@ -535,16 +542,45 @@ class FaceData implements RecordHandler {
       return;
     }
     const texcoords = this.texcoords && lists[this.texcoordList];
-    const withTexcoords = texcoords && lengths[this.texcoordList] === count * 2;
-    for (let i = 1; i + 1 < count; i++) {
-      this.indices.push3(corners[0], corners[i], corners[i + 1]);
-      if (this.texcoords) {
-        for (const corner of [0, i, i + 1]) {
-          this.texcoords.push(withTexcoords ? texcoords![corner * 2] : 0);
-          this.texcoords.push(withTexcoords ? 1 - texcoords![corner * 2 + 1] : 0);
-        }
-      }
+    this.corners = corners;
+    this.cornerTexcoords =
+      texcoords && lengths[this.texcoordList] === count * 2 ? texcoords : undefined;
+    const xyz = count > 3 ? this.positions(corners, count) : undefined;
+    // Fans where convex, ears where not.
+    if (xyz) triangulate(xyz, count, this.triangle);
+    else for (let i = 1; i + 1 < count; i++) this.triangle(0, i, i + 1);
+  }
+
+  /** Where a face's corners are; undefined if it names vertices not read. */
+  private positions(corners: Float64Array, count: number): Float64Array | undefined {
+    const vertices = this.vertices;
+    if (!vertices) return undefined;
+    if (this.xyz.length < count * 3) this.xyz = new Float64Array(count * 6);
+    for (let i = 0; i < count; i++) {
+      const v = corners[i];
+      if (!(v >= 0 && v < vertices.count)) return undefined;
+      this.xyz[i * 3] = vertices.positions[v * 3];
+      this.xyz[i * 3 + 1] = vertices.positions[v * 3 + 1];
+      this.xyz[i * 3 + 2] = vertices.positions[v * 3 + 2];
     }
+    return this.xyz;
+  }
+
+  /** Adds a triangle of the face being read, by its corners. */
+  private readonly triangle = (a: number, b: number, c: number): void => {
+    const corners = this.corners;
+    this.indices.push3(corners[a], corners[b], corners[c]);
+    if (this.texcoords) {
+      this.texcoord(a);
+      this.texcoord(b);
+      this.texcoord(c);
+    }
+  };
+
+  private texcoord(corner: number): void {
+    const texcoords = this.cornerTexcoords;
+    this.texcoords!.push(texcoords ? texcoords[corner * 2] : 0);
+    this.texcoords!.push(texcoords ? 1 - texcoords[corner * 2 + 1] : 0);
   }
 
   /**
