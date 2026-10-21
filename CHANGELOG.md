@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   solids, a PLY's elements, properties and comments, an OBJ's statements and the MTL statements
   of each material.
 - STL files are taken to be in millimetres with Z up, as CAD writes them; OBJ and PLY in metres
-  with Y up, or Z up when their coordinates are georeferenced. The **View** menu sets the units
+  with Y up, or Z up when their coordinates are georeferenced. An OBJ file that names its unit
+  in a comment, as Maya's do, opens in that unit. The **View** menu sets the units
   (millimetres, centimetres, metres, inches, feet) and which axis is up; the next file of the
   same format opens that way. Sizes in the view and the inspector, and the grid's squares, are
   in the file's units. Georeferenced models are drawn around their first point, where the view

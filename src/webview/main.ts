@@ -22,7 +22,7 @@ import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill, withoutNoise } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
-import { UNIT_METRES, fileTransform, unitsFor, withUnits, type Units } from './units';
+import { UNIT_METRES, fileTransform, statedUnit, unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
@@ -266,13 +266,16 @@ let lastStructure: StructureMessage | undefined;
 
 /**
  * glTF made from an OBJ, STL or PLY file, scaled and turned as the file's units and up axis
- * say: the ones the user picked for its format last, or the ones it most likely has. Other glTF
- * as it is. `drawn` for what the 3D view draws: far-away geometry around the origin.
+ * say: the unit the file names, if it does, and otherwise the ones the user picked for its
+ * format last, or the ones it most likely has. Other glTF as it is. `drawn` for what the 3D view
+ * draws: far-away geometry around the origin.
  */
 function inUnits(json: string, drawn = false): string {
   const format = opened?.format;
   if (!format || !isMeshFormat(format)) return json;
-  const decided = units ?? preferences.units?.[format] ?? unitsFor(format, json);
+  const likely = preferences.units?.[format] ?? unitsFor(format, json);
+  const stated = statedUnit(lastStructure?.source);
+  const decided = units ?? (stated ? { ...likely, unit: stated } : likely);
   // A large file's header, shown before it is read, has no geometry to decide by yet.
   if (json.includes('"meshes"') && units !== decided) {
     units = decided;

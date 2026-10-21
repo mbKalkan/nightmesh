@@ -1,6 +1,6 @@
-// OBJ, STL and PLY files don't say what their units are or which way is up; glTF is in metres
+// OBJ, STL and PLY files seldom say what their units are or which way is up; glTF is in metres
 // with Y up. The file's node takes a scale and rotation that turn the one into the other.
-import type { LengthUnit, MeshFormat, Units } from '../shared/protocol';
+import type { LengthUnit, MeshFormat, SourceFacts, Units } from '../shared/protocol';
 
 export type { LengthUnit, UpAxis, Units } from '../shared/protocol';
 
@@ -59,6 +59,29 @@ export function unitsFor(format: MeshFormat, json: string): Units {
   } catch {
     return units;
   }
+}
+
+/** Unit names a file's comments use, as Maya writes in every OBJ file it exports. */
+const STATED_UNITS: readonly [RegExp, LengthUnit][] = [
+  [/^millimet(?:er|re)s?$/i, 'mm'],
+  [/^centimet(?:er|re)s?$/i, 'cm'],
+  [/^met(?:er|re)s?$/i, 'm'],
+  [/^inch(?:es)?$/i, 'in'],
+  [/^(?:feet|foot)$/i, 'ft'],
+];
+
+/**
+ * The unit an OBJ file says it is in: "This file uses centimeters as units for non-parametric
+ * coordinates." in Maya's export. Undefined when it doesn't say.
+ */
+export function statedUnit(source: SourceFacts | undefined): LengthUnit | undefined {
+  if (source?.format !== 'obj') return undefined;
+  for (const comment of source.comments) {
+    const named = /\buses\s+(\w+)\s+as\s+units\b/i.exec(comment)?.[1];
+    const found = named && STATED_UNITS.find(([pattern]) => pattern.test(named));
+    if (found) return found[1];
+  }
+  return undefined;
 }
 
 /**
