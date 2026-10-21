@@ -28,8 +28,9 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
-import { Picker } from './picking';
+import { Picker, type PickRegion } from './picking';
 import { Playback } from './playback';
+import { Ruler, type Measurement } from './ruler';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 import { Shading } from './shading';
 import type { CameraState, Projection, ShadingMode, StandardView } from '../../shared/protocol';
@@ -61,6 +62,13 @@ export interface ViewEvents {
   turned(rotation: [number, number, number, number]): void;
   /** The camera moved, or zoomed: at most once a frame, after it is drawn. */
   moved(camera: CameraState): void;
+  /**
+   * While measuring, the measurement as far as it has come, each time it changes; undefined once
+   * measuring stops.
+   */
+  ruled(measurement: Measurement | undefined): void;
+  /** A length given in metres, as the view writes it over a measurement: in the unit set. */
+  lengthText(metres: number): string;
 }
 
 export interface AnimationState {
@@ -92,6 +100,11 @@ export class ModelView {
   private readonly helpers = new Helpers();
   private readonly shading = new Shading();
   private readonly picker = new Picker();
+  private readonly ruler: Ruler;
+  /** Whether clicks place the ends of a measurement rather than select. */
+  private measuring = false;
+  /** The measurement last told, to tell only changes. */
+  private ruledAs: string | undefined;
   private model: Object3D | undefined;
   private index: SelectionIndex | undefined;
   /** The structure entry selected, whose objects are highlighted. */
@@ -133,7 +146,8 @@ export class ModelView {
     const pmrem = new PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
-    this.scene.add(this.highlight.group, this.helpers.group);
+    this.ruler = new Ruler(container);
+    this.scene.add(this.highlight.group, this.helpers.group, this.ruler.group);
 
     this.viewpoint = new Viewpoint(canvas, this.modelSphere, () => this.requestRender());
     this.listenForClicks();
@@ -145,6 +159,7 @@ export class ModelView {
       this.model = undefined;
       this.index = undefined;
       this.highlight.clear();
+      this.ruler.clear();
       this.stopPlaying();
     });
     canvas.addEventListener('webglcontextrestored', () => this.requestRender());
@@ -162,7 +177,23 @@ export class ModelView {
   /** The highlight's color, as sRGB channels from 0 to 1. */
   setHighlightColor(color: readonly [number, number, number]): void {
     this.highlight.setColor(color);
+    this.ruler.setColor(color);
     this.requestRender();
+  }
+
+  /**
+   * Starts or stops measuring: while it lasts, a click on the model places an end of the
+   * measurement instead of selecting what is there.
+   */
+  setMeasuring(measuring: boolean): void {
+    if (measuring === this.measuring) return;
+    this.measuring = measuring;
+    this.ruler.clear();
+    this.render();
+  }
+
+  get isMeasuring(): boolean {
+    return this.measuring;
   }
 
   /** Shows or hides the ground grid, the origin axes and the bounding box. */
@@ -276,6 +307,8 @@ export class ModelView {
     this.model = model;
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
+    // What was measured was on the model before.
+    this.ruler.clear();
     this.cameras = [];
     this.cameraIndex = -1;
     model.traverse((object) => {
@@ -551,6 +584,7 @@ export class ModelView {
     this.resizeObserver.disconnect();
     this.viewpoint.dispose();
     this.picker.dispose();
+    this.ruler.dispose();
     this.highlight.dispose();
     this.helpers.dispose();
     this.shading.dispose();
@@ -596,37 +630,62 @@ export class ModelView {
       const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
       down = undefined;
       if (moved > CLICK_SLOP) return;
-      if (event.button === 0) this.events.picked(this.pickAt(event), false);
-      else this.events.menu(this.pickAt(event), event.clientX, event.clientY);
+      if (event.button === 2) this.events.menu(this.pickAt(event), event.clientX, event.clientY);
+      else if (this.measuring) this.placeEnd(event);
+      else this.events.picked(this.pickAt(event), false);
     });
     this.canvas.addEventListener('dblclick', (event) => {
-      this.events.picked(this.pickAt(event), true);
+      if (!this.measuring) this.events.picked(this.pickAt(event), true);
     });
   }
 
   /** The node drawn under the pointer, if any. */
   private pickAt(event: MouseEvent): number | undefined {
     if (!this.model || !this.index) return undefined;
-    const rect = this.canvas.getBoundingClientRect();
-    const scale = this.canvas.width / Math.max(1, rect.width);
     const object = this.picker.pick(
       this.renderer,
       this.scene,
       this.viewpoint.camera,
       this.model,
-      [this.highlight.group, this.helpers.group],
-      {
-        x: Math.floor((event.clientX - rect.left) * scale),
-        y: Math.floor((event.clientY - rect.top) * scale),
-        width: this.canvas.width,
-        height: this.canvas.height,
-      },
+      [this.highlight.group, this.helpers.group, this.ruler.group],
+      this.regionAt(event),
     );
     return object ? this.index.node(object) : undefined;
   }
 
+  /** Places an end of the measurement where the pointer is on the model; nothing off it. */
+  private placeEnd(event: MouseEvent): void {
+    if (!this.model) return;
+    const hit = this.picker.surfacePoint(
+      this.renderer,
+      this.scene,
+      this.viewpoint.camera,
+      this.model,
+      [this.highlight.group, this.helpers.group, this.ruler.group],
+      this.regionAt(event),
+    );
+    if (!hit) return;
+    this.ruler.add(hit.point, hit.object);
+    this.render();
+  }
+
+  /** The drawing-buffer pixel under the pointer. */
+  private regionAt(event: MouseEvent): PickRegion {
+    const rect = this.canvas.getBoundingClientRect();
+    const scale = this.canvas.width / Math.max(1, rect.width);
+    return {
+      x: Math.floor((event.clientX - rect.left) * scale),
+      y: Math.floor((event.clientY - rect.top) * scale),
+      width: this.canvas.width,
+      height: this.canvas.height,
+    };
+  }
+
   private render(): void {
     const camera = this.viewpoint.camera;
+    const measurement = this.measuring
+      ? this.ruler.update(camera, (metres) => this.events.lengthText(metres))
+      : undefined;
     this.renderer.render(this.scene, camera);
     this.shading.drawWireframe(this.renderer, this.scene, camera);
     if (!camera.quaternion.equals(this.turnedTo)) {
@@ -639,6 +698,16 @@ export class ModelView {
         this.movedTo = state;
         this.events.moved(state);
       }
+    }
+    // Told when it changes: an end placed, the model moved or scaled, measuring stopped.
+    const ruled =
+      measurement &&
+      JSON.stringify(measurement, (_, value: unknown) =>
+        typeof value === 'number' ? Number(value.toPrecision(9)) : value,
+      );
+    if (ruled !== this.ruledAs) {
+      this.ruledAs = ruled;
+      this.events.ruled(measurement);
     }
   }
 

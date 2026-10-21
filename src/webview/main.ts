@@ -31,6 +31,7 @@ import { vscode } from './vscodeApi';
 
 type SceneModule = typeof import('./scene');
 type View = InstanceType<SceneModule['ModelView']>;
+type Measurement = import('./scene/ruler').Measurement;
 
 /** A model on its way from the host: its JSON, and its parts as they arrive. */
 interface Arrival {
@@ -57,6 +58,7 @@ const shell = new Shell(
     layoutChanged: (layout) => savePreferences({ layout: { ...layout } }),
     frame: () => void view?.then((target) => target?.frameSelection()),
     json: () => showJson(selectedKey),
+    measure: () => setMeasuring(!shownView?.isMeasuring),
   },
 );
 let opened: OpenMessage | undefined;
@@ -209,11 +211,16 @@ watchTheme(
     }),
 );
 
-// F frames the selection, Escape lets go of it, as in most 3D tools.
+// F frames the selection, Escape lets go of it, as in most 3D tools; M measures, and Escape
+// stops measuring.
 shell.viewport.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
   if (event.key === 'f' || event.key === 'F') {
     void view?.then((target) => target?.frameSelection());
+  } else if ((event.key === 'm' || event.key === 'M') && shownView) {
+    setMeasuring(!shownView.isMeasuring);
+  } else if (event.key === 'Escape' && shownView?.isMeasuring) {
+    setMeasuring(false);
   } else if (event.key === 'Escape') {
     structure?.select('model');
   } else {
@@ -285,6 +292,39 @@ function cameraMoved(camera: CameraState): void {
   if (peerCamera && sameCamera(camera, peerCamera)) return;
   if (diffSide === 'original' && !followed) return;
   vscode.postMessage({ type: 'camera', camera });
+}
+
+/** Starts or stops measuring the distance between two points clicked on the model. */
+function setMeasuring(measuring: boolean): void {
+  if (!shownView) return;
+  shownView.setMeasuring(measuring);
+  shell.setMeasuring(measuring);
+}
+
+/** How many ends the measurement had when last shown: its distance is said once it has two. */
+let measuredEnds = 0;
+
+/** Shows a measurement in the corner of the view, or the size again once measuring stops. */
+function showMeasurement(measurement: Measurement | undefined): void {
+  const text = strings?.measure;
+  if (!measurement || !text) {
+    measuredEnds = 0;
+    shell.setMeasurement(undefined);
+    return;
+  }
+  const { ends, length, delta } = measurement;
+  if (length === undefined || !delta) {
+    const hint = ends === 0 ? text.first : text.second;
+    shell.setMeasurement({ title: hint, description: hint });
+  } else {
+    const total = metres.metres(length);
+    // Read from the GPU's drawing, a point is a hair off: under a 100,000th of the length is 0.
+    const axes = delta.map((value) => metres.metres(value < length * 1e-5 ? 0 : value));
+    const description = `${text.distance}: ${total} (X ${axes[0]}, Y ${axes[1]}, Z ${axes[2]})`;
+    shell.setMeasurement({ title: text.distance, description, total, axes });
+    if (measuredEnds !== 2) shell.announce(description);
+  }
+  measuredEnds = ends;
 }
 
 /** Hands the view, as a PNG, to the host to save where the user picks. */
@@ -688,9 +728,12 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     },
     turned: (rotation) => gizmo.update(rotation),
     moved: (camera) => cameraMoved(camera),
+    ruled: (measurement) => showMeasurement(measurement),
+    lengthText: (value) => metres.metres(value),
   });
   shownView = created;
   shell.viewButton.hidden = false;
+  shell.measureButton.hidden = false;
   shell.shadingButton.hidden = false;
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());

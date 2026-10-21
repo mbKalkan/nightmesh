@@ -3,6 +3,17 @@ import type { ModelFormat, PanelLayout, ViewerStrings } from '../shared/protocol
 import { icons } from './icons';
 import { SidePanel } from './panel';
 
+/** What the corner of the view shows of a measurement, written out. */
+export interface MeasurementBadge {
+  /** What it is, as a tooltip. */
+  title: string;
+  /** All of it, for screen readers: the hint, or the distance with X, Y and Z. */
+  description: string;
+  /** Once both points are placed: the distance, and along X, Y and Z. */
+  total?: string;
+  axes?: readonly string[];
+}
+
 /** Loading that takes longer than this, in milliseconds, is said in the view. */
 const LOADING_DELAY = 250;
 
@@ -17,6 +28,8 @@ export class Shell {
   readonly viewButton: HTMLButtonElement;
   /** Opens the Export menu. */
   readonly exportButton: HTMLButtonElement;
+  /** Starts and stops measuring, once there is a 3D view. */
+  readonly measureButton: HTMLButtonElement;
   readonly structurePanel: SidePanel;
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
@@ -24,6 +37,9 @@ export class Shell {
   /** The viewport, and below it the bar for a model's animations. */
   private readonly center: HTMLElement;
   private readonly measureBadge: HTMLElement;
+  /** The size last given, shown again once a measurement no longer takes its place. */
+  private lastSize: Parameters<Shell['setSize']> | undefined;
+  private measurement: MeasurementBadge | undefined;
   private strings: ViewerStrings | undefined;
   private readonly fileName: HTMLElement;
   private readonly progress: HTMLElement;
@@ -43,6 +59,7 @@ export class Shell {
       layoutChanged(layout: PanelLayout): void;
       frame(): void;
       json(): void;
+      measure(): void;
     },
   ) {
     container.innerHTML = `
@@ -55,6 +72,7 @@ export class Shell {
           <div class="nm-actions" hidden>
             <button class="nm-icon-button nm-menu-button" data-action="shading" type="button" hidden>${icons.shading}${icons.chevronDown}</button>
             <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
+            <button class="nm-icon-button" data-action="measure" type="button" aria-pressed="false" hidden>${icons.ruler}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
             <button class="nm-icon-button" data-action="json" type="button">${icons.json}</button>
             <button class="nm-icon-button nm-menu-button" data-action="export" type="button">${icons.export}${icons.chevronDown}</button>
@@ -119,6 +137,7 @@ export class Shell {
     this.viewButton = find('[data-action="view"]');
     this.shadingButton = find('[data-action="shading"]');
     this.exportButton = find('[data-action="export"]');
+    this.measureButton = find('[data-action="measure"]');
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -138,6 +157,7 @@ export class Shell {
       const button = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (button?.dataset.action === 'frame') return this.events.frame();
       if (button?.dataset.action === 'json') return this.events.json();
+      if (button?.dataset.action === 'measure') return this.events.measure();
       const panel = button?.dataset.panel as 'structure' | 'inspector' | undefined;
       if (!panel) return;
       this.layout[panel] = !this.layout[panel];
@@ -172,13 +192,15 @@ export class Shell {
             ? strings.shading.menu
             : button.dataset.action === 'frame'
               ? strings.frame
-              : button.dataset.action === 'json'
-                ? strings.showJson
-                : button.dataset.action === 'export'
-                  ? strings.export.menu
-                  : button.dataset.panel === 'structure'
-                    ? structure.structure
-                    : structure.inspector;
+              : button.dataset.action === 'measure'
+                ? strings.measure.button
+                : button.dataset.action === 'json'
+                  ? strings.showJson
+                  : button.dataset.action === 'export'
+                    ? strings.export.menu
+                    : button.dataset.panel === 'structure'
+                      ? structure.structure
+                      : structure.inspector;
       button.title = label;
       button.setAttribute('aria-label', label);
     }
@@ -202,6 +224,9 @@ export class Shell {
     selection: boolean,
     metres: (value: number) => string,
   ): void {
+    this.lastSize = [size, selection, metres];
+    // While measuring, the measurement has its place.
+    if (this.measurement) return;
     this.measureBadge.hidden = size === undefined;
     if (!size || !this.strings) return;
     const label = selection ? this.strings.selectionSize : this.strings.modelSize;
@@ -222,6 +247,60 @@ export class Shell {
       }),
     );
     this.measureBadge.classList.toggle('nm-measure-selection', selection);
+  }
+
+  /** Marks the measure button pressed, and the view as taking clicks for a measurement. */
+  setMeasuring(measuring: boolean): void {
+    this.measureButton.setAttribute('aria-pressed', String(measuring));
+    this.viewport.classList.toggle('nm-measuring', measuring);
+  }
+
+  /**
+   * Shows a measurement in the corner of the view, where the size is: what to click next, or the
+   * distance and how far apart the points are along X, Y and Z. Undefined puts the size back.
+   */
+  setMeasurement(measurement: MeasurementBadge | undefined): void {
+    this.measurement = measurement;
+    const badge = this.measureBadge;
+    badge.classList.toggle('nm-measure-distance', measurement !== undefined);
+    if (!measurement) {
+      // Said again, as it was before the measurement took its place.
+      badge.removeAttribute('aria-label');
+      if (this.lastSize) this.setSize(...this.lastSize);
+      else badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.classList.remove('nm-measure-selection');
+    badge.title = measurement.title;
+    badge.setAttribute('aria-label', measurement.description);
+    const { total, axes } = measurement;
+    if (total === undefined || !axes) {
+      const hint = document.createElement('span');
+      hint.className = 'nm-measure-hint';
+      hint.textContent = measurement.description;
+      badge.replaceChildren(hint);
+      return;
+    }
+    const icon = document.createElement('span');
+    icon.className = 'nm-measure-icon';
+    icon.innerHTML = icons.ruler;
+    const length = document.createElement('span');
+    length.className = 'nm-measure-value nm-measure-total';
+    length.textContent = total;
+    badge.replaceChildren(
+      icon,
+      length,
+      ...['X', 'Y', 'Z'].flatMap((axis, index) => {
+        const name = document.createElement('span');
+        name.className = `nm-axis nm-axis-${axis.toLowerCase()}`;
+        name.textContent = axis;
+        const value = document.createElement('span');
+        value.className = 'nm-measure-value';
+        value.textContent = axes[index];
+        return [name, value];
+      }),
+    );
   }
 
   /** Puts a bar below the viewport, the full width of the view. */
