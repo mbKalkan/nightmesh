@@ -1,6 +1,8 @@
 import './styles/viewer.css';
 import { isMeshFormat } from '../shared/formats';
 import type {
+  CameraState,
+  DiffSide,
   FailedMessage,
   HostToWebviewMessage,
   ModelMessage,
@@ -15,6 +17,7 @@ import type {
   ViewerStrings,
   ViewStrings,
 } from '../shared/protocol';
+import { sameCamera } from './cameraState';
 import { Shell } from './shell';
 import { AnimationBar } from './animationBar';
 import { Gizmo } from './gizmo';
@@ -145,6 +148,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       if (message.what === 'screenshot') void saveScreenshot();
       else saveReport();
       break;
+    case 'diff':
+      receiveSide(message.side);
+      break;
+    case 'peerCamera':
+      receivePeerCamera(message.camera);
+      break;
     case 'select': {
       const key = structure?.entryAt(message.pointer);
       if (key === undefined || key === selectedKey) break;
@@ -225,6 +234,42 @@ document.addEventListener('keydown', (event) => {
 });
 
 vscode.postMessage({ type: 'ready' });
+
+/** Which side of a comparison this viewer is, if it is one. */
+let diffSide: DiffSide | undefined;
+/** Where the other side's camera last was. */
+let peerCamera: CameraState | undefined;
+/**
+ * Whether this side has taken the other side's camera. The original side lets the modified one
+ * frame both at first, and only then says where it moves: the two never trade views.
+ */
+let followed = false;
+
+function receiveSide(side: DiffSide | undefined): void {
+  diffSide = side;
+  followed = false;
+  peerCamera = undefined;
+  // A model drawn before this viewer knew it was compared: the other side looks from here.
+  if (side === 'modified' && hasModel && shownView) cameraMoved(shownView.cameraState());
+}
+
+function receivePeerCamera(camera: CameraState): void {
+  if (!diffSide) return;
+  peerCamera = camera;
+  // Without a model yet, it is taken once the model is drawn.
+  if (!hasModel || !shownView) return;
+  followed = true;
+  shownView.setCameraState(camera);
+}
+
+/** Tells the other side of a comparison where the camera moved, to move there too. */
+function cameraMoved(camera: CameraState): void {
+  if (!diffSide) return;
+  // The other side's move, taken here: nothing to tell it.
+  if (peerCamera && sameCamera(camera, peerCamera)) return;
+  if (diffSide === 'original' && !followed) return;
+  vscode.postMessage({ type: 'camera', camera });
+}
 
 /** Hands the view, as a PNG, to the host to save where the user picks. */
 async function saveScreenshot(): Promise<void> {
@@ -621,6 +666,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       shell.viewport.dispatchEvent(viewContextMenu);
     },
     turned: (rotation) => gizmo.update(rotation),
+    moved: (camera) => cameraMoved(camera),
   });
   shownView = created;
   shell.viewButton.hidden = false;
@@ -691,6 +737,11 @@ async function build(current: Arrival): Promise<void> {
     const gltf = await parseModel(json, current.parts, decoders, readFromMesh);
     if (current !== arrival) return;
     target.show(gltf, current.message.reload && hasModel);
+    // The other side of a comparison is shown from where it looks.
+    if (diffSide && peerCamera) {
+      followed = true;
+      target.setCameraState(peerCamera);
+    }
     shell.stopLoading();
     // A texture selected before the model was drawn can show its image now.
     structure?.refresh();

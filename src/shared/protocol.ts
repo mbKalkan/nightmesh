@@ -580,6 +580,22 @@ export interface FailedMessage {
   details: string[];
 }
 
+/** Which side of a comparison a viewer is: the older version on the left, the newer right. */
+export type DiffSide = 'original' | 'modified';
+
+/** Where the camera is and what it sees, to put the other side of a comparison in the same place. */
+export interface CameraState {
+  projection: Projection;
+  position: [number, number, number];
+  /** The point the camera orbits. */
+  target: [number, number, number];
+  /** Perspective: the vertical field of view, in degrees. */
+  fov: number;
+  /** Orthographic: half the view's height at zoom 1, and the zoom. */
+  height: number;
+  zoom: number;
+}
+
 /** The check of an OBJ, STL or PLY model's triangles, once its parts are sent. */
 export interface MeshCheckMessage {
   type: 'meshCheck';
@@ -606,7 +622,11 @@ export type HostToWebviewMessage =
   /** The cursor moved in the glTF JSON document: select what it is in. */
   | { type: 'select'; pointer: string }
   /** A command asks for a screenshot or a report to save. */
-  | { type: 'export'; what: 'screenshot' | 'report' };
+  | { type: 'export'; what: 'screenshot' | 'report' }
+  /** The viewer is one side of a comparison, or no longer is. */
+  | { type: 'diff'; side: DiffSide | undefined }
+  /** The other side of the comparison moved its camera. */
+  | { type: 'peerCamera'; camera: CameraState };
 
 /**
  * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
@@ -640,4 +660,6 @@ export type WebviewToHostMessage =
   /** Text for the clipboard, such as a command the size tab suggests. */
   | { type: 'copy'; text: string }
   /** The user changed a preference; the host keeps them all for the next viewer. */
-  | { type: 'preferences'; preferences: Preferences };
+  | { type: 'preferences'; preferences: Preferences }
+  /** The camera moved, in a viewer that is one side of a comparison. */
+  | { type: 'camera'; camera: CameraState };

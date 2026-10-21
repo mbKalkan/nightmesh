@@ -163,6 +163,8 @@ for files of hundreds of megabytes.
 - **Copy Reference** in the right-click menu, for a part in the view, a row in the structure or a
   link in the inspector. **Copy Reference with Details** adds what the inspector says about it.
   Both are in the Command Palette too, where they refer to the selection.
+- Comparing two versions side by side (Source Control, the Timeline, Compare Selected) moves
+  both views together, so the same part is in the same place on each side.
 - Earlier versions from Git (the Timeline, Source Control, a comparison) open as they were
   committed, including models kept in Git LFS whose content is on this machine.
 - Live reload that keeps your view when the file is saved.
