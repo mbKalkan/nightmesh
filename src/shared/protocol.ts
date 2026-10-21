@@ -210,6 +210,9 @@ export interface ViewStrings {
   axes: string;
   bounds: string;
   backgrounds: Record<Background, string>;
+  /** For OBJ, STL and PLY, which don't say: which axis is up, and the units. */
+  up: Record<UpAxis, string>;
+  units: Record<LengthUnit, string>;
 }
 
 /** Which side panels show and how wide they are. */
@@ -232,6 +235,17 @@ export interface Preferences {
   axes?: boolean;
   bounds?: boolean;
   background?: Background;
+  /** The units and up axis picked for each of OBJ, STL and PLY, which don't say theirs. */
+  units?: Partial<Record<MeshFormat, Units>>;
+}
+
+export type LengthUnit = 'mm' | 'cm' | 'm' | 'in' | 'ft';
+export type UpAxis = 'y' | 'z';
+
+/** What a file's coordinates are in, and which of its axes points up. */
+export interface Units {
+  unit: LengthUnit;
+  up: UpAxis;
 }
 
 /** What the view clears to: the theme's editor background, or a fixed shade. */
