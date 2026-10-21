@@ -297,6 +297,26 @@ export class ModelView {
     this.render();
   }
 
+  /**
+   * Scales and turns the model's top node, as the units and up axis of an OBJ, STL or PLY file
+   * say, and frames it again from where the camera looks.
+   */
+  setFileTransform(scale: number, rotation: readonly [number, number, number, number]): void {
+    const [file] = this.index?.objects('node:0') ?? [];
+    if (!file || !this.model) return;
+    file.scale.setScalar(scale);
+    file.quaternion.set(...rotation);
+    this.model.updateMatrixWorld(true);
+    this.modelBox().getBoundingSphere(this.modelSphere);
+    this.helpers.fit(this.modelBox());
+    this.updateBounds();
+    this.highlight.update();
+    this.viewpoint.frame(this.modelBox(), this.viewpoint.direction());
+    this.viewpoint.updateClipping();
+    this.measure();
+    this.requestRender();
+  }
+
   /** Plays clip `index` from where it is now, or from the start if it is another clip. */
   setClip(index: number): void {
     if (!this.playback || index === this.playback.clip) return;

@@ -76,16 +76,38 @@ test('draws parts without a material light grey, not dark as glTF metal', async 
   expect(viewer.problems).toEqual([]);
 });
 
-test('stands an STL in millimetres with Z up on the grid, a few centimetres wide', async ({
+test('stands an STL in millimetres with Z up, and takes other units from the View menu', async ({
   page,
 }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('bracket.stl');
-  // 40 × 20 × 25 mm with Z up, in glTF's metres with Y up.
-  await expect(page.locator('.nm-measure')).toHaveAttribute(
-    'aria-label',
-    'Size of the model in metres: width (X), height (Y) and depth (Z): 0.04 m × 0.025 m × 0.02 m',
-  );
+  const size = (values: string) =>
+    `Size of the model: width (X), height (Y) and depth (Z): ${values}`;
+  const badge = page.locator('.nm-measure');
+  // 40 × 20 × 25 mm with Z up: in glTF's terms, Y up.
+  await expect(badge).toHaveAttribute('aria-label', size('40 mm × 25 mm × 20 mm'));
+  const menu = page.locator('.nm-menu');
+  const item = (label: string) =>
+    menu.locator('.nm-menu-item', { has: page.getByText(label, { exact: true }) });
+  await page.locator('[data-action="view"]').click();
+  for (const label of ['Y Up', 'Z Up', 'Millimetres', 'Centimetres', 'Metres', 'Inches', 'Feet']) {
+    await expect(item(label)).toHaveAttribute('role', 'menuitemradio');
+  }
+  await expect(item('Z Up')).toHaveAttribute('aria-checked', 'true');
+  await expect(item('Millimetres')).toHaveAttribute('aria-checked', 'true');
+  await page.screenshot({ path: `${SCREENS}/mesh-units-menu-dark.png` });
+
+  await item('Inches').click();
+  await expect(badge).toHaveAttribute('aria-label', size('40 in × 25 in × 20 in'));
+  await page.locator('[data-action="view"]').click();
+  await item('Y Up').click();
+  await expect(badge).toHaveAttribute('aria-label', size('40 in × 20 in × 25 in'));
+  await expect(section(page, 'Contents')).toContainText(['Dimensions', '[40, 20, 25] in']);
+  // The next STL file opens the same way.
+  const sent = (await viewer.sent()) as { type: string; preferences?: unknown }[];
+  expect(sent.filter((message) => message.type === 'preferences').at(-1)).toMatchObject({
+    preferences: { units: { stl: { unit: 'in', up: 'y' } } },
+  });
   expect(viewer.problems).toEqual([]);
 });
 

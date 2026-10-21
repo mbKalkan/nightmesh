@@ -13,6 +13,7 @@ import type {
   StandardView,
   StructureMessage,
   ViewerStrings,
+  ViewStrings,
 } from '../shared/protocol';
 import { Shell } from './shell';
 import { AnimationBar } from './animationBar';
@@ -21,7 +22,7 @@ import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
-import { unitsFor, withUnits, type Units } from './units';
+import { fileTransform, unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
@@ -260,19 +261,71 @@ function showProgress(loadId: number, done: number, total: number): void {
 
 /** The units and up axis of the OBJ, STL or PLY file shown, decided with its structure. */
 let units: Units | undefined;
+/** The structure as the host sent it, to show again in other units. */
+let lastStructure: StructureMessage | undefined;
 
 /**
  * glTF made from an OBJ, STL or PLY file, scaled and turned as the file's units and up axis
- * say; other glTF as it is. `drawn` for what the 3D view draws: far-away geometry around the
- * origin.
+ * say: the ones the user picked for its format last, or the ones it most likely has. Other glTF
+ * as it is. `drawn` for what the 3D view draws: far-away geometry around the origin.
  */
 function inUnits(json: string, drawn = false): string {
   const format = opened?.format;
   if (!format || !isMeshFormat(format)) return json;
-  const decided = units ?? unitsFor(format, json);
+  const decided = units ?? preferences.units?.[format] ?? unitsFor(format, json);
   // A large file's header, shown before it is read, has no geometry to decide by yet.
-  if (json.includes('"meshes"')) units = decided;
+  if (json.includes('"meshes"') && units !== decided) {
+    units = decided;
+    showLengthsIn(decided);
+  }
   return withUnits(json, decided, drawn);
+}
+
+/** Shows lengths in a file's own unit, in the view and the panels. */
+function showLengthsIn({ unit }: Units): void {
+  metres.setLength(unit);
+  structure?.setLengthUnit(unit);
+}
+
+/**
+ * The user picked other units or another up axis for the OBJ, STL or PLY file shown: it is
+ * scaled and turned at once, and files of its format open that way from now on.
+ */
+function setUnits(change: Partial<Units>): void {
+  const format = opened?.format;
+  if (!format || !isMeshFormat(format) || !units || !opened) return;
+  units = { ...units, ...change };
+  savePreferences({ units: { ...preferences.units, [format]: units } });
+  showLengthsIn(units);
+  if (lastStructure) {
+    // As for a file that changed: what is open and selected in the panels stays.
+    const message = { ...lastStructure, reload: true, json: withUnits(lastStructure.json, units) };
+    structure?.setStructure(message, opened.fileName, format);
+  }
+  const { scale, rotation } = fileTransform(units);
+  shownView?.setFileTransform(scale, rotation);
+}
+
+/** The View menu's choice of up axis and units, for OBJ, STL and PLY. */
+function unitItems(text: ViewStrings): MenuItem[] {
+  const current = units;
+  if (!current || !opened || !isMeshFormat(opened.format)) return [];
+  return [
+    'separator',
+    ...(['y', 'z'] as const).map((up) => ({
+      label: text.up[up],
+      kind: 'radio' as const,
+      checked: current.up === up,
+      run: () => setUnits({ up }),
+    })),
+    'separator',
+    ...(['mm', 'cm', 'm', 'in', 'ft'] as const).map((unit) => ({
+      label: text.units[unit],
+      kind: 'radio' as const,
+      checked: current.unit === unit,
+      run: () => setUnits({ unit }),
+    })),
+  ];
 }
 
 function open(message: OpenMessage): void {
@@ -290,6 +343,7 @@ function open(message: OpenMessage): void {
   opened = message;
   strings = message.strings;
   metres = new Formatter(message.locale);
+  if (units) metres.setLength(units.unit);
   shell.setDocument(message.fileName, message.format, strings);
   if (!hasModel) shell.startLoading(strings.loading);
   viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
@@ -396,6 +450,7 @@ function viewMenuItems(): MenuItem[] {
       checked: current.projection === projection,
       run: () => current.setProjection(projection),
     })),
+    ...unitItems(text),
     'separator',
     {
       label: cell === undefined ? text.grid : fill(text.gridCell, metres.metres(cell)),
@@ -487,6 +542,7 @@ function receiveStructure(message: StructureMessage): void {
   structureLoad = message.loadId;
   // A file read anew decides its units again; a reload of the same file keeps them.
   if (!message.reload) units = undefined;
+  lastStructure = message;
   structure?.setStructure(
     { ...message, json: inUnits(message.json) },
     opened.fileName,

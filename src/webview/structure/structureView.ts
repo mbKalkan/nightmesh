@@ -1,5 +1,6 @@
 import type {
   ImageInfo,
+  LengthUnit,
   ModelFormat,
   Motion,
   StructureMessage,
@@ -172,6 +173,13 @@ export class StructureView {
       imageBytes: this.imageBytes,
     });
     this.size.show(analysis, model);
+  }
+
+  /** Shows lengths in `unit`: an OBJ, STL or PLY file's own. */
+  setLengthUnit(unit: LengthUnit): void {
+    this.format.setLength(unit);
+    this.showStatistics();
+    this.render(true);
   }
 
   private showStatistics(): void {

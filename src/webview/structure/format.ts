@@ -1,11 +1,16 @@
+import type { LengthUnit } from '../../shared/protocol';
+import { UNIT_METRES } from '../units';
+
 /**
  * Numbers as the inspector shows them. Counts and sizes follow VS Code's display language; values
- * from the file keep a dot and no grouping, so they can be copied back into code or JSON.
+ * from the file keep a dot and no grouping, so they can be copied back into code or JSON. Lengths
+ * are given in metres and shown in the unit set, the file's own for OBJ, STL and PLY.
  */
 export class Formatter {
   private readonly integer: Intl.NumberFormat;
   private readonly decimal: Intl.NumberFormat;
   private readonly length: Intl.NumberFormat;
+  private unit: LengthUnit = 'm';
 
   constructor(locale: string) {
     this.integer = numberFormat(locale, { maximumFractionDigits: 0 });
@@ -17,9 +22,18 @@ export class Formatter {
     return this.integer.format(value);
   }
 
-  /** A length in metres for reading, not copying: four significant digits, the user's decimals. */
+  /** Shows lengths, which are given in metres, in `unit`. */
+  setLength(unit: LengthUnit): void {
+    this.unit = unit;
+  }
+
+  /**
+   * A length given in metres, for reading, not copying: in the unit set, to four significant
+   * digits, with the user's decimals.
+   */
   metres(value: number): string {
-    return `${this.length.format(Number(value.toPrecision(4)))} m`;
+    const shown = Number((value / UNIT_METRES[this.unit]).toPrecision(4));
+    return `${this.length.format(shown)} ${this.unit}`;
   }
 
   bytes(value: number): string {
@@ -44,9 +58,13 @@ export class Formatter {
     return `[${values.map((value) => this.value(value)).join(', ')}]`;
   }
 
-  /** A size along X, Y and Z, to four significant digits as the size in the view gives it. */
+  /**
+   * A size along X, Y and Z given in metres, in the unit set, to four significant digits as the
+   * size in the view gives it.
+   */
   dimensions(values: readonly number[]): string {
-    return `${this.vector(values.map((value) => Number(value.toPrecision(4))))} m`;
+    const shown = values.map((value) => Number((value / UNIT_METRES[this.unit]).toPrecision(4)));
+    return `${this.vector(shown)} ${this.unit}`;
   }
 
   degrees(radians: number): string {

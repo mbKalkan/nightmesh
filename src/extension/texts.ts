@@ -35,8 +35,8 @@ export function viewerStrings(t: Translate): ViewerStrings {
     viewKeys: t(
       'Arrow keys orbit, plus and minus zoom. 1, 3 and 7 look from the front, the right and the top, with Shift from the other side; 5 switches between perspective and orthographic. F frames the selection, Escape lets go of it, Space plays an animation.',
     ),
-    modelSize: t('Size of the model in metres: width (X), height (Y) and depth (Z)'),
-    selectionSize: t('Size of the selection in metres: width (X), height (Y) and depth (Z)'),
+    modelSize: t('Size of the model: width (X), height (Y) and depth (Z)'),
+    selectionSize: t('Size of the selection: width (X), height (Y) and depth (Z)'),
     structure: structureStrings(t),
     validation: {
       tab: t('Validation'),
@@ -183,6 +183,14 @@ export function viewerStrings(t: Translate): ViewerStrings {
         dark: t('Dark Background'),
         neutral: t('Neutral Background'),
         light: t('Light Background'),
+      },
+      up: { y: t('Y Up'), z: t('Z Up') },
+      units: {
+        mm: t('Millimetres'),
+        cm: t('Centimetres'),
+        m: t('Metres'),
+        in: t('Inches'),
+        ft: t('Feet'),
       },
     },
     shading: {

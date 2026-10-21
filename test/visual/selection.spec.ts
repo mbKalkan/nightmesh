@@ -145,11 +145,11 @@ test('shows the size of the model, or of the selection, in metres', async ({ pag
   const badge = page.locator('.nm-measure');
 
   await expect(badge).toHaveText('X4.1 mY1.781 mZ1.849 m');
-  await expect(badge).toHaveAttribute('title', /^Size of the model in metres/);
+  await expect(badge).toHaveAttribute('title', /^Size of the model:/);
   // A node along its own axes: the sphere is turned 45°, its size isn't.
   await row(page, 'Sphere').click();
   await expect(badge).toHaveText('X1.2 mY1.2 mZ1.2 m');
-  await expect(badge).toHaveAttribute('title', /^Size of the selection in metres/);
+  await expect(badge).toHaveAttribute('title', /^Size of the selection:/);
   await page.locator('.nm-viewport').focus();
   await page.keyboard.press('Escape');
   await expect(badge).toHaveText('X4.1 mY1.781 mZ1.849 m');

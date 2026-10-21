@@ -1,14 +1,8 @@
 // OBJ, STL and PLY files don't say what their units are or which way is up; glTF is in metres
 // with Y up. The file's node takes a scale and rotation that turn the one into the other.
-import type { MeshFormat } from '../shared/protocol';
+import type { LengthUnit, MeshFormat, Units } from '../shared/protocol';
 
-export type LengthUnit = 'mm' | 'cm' | 'm' | 'in' | 'ft';
-export type UpAxis = 'y' | 'z';
-
-export interface Units {
-  unit: LengthUnit;
-  up: UpAxis;
-}
+export type { LengthUnit, UpAxis, Units } from '../shared/protocol';
 
 /** Metres in each unit. */
 export const UNIT_METRES: Readonly<Record<LengthUnit, number>> = {
@@ -30,7 +24,15 @@ export const DEFAULT_UNITS: Readonly<Record<MeshFormat, Units>> = {
 };
 
 /** A quarter turn about X, from Z up to Y up. */
-const Z_UP_TO_Y_UP = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+const Z_UP_TO_Y_UP: [number, number, number, number] = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+
+/** The scale and rotation (x, y, z, w) that turn a file in `units` into metres with Y up. */
+export function fileTransform({ unit, up }: Units): {
+  scale: number;
+  rotation: [number, number, number, number];
+} {
+  return { scale: UNIT_METRES[unit], rotation: up === 'z' ? Z_UP_TO_Y_UP : [0, 0, 0, 1] };
+}
 
 type MeshGltf = { scenes?: { nodes?: number[] }[]; nodes?: Record<string, unknown>[] };
 
@@ -65,7 +67,7 @@ export function unitsFor(format: MeshFormat, json: string): Units {
  * where 32-bit floats are precise; the panels keep the file's coordinates. The JSON comes back as
  * it was when it has no such node.
  */
-export function withUnits(json: string, { unit, up }: Units, drawn = false): string {
+export function withUnits(json: string, units: Units, drawn = false): string {
   let gltf: MeshGltf;
   try {
     gltf = JSON.parse(json) as MeshGltf;
@@ -74,10 +76,10 @@ export function withUnits(json: string, { unit, up }: Units, drawn = false): str
   }
   const { file, moved } = fileNodes(gltf);
   if (!file) return json;
-  const scale = UNIT_METRES[unit];
+  const { scale } = fileTransform(units);
   if (scale === 1) delete file.scale;
   else file.scale = [scale, scale, scale];
-  if (up === 'z') file.rotation = Z_UP_TO_Y_UP;
+  if (units.up === 'z') file.rotation = Z_UP_TO_Y_UP;
   else delete file.rotation;
   if (drawn) for (const node of moved) delete node.translation;
   return JSON.stringify(gltf);

@@ -83,8 +83,8 @@
   "No preview: this texture stays compressed on the GPU.": "Önizleme yok: bu doku GPU'da sıkıştırılmış kalır.",
   "GPU memory": "GPU belleği",
   "Texture memory": "Doku belleği",
-  "Size of the model in metres: width (X), height (Y) and depth (Z)": "Modelin metre cinsinden boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
-  "Size of the selection in metres: width (X), height (Y) and depth (Z)": "Seçimin metre cinsinden boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
+  "Size of the model: width (X), height (Y) and depth (Z)": "Modelin boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
+  "Size of the selection: width (X), height (Y) and depth (Z)": "Seçimin boyutu: genişlik (X), yükseklik (Y) ve derinlik (Z)",
   "Animation playback": "Animasyon oynatma",
   "Play (Space)": "Oynat (Boşluk)",
   "Pause (Space)": "Duraklat (Boşluk)",
@@ -238,5 +238,12 @@
   "Material libraries": "Malzeme kütüphaneleri",
   "Statements": "İfadeler",
   "not drawn": "çizilmez",
-  "The material libraries don't define this material.": "Malzeme kütüphaneleri bu malzemeyi tanımlamıyor."
+  "The material libraries don't define this material.": "Malzeme kütüphaneleri bu malzemeyi tanımlamıyor.",
+  "Y Up": "Y Yukarı",
+  "Z Up": "Z Yukarı",
+  "Millimetres": "Milimetre",
+  "Centimetres": "Santimetre",
+  "Metres": "Metre",
+  "Inches": "İnç",
+  "Feet": "Fit"
 }
