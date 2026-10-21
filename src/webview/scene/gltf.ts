@@ -44,8 +44,13 @@ export function parseModel(
   return loader.parseAsync(json, '');
 }
 
-/** Points are this many pixels wide, rather than glTF's one: a scan's points stay visible. */
-const POINT_SIZE = 2;
+/**
+ * How many pixels wide points are drawn, rather than glTF's one: the fewer there are, the wider,
+ * so a scan's millions stay apart and a handful stay visible.
+ */
+export function pointSize(count: number): number {
+  return count <= 1000 ? 6 : count <= 100_000 ? 3 : 2;
+}
 /** Linear grey of surfaces the file gives no material: light, as CAD and slicer tools show them. */
 const SURFACE_GREY = 0.4;
 /** Linear grey of lines and points without colors: visible on dark and light backgrounds. */
@@ -68,7 +73,10 @@ function meshFormatsPlugin(parser: GLTFParser) {
         const primitive = meshes[association.meshes]?.primitives[association.primitives];
         const drawable = object as Mesh & Line & Points;
         const colored = drawable.geometry?.attributes.color !== undefined;
-        if (drawable.isPoints) (drawable.material as PointsMaterial).size = POINT_SIZE;
+        if (drawable.isPoints) {
+          const count = drawable.geometry.attributes.position?.count ?? 0;
+          (drawable.material as PointsMaterial).size = pointSize(count);
+        }
         if (primitive?.material !== undefined) return;
         if (drawable.isPoints || drawable.isLine) {
           if (!colored)

@@ -1,6 +1,7 @@
 // PLY, ASCII and binary of either byte order: a header that declares elements and their
-// properties, then the elements' records in order. Vertices, faces and edges are read; any other
-// element is passed over. A file with faces is a mesh, one without a point cloud.
+// properties, then the elements' records in order. Vertices, faces (or triangle strips) and edges
+// are read; any other element is passed over. A file with faces is a mesh, one without a point
+// cloud.
 import type { PlyFacts } from '../../../shared/protocol';
 import { Growable, TripleIndex, bitsOf } from './arrays';
 import {
@@ -169,8 +170,8 @@ export class PlyReader implements MeshReader {
       this.vertices = new VertexData(element, records, this.origin);
       return this.vertices;
     }
-    if (element.name === 'face' && !this.faces) {
-      this.faces = new FaceData(element);
+    if ((element.name === 'face' || element.name === 'tristrips') && !this.faces) {
+      this.faces = new FaceData(element, element.name === 'tristrips');
       return this.faces;
     }
     if (element.name === 'edge' && !this.edges) {
@@ -319,7 +320,8 @@ function parseHeader(text: string): { facts: PlyFacts; elements: Element[]; text
       if (!element) throw new MeshFormatError('PLY property before any element');
       element.properties.push(property(words, line));
     } else if (keyword !== '' && keyword !== 'end_header') {
-      throw new MeshFormatError(`Unknown PLY header line: ${line}`);
+      // Some exporters (Blender 2.4's among them) wrote a comment without its keyword.
+      facts.comments.push(line);
     }
   }
   if (!format) throw new MeshFormatError('PLY header without a format');
@@ -494,7 +496,11 @@ class VertexData implements RecordHandler {
   }
 }
 
-/** The face element: polygons as triangles, with the texture coordinates of each corner if any. */
+/**
+ * The face element: polygons as triangles, with the texture coordinates of each corner if any.
+ * Or the tristrips element, as VCG and older scanners write: strips of triangles, each a corner
+ * after the two before it, one strip from the next parted by -1.
+ */
 class FaceData implements RecordHandler {
   private readonly indices: Growable<Uint32Array>;
   /** Per corner of each triangle, when faces carry their own texture coordinates. */
@@ -503,7 +509,10 @@ class FaceData implements RecordHandler {
   private readonly texcoordList: number;
   private broken = 0;
 
-  constructor(element: Element) {
+  constructor(
+    element: Element,
+    private readonly strips = false,
+  ) {
     this.vertexList = element.properties.findIndex(
       (property) =>
         property.count && (property.name === 'vertex_indices' || property.name === 'vertex_index'),
@@ -513,13 +522,14 @@ class FaceData implements RecordHandler {
       (property) => property.count && property.name === 'texcoord',
     );
     this.indices = new Growable(Uint32Array, Math.min(element.count, 1 << 22) * 3);
-    if (this.texcoordList >= 0)
+    if (this.texcoordList >= 0 && !strips)
       this.texcoords = new Growable(Float32Array, Math.min(element.count, 1 << 22) * 6);
   }
 
   record(_values: Float64Array, lists: readonly Float64Array[], lengths: Int32Array): void {
     const corners = lists[this.vertexList];
     const count = lengths[this.vertexList];
+    if (this.strips) return this.strip(corners, count);
     if (count < 3) {
       this.broken++;
       return;
@@ -534,6 +544,32 @@ class FaceData implements RecordHandler {
           this.texcoords.push(withTexcoords ? 1 - texcoords![corner * 2 + 1] : 0);
         }
       }
+    }
+  }
+
+  /**
+   * Triangle strips: each corner makes a triangle with the two before it, every other one turned
+   * the other way so they all face the same side. A strip's degenerate triangles, which join its
+   * pieces, are left out.
+   */
+  private strip(corners: Float64Array, count: number): void {
+    let inStrip = 0;
+    let first = 0;
+    let second = 0;
+    for (let i = 0; i < count; i++) {
+      const corner = corners[i];
+      // -1, or as an unsigned list type writes it.
+      if (corner < 0 || corner === 0xffffffff) {
+        inStrip = 0;
+        continue;
+      }
+      if (inStrip >= 2 && first !== second && second !== corner && first !== corner) {
+        if (inStrip % 2 === 0) this.indices.push3(first, second, corner);
+        else this.indices.push3(second, first, corner);
+      }
+      first = second;
+      second = corner;
+      inStrip++;
     }
   }
 
@@ -655,8 +691,13 @@ class RecordScratch {
   }
 }
 
-/** Items in one list past this make a record damaged rather than a buffer enormous. */
+/**
+ * Items in one list past this make a record damaged rather than a buffer enormous. A tristrips
+ * element can hold a whole mesh in one list, as VCG writes it.
+ */
 const MAX_LIST = 1 << 16;
+const MAX_STRIP = 1 << 24;
+const maxItems = (element: Element) => (element.name === 'tristrips' ? MAX_STRIP : MAX_LIST);
 
 class AsciiBody {
   private readonly cursor = new Cursor();
@@ -691,7 +732,8 @@ class AsciiBody {
     if (this.element >= this.elements.length) return;
     const cursor = this.cursor.reset(bytes, start, end);
     if (cursor.atEnd()) return;
-    const { properties } = this.elements[this.element];
+    const element = this.elements[this.element];
+    const { properties } = element;
     const scratch = this.scratch[this.element];
     for (let index = 0; index < properties.length; index++) {
       if (!properties[index].count) {
@@ -699,7 +741,10 @@ class AsciiBody {
         continue;
       }
       const count = cursor.number();
-      if (!(count >= 0 && count <= MAX_LIST)) throw new MeshFormatError('Bad PLY list');
+      // Each item takes a digit and a space at least: a count the line has no room for is wrong.
+      if (!(count >= 0 && count <= maxItems(element) && count * 2 <= end - cursor.pos + 1)) {
+        throw new MeshFormatError('Bad PLY list');
+      }
       const items = scratch.list(index, count);
       for (let i = 0; i < count; i++) items[i] = cursor.number();
     }
@@ -793,7 +838,7 @@ class BinaryBody {
       if (at + countSize > view.byteLength) return -1;
       const count = read(view, at, property.count, little);
       at += countSize;
-      if (!(count >= 0 && count <= MAX_LIST)) throw new MeshFormatError('Bad PLY list');
+      if (!(count >= 0 && count <= maxItems(element))) throw new MeshFormatError('Bad PLY list');
       const size = SIZES[property.type];
       if (at + count * size > view.byteLength) return -1;
       const items = scratch.list(index, count);

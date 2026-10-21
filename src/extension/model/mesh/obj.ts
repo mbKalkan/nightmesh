@@ -15,7 +15,7 @@ import {
   type ParsedMesh,
   type PartMode,
 } from './geometry';
-import { Cursor, LineSplitter, concat, decodeText } from './text';
+import { Cursor, LineSplitter, concat, decodeText, utf16 } from './text';
 
 const NONE = -1;
 const HASH = 0x23;
@@ -26,6 +26,8 @@ const LOWER_V = 0x76;
 const LOWER_T = 0x74;
 const LOWER_N = 0x6e;
 const LOWER_F = 0x66;
+
+const utf8 = new TextEncoder();
 
 /** Free-form curves and surfaces: valid OBJ, but not drawn. */
 const FREE_FORM = new Set(['curv', 'curv2', 'surf']);
@@ -122,8 +124,23 @@ export class ObjReader implements MeshReader {
   private continued: Uint8Array | undefined;
   /** One polygon's corners while it is read. */
   private polygon = new Int32Array(3 * 64);
+  private first = true;
+  /** For a file in UTF-16, as some Windows tools write text: read as UTF-8. */
+  private transcoder: InstanceType<typeof TextDecoder> | undefined;
 
   push(chunk: Uint8Array): void {
+    if (this.first) {
+      this.first = false;
+      const encoding = utf16(chunk);
+      if (encoding) this.transcoder = new TextDecoder(encoding);
+      // UTF-8's byte order mark would read as part of the first statement.
+      else if (chunk[0] === 0xef && chunk[1] === 0xbb && chunk[2] === 0xbf) {
+        chunk = chunk.subarray(3);
+      }
+    }
+    if (this.transcoder) {
+      chunk = utf8.encode(this.transcoder.decode(chunk, { stream: true }));
+    }
     this.lines.push(chunk);
   }
 
@@ -320,6 +337,7 @@ export class ObjReader implements MeshReader {
   }
 
   finish(): ParsedMesh {
+    if (this.transcoder) this.lines.push(utf8.encode(this.transcoder.decode()));
     this.lines.finish();
     if (this.continued) {
       const last = this.continued;

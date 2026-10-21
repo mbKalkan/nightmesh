@@ -1,0 +1,18 @@
+ply
+format ascii 1.0
+comment Nightmesh fixture generator
+Created by an exporter that left out the comment keyword
+element vertex 6
+property float x
+property float y
+property float z
+element tristrips 1
+property list int int vertex_indices
+end_header
+0 0 0
+0 1 0
+1 0 0
+1 1 0
+2 0 0
+2 1 0
+9 0 1 2 3 -1 2 3 4 5

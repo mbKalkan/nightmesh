@@ -16,8 +16,6 @@ const UPPER_E = 0x45;
 /** Powers of ten a double holds exactly enough for parsing: 10^0 to 10^22. */
 const POWERS = Array.from({ length: 23 }, (_, power) => 10 ** power);
 
-const decoder = new TextDecoder();
-
 const isSpace = (byte: number) => byte === SPACE || byte === TAB || byte === CR;
 
 /** A position in one line of text, from which words and numbers are read in turn. */
@@ -48,7 +46,7 @@ export class Cursor {
     this.skipSpaces();
     const start = this.pos;
     while (this.pos < this.end && !isSpace(this.bytes[this.pos])) this.pos++;
-    return decoder.decode(this.bytes.subarray(start, this.pos));
+    return decodeText(this.bytes.subarray(start, this.pos));
   }
 
   /** True if the next word is exactly `keyword`, which is then skipped. */
@@ -70,7 +68,7 @@ export class Cursor {
     this.skipSpaces();
     let end = this.end;
     while (end > this.pos && isSpace(this.bytes[end - 1])) end--;
-    const text = decoder.decode(this.bytes.subarray(this.pos, end));
+    const text = decodeText(this.bytes.subarray(this.pos, end));
     this.pos = this.end;
     return text;
   }
@@ -249,11 +247,26 @@ export function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
   return joined;
 }
 
-/** Text as it is in the file, for names and comments: UTF-8, or Latin-1 where it isn't. */
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+const latin1 = new TextDecoder('latin1');
+
+/**
+ * Text as it is in the file, for names and comments: UTF-8, or Latin-1 where it isn't (older
+ * exporters write names in the system's code page), or UTF-16 after its byte order mark.
+ */
 export function decodeText(bytes: Uint8Array): string {
+  const encoding = utf16(bytes);
+  if (encoding) return new TextDecoder(encoding).decode(bytes);
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return utf8.decode(bytes);
   } catch {
-    return new TextDecoder('latin1').decode(bytes);
+    return latin1.decode(bytes);
   }
+}
+
+/** The UTF-16 encoding text in `bytes` is in, by its byte order mark; undefined if none. */
+export function utf16(bytes: Uint8Array): 'utf-16le' | 'utf-16be' | undefined {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
+  return undefined;
 }

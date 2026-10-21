@@ -147,6 +147,19 @@ describe('PLY', () => {
     expect([...part.uvs!]).toEqual([0, 1, 1, 1, 1, 0, 0, 0]);
   });
 
+  it('reads triangle strips, and a header comment without its keyword', () => {
+    const mesh = read('strips.ply', 7);
+    const [part] = parts(mesh.objects);
+    // Every other triangle of a strip turned back, so all face the same way.
+    expect([...part.indices!]).toEqual([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5]);
+    expect(mesh.facts).toMatchObject({
+      comments: [
+        'Nightmesh fixture generator',
+        'Created by an exporter that left out the comment keyword',
+      ],
+    });
+  });
+
   it("turns down what isn't PLY", () => {
     expect(looksLike('ply', file('not-a-model.ply'), 34)).toBe('yes');
     expect(() => read('not-a-model.ply')).toThrow(MeshFormatError);
@@ -214,6 +227,20 @@ describe('OBJ', () => {
   it("knows a compiler's object file from a model", () => {
     expect(looksLike('obj', file('object-file.obj'), 64)).toBe('objectFile');
     expect(looksLike('obj', file('cube.obj'), 100)).toBe('yes');
+    expect(looksLike('obj', file('utf16.obj'), 100)).toBe('yes');
+  });
+
+  it('reads UTF-16 text, and UTF-8 after a byte order mark', () => {
+    const utf16 = read('utf16.obj', 5);
+    expect(triangles(parts(utf16.objects)[0])).toBe(1);
+    expect(utf16.facts).toMatchObject({ comments: ['Nightmesh fixture generator'] });
+    const reader = createReader('obj', 100);
+    const marked = ['\ufeff# Marked', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3', ''].join('\n');
+    reader.push(new TextEncoder().encode(marked));
+    expect(reader.finish().facts).toMatchObject({
+      comments: ['Marked'],
+      statements: { v: 3, f: 1 },
+    });
   });
 
   it('reads one library name with spaces, or several', () => {

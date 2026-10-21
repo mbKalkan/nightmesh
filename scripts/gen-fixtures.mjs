@@ -1308,6 +1308,52 @@ write(
   'missing-library.obj',
   text(['mtllib nowhere.mtl', 'usemtl Something', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3']),
 );
+// Names in Latin-1, as older exporters write them in the system's code page.
+const latin1 = (lines) => Buffer.from(`${lines.join('\n')}\n`, 'latin1');
+write('latin1.mtl', latin1([`# ${GENERATOR}`, 'newmtl Terraindæk', 'Kd 0.2 0.6 0.2']));
+write(
+  'latin1.obj',
+  latin1(['mtllib latin1.mtl', 'usemtl Terraindæk', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3']),
+);
+// A library of one material that the file never selects: its faces are in it.
+write('only-material.mtl', text([`# ${GENERATOR}`, 'newmtl Clay', 'Kd 0.8 0.5 0.3']));
+write(
+  'only-material.obj',
+  text(['mtllib only-material.mtl', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3']),
+);
+// UTF-16 with its byte order mark, as Windows tools can write text.
+write(
+  'utf16.obj',
+  Buffer.concat([
+    Buffer.from([0xff, 0xfe]),
+    Buffer.from(`# ${GENERATOR}\r\nv 0 0 0\r\nv 1 0 0\r\nv 0 1 0\r\nf 1 2 3\r\n`, 'utf16le'),
+  ]),
+);
+// Triangle strips, as VCG writes them, after a header comment without its keyword.
+write(
+  'strips.ply',
+  text([
+    'ply',
+    'format ascii 1.0',
+    `comment ${GENERATOR}`,
+    'Created by an exporter that left out the comment keyword',
+    'element vertex 6',
+    'property float x',
+    'property float y',
+    'property float z',
+    'element tristrips 1',
+    'property list int int vertex_indices',
+    'end_header',
+    '0 0 0',
+    '0 1 0',
+    '1 0 0',
+    '1 1 0',
+    '2 0 0',
+    '2 1 0',
+    // Two strips of two triangles each, parted by -1.
+    '9 0 1 2 3 -1 2 3 4 5',
+  ]),
+);
 write('object-file.obj', objectFile());
 write('not-a-model.stl', Buffer.from('This is not an STL model.\n'));
 write('truncated.stl', bracketStl.subarray(0, 84 + 50 * 10 + 20));
