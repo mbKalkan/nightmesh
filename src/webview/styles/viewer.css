@@ -421,6 +421,63 @@ body.vscode-high-contrast .nm-tree-description {
   text-align: center;
 }
 
+/* Comparison marks in the tree, in Source Control's colors */
+
+.nm-tree-row,
+.nm-compare {
+  --nm-change: var(
+    --vscode-gitDecoration-modifiedResourceForeground,
+    var(--vscode-charts-yellow, currentColor)
+  );
+}
+
+.nm-change-added {
+  --nm-change: var(
+    --vscode-gitDecoration-addedResourceForeground,
+    var(--vscode-charts-green, currentColor)
+  );
+}
+
+.nm-change-removed {
+  --nm-change: var(
+    --vscode-gitDecoration-deletedResourceForeground,
+    var(--vscode-charts-red, currentColor)
+  );
+}
+
+/*
+ * What was removed is struck through in the text color: VS Code's red for it is too dark on dark
+ * side bars to read as text, so only its letter takes it.
+ */
+.nm-change-added .nm-tree-label,
+.nm-change-changed .nm-tree-label {
+  color: var(--nm-change);
+}
+
+.nm-change-removed .nm-tree-label,
+.nm-change-removed .nm-compare-name {
+  text-decoration: line-through;
+}
+
+.nm-change-mark {
+  flex: none;
+  margin-left: auto;
+  padding: 0 6px 0 4px;
+  color: var(--nm-change);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.nm-change-mark + .nm-badge {
+  margin-left: 0;
+}
+
+/* A selected row is in the selection's colors, as VS Code's trees have it. */
+.nm-tree-row[aria-selected='true'] .nm-tree-label,
+.nm-tree-row[aria-selected='true'] .nm-change-mark {
+  color: inherit;
+}
+
 /* Inspector */
 
 .nm-inspector-content {
@@ -550,7 +607,8 @@ body.vscode-high-contrast .nm-tree-description {
 
 .nm-statistics,
 .nm-validation,
-.nm-size {
+.nm-size,
+.nm-compare {
   flex: 1;
   min-height: 0;
   padding: 0 12px 16px;
@@ -561,7 +619,8 @@ body.vscode-high-contrast .nm-tree-description {
 
 .nm-statistics:focus-visible,
 .nm-validation:focus-visible,
-.nm-size:focus-visible {
+.nm-size:focus-visible,
+.nm-compare:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
@@ -1337,6 +1396,64 @@ body.vscode-light .nm-gizmo {
 
 .nm-validation-clean svg {
   color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+/* Changes, while two versions are compared */
+
+.nm-compare-totals {
+  margin-top: 8px;
+}
+
+.nm-compare-delta {
+  color: var(--vscode-descriptionForeground);
+}
+
+.nm-compare-count {
+  margin: 12px 0 0;
+  font-weight: 600;
+}
+
+.nm-compare-heading-count {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 400;
+}
+
+.nm-compare-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nm-compare-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  line-height: 20px;
+}
+
+.nm-compare-list .nm-change-mark {
+  width: 1ch;
+  margin: 0;
+  padding: 0;
+}
+
+.nm-compare-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nm-compare-facets {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Size */

@@ -12,6 +12,7 @@ const VALID = [
   'triangle.glb',
   'triangle.gltf',
   'scene.glb',
+  'scene-edited.glb',
   'materials.glb',
   'animated.glb',
   'variants.glb',

@@ -319,6 +319,23 @@ function structureStrings(t: Translate): StructureStrings {
       degenerate: t('Faces without area'),
       notDefined: t("The material libraries don't define this material."),
     },
+    compare: {
+      tab: t('Changes'),
+      note: t(
+        'Things are matched by name. Geometry is compared by its counts and bounds, not vertex by vertex.',
+      ),
+      waiting: t('Waiting for the other version…'),
+      none: t('No changes found.'),
+      one: t('1 change'),
+      many: t('{0} changes', '{0}'),
+      added: t('Added'),
+      removed: t('Removed'),
+      changed: t('Changed'),
+      contains: t('Contains changes'),
+      visibility: t('Visibility'),
+      geometry: t('Geometry'),
+      bounds: t('Bounds'),
+    },
   };
 }
 

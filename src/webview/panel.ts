@@ -55,6 +55,7 @@ export class SidePanel {
     active: string,
     onChange: (id: string) => void,
   ): void {
+    this.tabButtons.clear();
     const list = document.createElement('div');
     list.className = 'nm-panel-tabs';
     list.setAttribute('role', 'tablist');
