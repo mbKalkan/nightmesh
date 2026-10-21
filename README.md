@@ -54,6 +54,9 @@ for files of hundreds of megabytes.
   model, the world's axes and the model's bounding box. The background can follow your theme or
   be dark, neutral or light.
 - The size of the model, or of what is selected, in the corner of the view.
+- **Measure** the distance between two points on the model: click them with the ruler on (the
+  toolbar or <kbd>M</kbd>), and the length shows over the line, with how far apart they are
+  along X, Y and Z in the corner. In the file's units for OBJ, STL and PLY.
 - Models are lit by a built-in environment, so they look right without any setup.
 - Draco and meshopt compressed meshes, quantized models and KTX2 (Basis Universal) textures open
   too. Their decoders load only when a model needs them.
@@ -220,6 +223,7 @@ An `.obj` that is a compiler's object file, not a model, is said to be one: open
 | Switch between perspective and orthographic | <kbd>5</kbd>                                              |
 | Look through the next camera in the model   | <kbd>0</kbd>                                              |
 | Play or pause the animation                 | <kbd>Space</kbd>                                          |
+| Measure between two clicked points          | <kbd>M</kbd>, then click twice; <kbd>Esc</kbd> to stop    |
 
 The number keys work on the main keyboard and the number pad. Nightmesh doesn't use
 <kbd>Ctrl</kbd> shortcuts in the view, so VS Code's own stay as they are.

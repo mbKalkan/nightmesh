@@ -33,10 +33,16 @@ export function viewerStrings(t: Translate): ViewerStrings {
     frame: t('Frame Selection (F)'),
     showJson: t('Show glTF JSON'),
     viewKeys: t(
-      'Arrow keys orbit, plus and minus zoom. 1, 3 and 7 look from the front, the right and the top, with Shift from the other side; 5 switches between perspective and orthographic. F frames the selection, Escape lets go of it, Space plays an animation.',
+      'Arrow keys orbit, plus and minus zoom. 1, 3 and 7 look from the front, the right and the top, with Shift from the other side; 5 switches between perspective and orthographic. F frames the selection, Escape lets go of it, Space plays an animation. M measures the distance between two points clicked on the model.',
     ),
     modelSize: t('Size of the model: width (X), height (Y) and depth (Z)'),
     selectionSize: t('Size of the selection: width (X), height (Y) and depth (Z)'),
+    measure: {
+      button: t('Measure Distance (M)'),
+      first: t('Click a point on the model'),
+      second: t('Click a second point'),
+      distance: t('Distance'),
+    },
     structure: structureStrings(t),
     validation: {
       tab: t('Validation'),

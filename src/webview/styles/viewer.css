@@ -957,6 +957,55 @@ body.vscode-high-contrast .nm-axis-z {
   margin-left: 6px;
 }
 
+/* A measurement in the corner, outlined in the color of the ruler drawn over the model. */
+.nm-measure-distance {
+  border-color: var(--vscode-focusBorder);
+}
+
+.nm-measure-hint {
+  font-family: var(--vscode-font-family, sans-serif);
+}
+
+.nm-measure-icon {
+  display: flex;
+  align-self: center;
+}
+
+.nm-measure-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nm-measure-total {
+  font-weight: 700;
+}
+
+.nm-measure-total + .nm-axis {
+  margin-left: 10px;
+}
+
+/* While measuring, the pointer marks the point a click places. */
+.nm-measuring .nm-canvas {
+  cursor: crosshair;
+}
+
+/* The length over the middle of a measurement, a little above the line. */
+.nm-ruler-label {
+  position: absolute;
+  z-index: 1;
+  padding: 1px 6px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 6px));
+  pointer-events: none;
+}
+
 /* Error state, drawn over the viewport */
 
 .nm-error {

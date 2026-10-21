@@ -338,6 +338,7 @@ export interface ViewerStrings {
   /** What the size in the corner of the view measures. */
   modelSize: string;
   selectionSize: string;
+  measure: MeasureStrings;
   structure: StructureStrings;
   validation: ValidationStrings;
   size: SizeStrings;
@@ -346,6 +347,17 @@ export interface ViewerStrings {
   animation: AnimationStrings;
   view: ViewStrings;
   shading: ShadingStrings;
+}
+
+/** Measuring the distance between two points clicked on the model. */
+export interface MeasureStrings {
+  /** The toolbar button, with its shortcut. */
+  button: string;
+  /** What to click next, in the corner of the view. */
+  first: string;
+  second: string;
+  /** What the corner of the view shows once both points are placed. */
+  distance: string;
 }
 
 /** How much a validation issue matters, from the glTF Validator's report. */
