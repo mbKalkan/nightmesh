@@ -192,6 +192,26 @@ test.describe('files that cannot be shown', () => {
   });
 });
 
+test('hides nodes KHR_node_visibility hides, and frames and counts what is shown', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('hidden.gltf');
+
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  await expect(page.locator('.nm-error')).toBeHidden();
+  // The box 10 m away, in the hidden node, is neither framed nor measured.
+  await expect(page.locator('.nm-measure')).toHaveAttribute(
+    'aria-label',
+    'Size of the model: width (X), height (Y) and depth (Z): 1 m × 1 m × 1 m',
+  );
+  await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+  const totals = page.locator('.nm-statistics .nm-props').first().locator('dt, dd');
+  await expect(totals).toContainText(['Nodes', '1', 'Instances', '1', 'Triangles', '12']);
+  await page.screenshot({ path: `${SCREENS}/hidden-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
 test('clears to the theme background and follows theme changes', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('scene.glb');

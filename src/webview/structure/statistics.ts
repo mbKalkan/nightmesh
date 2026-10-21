@@ -83,8 +83,10 @@ export function statistics(
   const stack = roots.map((node) => ({ node, parent: IDENTITY }));
   while (stack.length > 0) {
     const { node, parent } = stack.pop()!;
-    result.nodes++;
     const item = model.items('nodes')[node];
+    // KHR_node_visibility: a hidden node and all below it aren't in the scene shown.
+    if (model.extension(item, 'KHR_node_visibility')?.visible === false) continue;
+    result.nodes++;
     const world = multiply(parent, localMatrix(item));
     for (const child of model.children(node)) stack.push({ node: child, parent: world });
     const mesh = model.ref('meshes', item.mesh);

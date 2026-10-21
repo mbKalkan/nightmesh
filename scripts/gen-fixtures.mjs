@@ -675,6 +675,26 @@ function textured() {
   return doc;
 }
 
+/**
+ * A box, and beside it another inside a node that KHR_node_visibility hides (added to the JSON,
+ * which glTF Transform doesn't know).
+ */
+function hidden() {
+  const doc = newDocument();
+  doc.getRoot().listBuffers()[0].setURI('hidden.bin');
+  const box = (name) => mesh(doc, name, boxGeometry(1));
+  scene(
+    doc,
+    'Hidden',
+    doc.createNode('Shown').setMesh(box('Shown')).setTranslation([0, 0.5, 0]),
+    doc
+      .createNode('Hidden')
+      .setTranslation([10, 0.5, 0])
+      .addChild(doc.createNode('Inside Hidden').setMesh(box('Inside Hidden'))),
+  );
+  return doc;
+}
+
 /** Two boxes with KTX2 textures: ETC1S on the left, UASTC on the right. */
 async function compressedTextures() {
   const doc = newDocument();
@@ -1229,6 +1249,12 @@ await writeGltf('textured.gltf', textured(), (json) => {
   for (const image of json.images) delete image.mimeType;
 });
 write('embedded.gltf', Buffer.from(await triangleWithBuffer()));
+await writeGltf('hidden.gltf', hidden(), (json) => {
+  const node = json.nodes.find((each) => each.name === 'Hidden');
+  node.extensions = { KHR_node_visibility: { visible: false } };
+  json.extensionsUsed = ['KHR_node_visibility'];
+  json.extensionsRequired = ['KHR_node_visibility'];
+});
 
 // The same dense sphere, stored three ways.
 await writeGlb('dense.glb', dense());

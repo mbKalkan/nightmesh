@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- glTF models with nodes hidden by `KHR_node_visibility` open, with those nodes and all below
+  them hidden, lights included. The view frames and measures what is shown, and the statistics
+  count it; a hidden node can still be selected in the structure.
+
 ## [0.3.0] - 2026-10-21
 
 OBJ, STL and PLY models, in their own units, with a mesh check for 3D printing.

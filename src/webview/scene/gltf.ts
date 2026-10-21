@@ -40,6 +40,7 @@ export function parseModel(
     return partsPlugin(parser, parts);
   });
   loader.register(variantsPlugin);
+  loader.register(nodeVisibilityPlugin);
   if (readFromMesh) loader.register(meshFormatsPlugin);
   return loader.parseAsync(json, '');
 }
@@ -88,6 +89,26 @@ function meshFormatsPlugin(parser: GLTFParser) {
           material.side = DoubleSide;
           if (!colored) material.color.setScalar(SURFACE_GREY);
         }
+      });
+    },
+  };
+}
+
+/**
+ * KHR_node_visibility: a node it hides is not drawn, nor anything below it, lights included. It
+ * stays in the scene, so it can still be selected and outlined.
+ */
+function nodeVisibilityPlugin(parser: GLTFParser) {
+  return {
+    name: 'KHR_node_visibility',
+    afterRoot: async (gltf: GLTF) => {
+      const nodes = (parser.json as { nodes?: { extensions?: Record<string, unknown> }[] }).nodes;
+      gltf.scene.traverse((object) => {
+        const node = parser.associations.get(object)?.nodes;
+        if (node === undefined) return;
+        const visibility = nodes?.[node]?.extensions?.KHR_node_visibility as
+          { visible?: unknown } | undefined;
+        if (visibility?.visible === false) object.visible = false;
       });
     },
   };
