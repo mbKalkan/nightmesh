@@ -1,4 +1,11 @@
-import type { ImageInfo, Motion, StructureKind, StructureStrings } from '../../shared/protocol';
+import type {
+  ImageInfo,
+  ModelFormat,
+  Motion,
+  SourceFacts,
+  StructureKind,
+  StructureStrings,
+} from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import {
   fileName,
@@ -56,7 +63,7 @@ export interface Inspection {
 export interface FileFacts {
   name: string;
   size: number;
-  container: 'glb' | 'gltf';
+  container: ModelFormat;
   chunks?: { json: number; bin?: number };
 }
 
@@ -71,6 +78,8 @@ export interface InspectContext {
   motion?: readonly (Motion | null)[];
   /** What the glTF Validator found, in a few words, once it has run. */
   validation?: string;
+  /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
+  source?: SourceFacts;
 }
 
 /** Lists longer than this are cut short, with a count of the rest. */
@@ -190,6 +199,7 @@ const moreRow = (context: InspectContext, count: number): Row => ({
 });
 
 function inspectModel(context: InspectContext): Inspection {
+  if (context.source) return inspectSource(context, context.source);
   const { model, strings, format, file } = context;
   const asset = isObject(model.root.asset) ? model.root.asset : {};
   const labels = strings.labels;
@@ -214,6 +224,42 @@ function inspectModel(context: InspectContext): Inspection {
   }
   if (context.validation) fileRows.push({ label: labels.validation, text: context.validation });
 
+  return {
+    title: file.name,
+    kind: strings.kinds.model,
+    sections: [
+      { title: strings.kinds.model, rows: assetRows },
+      { title: strings.sections.file, rows: fileRows },
+      contentsSection(context),
+      {
+        title: strings.sections.extensions,
+        rows: used(model).map(({ name, required }) => ({
+          label: '',
+          wide: true,
+          text: name,
+          mono: true,
+          note: required ? labels.required : undefined,
+        })),
+      },
+      ...extrasSection(context, asset),
+    ].filter((section) => section.rows.length > 0),
+  };
+}
+
+/** The extensions a model uses, and whether it needs them to be drawn. */
+function used(model: GltfModel): { name: string; required: boolean }[] {
+  const required = new Set(
+    Array.isArray(model.root.extensionsRequired) ? model.root.extensionsRequired : [],
+  );
+  return (Array.isArray(model.root.extensionsUsed) ? model.root.extensionsUsed : [])
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => ({ name, required: required.has(name) }));
+}
+
+/** How big the model is and how many of each thing it holds. */
+function contentsSection(context: InspectContext): Section {
+  const { model, strings, format } = context;
+  const labels = strings.labels;
   const primitives = model
     .items('meshes')
     .reduce((sum, mesh) => sum + objects(mesh.primitives).length, 0);
@@ -228,41 +274,108 @@ function inspectModel(context: InspectContext): Inspection {
     [strings.groups.cameras, model.items('cameras').length],
     [strings.groups.lights, model.lights().length],
   ];
+  return {
+    title: strings.sections.contents,
+    rows: [
+      ...dimensionRows(context, sceneNodes(model)),
+      ...counts.flatMap(([label, count]) =>
+        count > 0 ? [{ label, text: format.count(count), mono: true }] : [],
+      ),
+    ],
+  };
+}
 
-  const used = (Array.isArray(model.root.extensionsUsed) ? model.root.extensionsUsed : []).filter(
-    (name): name is string => typeof name === 'string',
-  );
-  const required = new Set(
-    Array.isArray(model.root.extensionsRequired) ? model.root.extensionsRequired : [],
-  );
+const SOURCE_FORMATS: Record<SourceFacts['format'], string> = {
+  obj: 'Wavefront OBJ',
+  stl: 'STL',
+  ply: 'PLY',
+};
 
+/** OBJ statements Nightmesh draws or reads; the others are listed as not drawn. */
+const READ_STATEMENTS = ['v', 'vt', 'vn', 'f', 'l', 'p', 'o', 'g', 'usemtl', 'mtllib'];
+
+/** Comments and header lines shown, at most. */
+const COMMENT_LIMIT = 20;
+
+/**
+ * An OBJ, STL or PLY model: what its file says about itself in place of glTF's asset and
+ * extensions, which it doesn't have.
+ */
+function inspectSource(context: InspectContext, source: SourceFacts): Inspection {
+  const { strings, format, file } = context;
+  const words = strings.source;
+  const fileRows: Row[] = [{ label: words.format, text: SOURCE_FORMATS[source.format] }];
+  if (source.format !== 'obj') {
+    fileRows.push({ label: words.encoding, text: words.encodings[source.encoding] });
+  }
+  if (source.format === 'ply' && source.version) {
+    fileRows.push({ label: words.version, text: source.version, mono: true });
+  }
+  fileRows.push({ label: strings.labels.fileSize, text: format.bytes(file.size), mono: true });
+  const sections: Section[] = [{ title: strings.sections.file, rows: fileRows }];
+  const comments: string[] = [];
+
+  if (source.format === 'stl') {
+    if (source.header) fileRows.push({ label: words.header, text: source.header });
+    const names = (source.solids ?? []).filter(Boolean);
+    if (names.length > 0) fileRows.push({ label: words.solids, text: names.join(', ') });
+    if (source.triangles > 0) {
+      fileRows.push({ label: words.facets, text: format.count(source.triangles), mono: true });
+    }
+    if (source.colors) fileRows.push({ label: words.colors, text: words.materialise });
+  } else if (source.format === 'ply') {
+    comments.push(...source.comments, ...source.objInfo);
+    sections.push({
+      title: words.elements,
+      rows: source.elements.flatMap(({ name, count, properties }): Row[] => [
+        { label: name, text: format.count(count), mono: true },
+        ...(properties.length > 0 ? [{ label: '', text: properties.join(' · '), mono: true }] : []),
+      ]),
+    });
+  } else {
+    comments.push(...source.comments);
+    fileRows.push(
+      ...source.mtllibs.map((name, index) => ({
+        label: index === 0 ? words.libraries : '',
+        text: name,
+        mono: true,
+      })),
+    );
+    const keywords = Object.keys(source.statements).sort((a, b) => {
+      const order = (keyword: string) => {
+        const at = READ_STATEMENTS.indexOf(keyword);
+        return at < 0 ? READ_STATEMENTS.length : at;
+      };
+      return order(a) - order(b) || a.localeCompare(b);
+    });
+    sections.push({
+      title: words.statements,
+      rows: keywords.map((keyword) => ({
+        label: keyword,
+        text: format.count(source.statements[keyword]),
+        mono: true,
+        note: READ_STATEMENTS.includes(keyword) ? undefined : words.notDrawn,
+      })),
+    });
+  }
+  if (comments.length > 0) {
+    sections.push({
+      title: words.comments,
+      rows: [
+        ...comments
+          .slice(0, COMMENT_LIMIT)
+          .map((comment): Row => ({ label: '', wide: true, text: comment })),
+        ...(comments.length > COMMENT_LIMIT
+          ? [moreRow(context, comments.length - COMMENT_LIMIT)]
+          : []),
+      ],
+    });
+  }
+  sections.splice(1, 0, contentsSection(context));
   return {
     title: file.name,
     kind: strings.kinds.model,
-    sections: [
-      { title: strings.kinds.model, rows: assetRows },
-      { title: strings.sections.file, rows: fileRows },
-      {
-        title: strings.sections.contents,
-        rows: [
-          ...dimensionRows(context, sceneNodes(model)),
-          ...counts.flatMap(([label, count]) =>
-            count > 0 ? [{ label, text: format.count(count), mono: true }] : [],
-          ),
-        ],
-      },
-      {
-        title: strings.sections.extensions,
-        rows: used.map((name) => ({
-          label: '',
-          wide: true,
-          text: name,
-          mono: true,
-          note: required.has(name) ? labels.required : undefined,
-        })),
-      },
-      ...extrasSection(context, asset),
-    ].filter((section) => section.rows.length > 0),
+    sections: sections.filter((section) => section.rows.length > 0),
   };
 }
 
@@ -536,7 +649,25 @@ function inspectMaterial(context: InspectContext, index: number): Section[] {
   );
   rows.push(...propertyRows(context, rest));
   const pbr = isObject(material.pbrMetallicRoughness) ? material.pbrMetallicRoughness : {};
+  // An OBJ material: what its library says, then the glTF material it is drawn as.
+  const mtl = context.source?.format === 'obj' ? context.source.materials[index] : undefined;
+  const library: Section[] = mtl
+    ? [
+        {
+          title: mtl.library ? `MTL · ${mtl.library}` : 'MTL',
+          rows:
+            mtl.statements.length > 0
+              ? mtl.statements.map(([keyword, value]): Row => ({
+                  label: keyword,
+                  text: value,
+                  mono: true,
+                }))
+              : [{ label: '', wide: true, text: strings.source.notDefined }],
+        },
+      ]
+    : [];
   return [
+    ...library,
     { title: strings.kinds.material, rows },
     {
       title: 'pbrMetallicRoughness',

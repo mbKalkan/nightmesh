@@ -1,3 +1,4 @@
+import { isMeshFormat } from '../shared/formats';
 import type { ModelFormat, PanelLayout, ViewerStrings } from '../shared/protocol';
 import { icons } from './icons';
 import { SidePanel } from './panel';
@@ -148,6 +149,9 @@ export class Shell {
   setDocument(fileName: string, format: ModelFormat, strings: ViewerStrings): void {
     this.strings = strings;
     this.root.dataset.format = format;
+    // OBJ, STL and PLY have no glTF JSON of their own to show.
+    (this.toggles.querySelector('[data-action="json"]') as HTMLElement).hidden =
+      isMeshFormat(format);
     this.fileName.textContent = fileName;
     this.fileName.title = fileName;
     document.title = fileName;

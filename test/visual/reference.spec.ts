@@ -95,8 +95,14 @@ test('refers to the row or link right-clicked, and to the selection otherwise', 
       }
       return merged;
     });
-  expect(await context('.nm-tree')).toEqual({ preventDefaultContextMenuItems: true });
-  expect(await context('.nm-inspector-content')).toEqual({ preventDefaultContextMenuItems: false });
+  expect(await context('.nm-tree')).toEqual({
+    preventDefaultContextMenuItems: true,
+    nightmeshGltf: true,
+  });
+  expect(await context('.nm-inspector-content')).toEqual({
+    preventDefaultContextMenuItems: false,
+    nightmeshGltf: true,
+  });
   expect(viewer.problems).toEqual([]);
 });
 

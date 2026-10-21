@@ -1,0 +1,5 @@
+newmtl Textured
+Kd 1 1 1
+map_Kd C:\Users\artist\textures\checker.png
+map_Bump -bm 0.5 bumps.tga
+map_Ke stone.tga

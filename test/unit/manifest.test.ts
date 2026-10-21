@@ -53,6 +53,14 @@ describe('extension manifest', () => {
     expect(gltf?.id).toBe('json');
   });
 
+  it('names OBJ and ASCII STL as their syntax extensions do, so it adds to them and not over', () => {
+    const language = (extension: string) =>
+      manifest.contributes.languages.find((each) => each.extensions.includes(extension))?.id;
+    expect(language('.obj')).toBe('wavefront-obj');
+    expect(language('.stl')).toBe('stlascii');
+    expect(language('.ply')).toBe('ply');
+  });
+
   it('stays within the Marketplace limit of 30 keywords', () => {
     expect(manifest.keywords.length).toBeLessThanOrEqual(30);
     expect(new Set(manifest.keywords).size).toBe(manifest.keywords.length);

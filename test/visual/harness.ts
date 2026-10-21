@@ -168,7 +168,14 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       const source = await fileSource(join(FIXTURES, fixture));
       const messages: HostToWebviewMessage[] = [];
       try {
-        const options = { loadId: ++loadId, reload, texts: loadTexts(english), largeBytes };
+        const options = {
+          loadId: ++loadId,
+          reload,
+          texts: loadTexts(english),
+          format: formatForPath(fixture),
+          fileName: fixture,
+          largeBytes,
+        };
         for await (const message of loadMessages(source, fixtureOpener(), options)) {
           messages.push(message);
         }

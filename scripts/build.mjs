@@ -38,6 +38,14 @@ const validator = {
   outfile: 'dist/validator.js',
 };
 
+/** OBJ, STL and PLY files are read in a worker thread of the extension host too. */
+/** @type {import('esbuild').BuildOptions} */
+const mesh = {
+  ...extension,
+  entryPoints: ['src/extension/meshWorker.ts'],
+  outfile: 'dist/mesh.js',
+};
+
 /** Changes made to embedded text files on the way in, by file name. */
 const PATCHES = { 'basis_transcoder.js': embindWithoutEval };
 
@@ -81,10 +89,10 @@ const webview = {
 
 if (watch) {
   const contexts = await Promise.all(
-    [extension, validator, webview].map((options) => esbuild.context(options)),
+    [extension, validator, mesh, webview].map((options) => esbuild.context(options)),
   );
   await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
   rmSync('dist', { recursive: true, force: true });
-  await Promise.all([extension, validator, webview].map((options) => esbuild.build(options)));
+  await Promise.all([extension, validator, mesh, webview].map((options) => esbuild.build(options)));
 }

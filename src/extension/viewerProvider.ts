@@ -1,7 +1,12 @@
 import { join, posix } from 'node:path';
 import * as vscode from 'vscode';
-import { formatForPath } from '../shared/formats';
-import type { HostToWebviewMessage, Preferences, WebviewToHostMessage } from '../shared/protocol';
+import { formatForPath, isMeshFormat } from '../shared/formats';
+import type {
+  HostToWebviewMessage,
+  ModelFormat,
+  Preferences,
+  WebviewToHostMessage,
+} from '../shared/protocol';
 import { composeReference } from '../shared/reference';
 import { watchFile } from './fileWatcher';
 import { gitSibling, readGitBlob } from './gitBlob';
@@ -10,11 +15,13 @@ import { lfsObjectId } from './gitObject';
 import { sniff } from './model/container';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
+import { looksLike } from './model/mesh/parse';
 import { resolveResourceUri } from './model/resources';
 import { fileSource, memorySource, type ByteSource } from './model/sources';
 import { validationMessage } from './model/validation';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
+import { workerMeshParser } from './workerMesh';
 import { workerValidator } from './workerValidator';
 
 const PREFERENCES = 'nightmesh.preferences';
@@ -118,16 +125,19 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     /** Lets a load waiting for the user's word on a large model go on. */
     let drawRequest: (() => void) | undefined;
     const validator = workerValidator(join(this.extensionUri.fsPath, 'dist', 'validator.js'));
+    const meshParser = workerMeshParser(join(this.extensionUri.fsPath, 'dist', 'mesh.js'));
+    const gltf = !isMeshFormat(format);
     const load = async (reload: boolean) => {
       const id = ++loadId;
       // A load still waiting gives way to this one: it ends, and closes its file.
       drawRequest?.();
       validator.stop();
+      meshParser.stop();
       const current = () => id === loadId && !disposed;
       let structured = false;
       let source: ByteSource;
       try {
-        source = await openSource(uri);
+        source = await openSource(uri, format);
       } catch {
         // A save in progress can briefly remove the file; keep showing the last good model.
         if (current()) await post(readFailure(id, reload));
@@ -138,12 +148,16 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           loadId: id,
           reload,
           texts: loadTexts(vscode.l10n.t),
+          format,
+          fileName,
           largeBytes: largeApproved ? Infinity : undefined,
+          parseMesh: meshParser.parse,
         });
         for await (const message of messages) {
           if (!current()) break;
           await post(message);
-          if (message.type === 'structure') {
+          // OBJ, STL and PLY have no glTF JSON of their own, nor anything to validate.
+          if (message.type === 'structure' && gltf) {
             structured = true;
             this.jsonDocuments.set(viewer, fileName, message.json);
           }
@@ -167,7 +181,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       await post({ type: 'validation', loadId: id, state: 'running' });
       let source: ByteSource | undefined;
       try {
-        source = await openSource(uri);
+        source = await openSource(uri, format);
         const message = await validationMessage(
           source,
           resourceOpener(uri),
@@ -237,22 +251,28 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         const pointer = this.jsonDocuments.pointerAt(viewer, document, event.selections[0].active);
         void post({ type: 'select', pointer });
       }),
-      panel.onDidChangeViewState(() => this.track(panel)),
+      panel.onDidChangeViewState(() => this.track(panel, format)),
     ];
-    this.track(panel);
+    this.track(panel, format);
     panel.onDidDispose(() => {
       disposed = true;
       drawRequest?.();
       validator.stop();
+      meshParser.stop();
       this.jsonDocuments.delete(viewer);
       if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });
   }
 
-  private track(panel: vscode.WebviewPanel): void {
-    if (panel.active) this.active = panel;
-    else if (this.active === panel) this.active = undefined;
+  /** Keeps the viewer in front, and whether it shows glTF, which has JSON to show. */
+  private track(panel: vscode.WebviewPanel, format: ModelFormat): void {
+    if (panel.active) {
+      this.active = panel;
+      void vscode.commands.executeCommand('setContext', 'nightmesh.gltf', !isMeshFormat(format));
+    } else if (this.active === panel) {
+      this.active = undefined;
+    }
   }
 }
 
@@ -335,11 +355,19 @@ function readFailure(loadId: number, reload: boolean): HostToWebviewMessage {
 }
 
 /** Local files are read in place; other schemes (Git, remote file systems) only as a whole. */
-async function openSource(uri: vscode.Uri): Promise<ByteSource> {
+async function openSource(uri: vscode.Uri, format: ModelFormat): Promise<ByteSource> {
   if (uri.scheme === 'file') return fileSource(uri.fsPath);
-  // A model is a GLB or JSON; anything else from Git is text converted from it, or a pointer.
+  // Anything from Git that isn't what the format looks like is text converted from it, or a
+  // pointer.
   return memorySource(
-    await readVersion(uri, (data) => sniff(data) === 'unknown' || sniff(data) === 'lfsPointer'),
+    await readVersion(
+      uri,
+      (data) =>
+        sniff(data) === 'lfsPointer' ||
+        (isMeshFormat(format)
+          ? looksLike(format, data.subarray(0, 64 * 1024), data.length) !== 'yes'
+          : sniff(data) === 'unknown'),
+    ),
   );
 }
 

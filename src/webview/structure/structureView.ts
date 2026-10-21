@@ -6,6 +6,7 @@ import type {
   ValidationMessage,
   ViewerStrings,
 } from '../../shared/protocol';
+import { isMeshFormat } from '../../shared/formats';
 import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
 import { inspect, type InspectContext } from './details';
@@ -57,13 +58,18 @@ export class StructureView {
   private usage: ModelUsage | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
+  /** glTF and GLB: the formats with JSON of their own, which is validated and sized. */
+  private readonly gltf: boolean;
 
   constructor(
     shell: Shell,
     private readonly strings: ViewerStrings,
     private readonly locale: string,
+    /** The viewer's file format, which stays for its lifetime. */
+    modelFormat: ModelFormat,
     private readonly events: StructureEvents,
   ) {
+    this.gltf = !isMeshFormat(modelFormat);
     this.format = new Formatter(locale);
     this.tree = new StructureTree(
       strings.structure.structure,
@@ -91,16 +97,20 @@ export class StructureView {
     );
     this.panel = shell.inspectorPanel;
     shell.structurePanel.body.replaceChildren(this.tree.element);
-    shell.inspectorPanel.setTabs(
-      [
-        { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
-        { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
-        { id: 'validation', label: strings.validation.tab, content: this.validation.element },
-        { id: 'size', label: strings.size.tab, content: this.size.element },
-      ],
-      shell.inspectorTab,
-      (tab) => (shell.inspectorTab = tab),
-    );
+    const tabs = [
+      { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
+      { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
+      // The glTF Validator and the size of the file's glTF parts don't apply to a model read
+      // from OBJ, STL or PLY.
+      ...(this.gltf
+        ? [
+            { id: 'validation', label: strings.validation.tab, content: this.validation.element },
+            { id: 'size', label: strings.size.tab, content: this.size.element },
+          ]
+        : []),
+    ];
+    const tab = tabs.some(({ id }) => id === shell.inspectorTab) ? shell.inspectorTab : 'inspector';
+    shell.inspectorPanel.setTabs(tabs, tab, (id) => (shell.inspectorTab = id));
   }
 
   /**
@@ -124,6 +134,7 @@ export class StructureView {
       file: { name: fileName, size: message.fileSize, container: format, chunks: message.chunks },
       // A changed file keeps its last report until it is validated again.
       validation: keep ? this.context?.validation : undefined,
+      source: message.source,
     };
     this.json = message.json;
     this.usage = undefined;
@@ -151,7 +162,7 @@ export class StructureView {
   }
 
   private showSize(): void {
-    if (!this.context) return;
+    if (!this.context || !this.gltf) return;
     const { model, file, images } = this.context;
     const analysis = sizeAnalysis(model, this.modelUsage(), {
       fileName: file.name,
@@ -247,13 +258,15 @@ export class StructureView {
       context: this.context,
       strings: this.strings,
       statistics: statistics(model, images, motion),
-      size: sizeAnalysis(model, this.modelUsage(), {
-        fileName: file.name,
-        fileSize: file.size,
-        chunks: file.chunks,
-        images,
-        imageBytes: this.imageBytes,
-      }),
+      size: this.gltf
+        ? sizeAnalysis(model, this.modelUsage(), {
+            fileName: file.name,
+            fileSize: file.size,
+            chunks: file.chunks,
+            images,
+            imageBytes: this.imageBytes,
+          })
+        : undefined,
       validation: this.validation.report,
     });
   }
