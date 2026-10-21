@@ -138,6 +138,21 @@ const tests: Record<string, () => Promise<void>> = {
     assert.equal(input.viewType, VIEW_TYPE);
   },
 
+  async 'compares two versions side by side in a tab it can recognize'() {
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      vscode.Uri.file(`${FIXTURES}/scene.glb`),
+      vscode.Uri.file(`${FIXTURES}/materials.glb`),
+    );
+    const tab = await waitFor(() => {
+      const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return active?.label.includes(' ↔ ') ? active : undefined;
+    });
+    // The viewers of a comparison find each other by this: a tab with no input the API exposes.
+    assert.equal(tab.input, undefined);
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  },
+
   async 'opens .obj, .stl and .ply files in the viewer by default'() {
     for (const name of ['cube.obj', 'bracket.stl', 'cloud.ply']) {
       const input = await openInEditor(name);

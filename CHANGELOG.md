@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- When VS Code compares two versions of a model side by side (Source Control, the Timeline,
+  Compare Selected), both sides move together: orbiting, panning, zooming, standard views and
+  the projection in one go to the other. The newer side frames both when they open.
 - glTF models with nodes hidden by `KHR_node_visibility` open, with those nodes and all below
   them hidden, lights included. The view frames and measures what is shown, and the statistics
   count it; a hidden node can still be selected in the structure.

@@ -32,8 +32,9 @@ import { Picker } from './picking';
 import { Playback } from './playback';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 import { Shading } from './shading';
-import type { Projection, ShadingMode, StandardView } from '../../shared/protocol';
+import type { CameraState, Projection, ShadingMode, StandardView } from '../../shared/protocol';
 import { OPPOSITE, Viewpoint } from './viewpoint';
+import { sameCamera } from '../cameraState';
 
 /** Decoders a model needs, made the first time any model needs them. */
 export interface Decoders {
@@ -58,6 +59,8 @@ export interface ViewEvents {
   menu(node: number | undefined, x: number, y: number): void;
   /** The camera turned: its rotation as a quaternion, x, y, z and w, for the axes gizmo. */
   turned(rotation: [number, number, number, number]): void;
+  /** The camera moved, or zoomed: at most once a frame, after it is drawn. */
+  moved(camera: CameraState): void;
 }
 
 export interface AnimationState {
@@ -114,6 +117,8 @@ export class ModelView {
   private readonly ownMaterials = new Map<Mesh, Material | Material[]>();
   /** The camera's rotation when the gizmo was last told. */
   private readonly turnedTo = new Quaternion(Number.NaN);
+  /** The camera last said to have moved, so a frame drawn without moving says nothing. */
+  private movedTo: CameraState | undefined;
 
   constructor(
     private readonly container: HTMLElement,
@@ -628,6 +633,23 @@ export class ModelView {
       this.turnedTo.copy(camera.quaternion);
       this.events.turned(camera.quaternion.toArray() as [number, number, number, number]);
     }
+    if (this.model) {
+      const state = this.viewpoint.state();
+      if (!this.movedTo || !sameCamera(state, this.movedTo)) {
+        this.movedTo = state;
+        this.events.moved(state);
+      }
+    }
+  }
+
+  /** Where the camera is and what it sees. */
+  cameraState(): CameraState {
+    return this.viewpoint.state();
+  }
+
+  /** Puts the camera where the other side of a comparison has it. */
+  setCameraState(state: CameraState): void {
+    this.viewpoint.setState(state);
   }
 
   private resize(): void {

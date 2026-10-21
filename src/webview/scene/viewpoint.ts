@@ -8,7 +8,7 @@ import {
   type Sphere,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Projection, StandardView } from '../../shared/protocol';
+import type { CameraState, Projection, StandardView } from '../../shared/protocol';
 
 /** Where the camera looks from in each standard view: a glTF model faces +Z, with +Y up. */
 export const VIEW_DIRECTIONS: Readonly<Record<StandardView, Vector3>> = {
@@ -85,6 +85,34 @@ export class Viewpoint {
 
   get projection(): Projection {
     return this.camera === this.orthographic ? 'orthographic' : 'perspective';
+  }
+
+  /** Where the camera is and what it sees. */
+  state(): CameraState {
+    const { perspective, orthographic, controls } = this;
+    return {
+      projection: this.projection,
+      position: this.camera.position.toArray(),
+      target: controls.target.toArray(),
+      fov: perspective.fov,
+      height: orthographic.top,
+      zoom: orthographic.zoom,
+    };
+  }
+
+  /** Puts the camera where `state` says, as the other side of a comparison has it. */
+  setState(state: CameraState): void {
+    this.stopTurn();
+    this.view = undefined;
+    this.setFov(state.fov);
+    this.orthographic.zoom = state.zoom;
+    this.setOrthographicHeight(state.height);
+    this.controls.object =
+      state.projection === 'orthographic' ? this.orthographic : this.perspective;
+    this.controls.target.fromArray(state.target);
+    this.camera.position.fromArray(state.position);
+    this.controls.update();
+    this.afterMove();
   }
 
   /** The direction from the point orbited to the camera. */

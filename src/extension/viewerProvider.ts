@@ -8,6 +8,7 @@ import type {
   WebviewToHostMessage,
 } from '../shared/protocol';
 import { composeReference } from '../shared/reference';
+import { DiffPairs, type DiffMember } from './diffPairs';
 import { watchFile } from './fileWatcher';
 import { gitSibling, readGitBlob } from './gitBlob';
 import { JsonDocuments } from './jsonDocuments';
@@ -33,6 +34,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   private active: vscode.WebviewPanel | undefined;
   /** Numbers the viewers, for their glTF JSON documents. */
   private viewers = 0;
+  /** The two sides of each comparison, which move together. */
+  private readonly diffs = new DiffPairs();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -117,6 +120,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
     const post = (message: HostToWebviewMessage) => panel.webview.postMessage(message);
     const viewer = String(++this.viewers);
+    const member: DiffMember = { uri, post, ready: false };
+    this.diffs.add(member, panel.viewColumn);
     const fileName = uri.path.slice(uri.path.lastIndexOf('/') + 1);
     let loadId = 0;
     let disposed = false;
@@ -209,6 +214,9 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
             preferences: this.globalState.get<Preferences>(PREFERENCES) ?? {},
           });
           void load(false);
+          this.diffs.ready(member);
+        } else if (message.type === 'camera') {
+          this.diffs.camera(member, message.camera);
         } else if (message.type === 'reload') {
           void load(true);
         } else if (message.type === 'draw') {
@@ -260,6 +268,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       validator.stop();
       meshParser.stop();
       this.jsonDocuments.delete(viewer);
+      this.diffs.remove(member);
       if (this.active === panel) this.active = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
     });
