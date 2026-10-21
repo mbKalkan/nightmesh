@@ -138,6 +138,45 @@ const tests: Record<string, () => Promise<void>> = {
     assert.equal(input.viewType, VIEW_TYPE);
   },
 
+  async 'opens .obj, .stl and .ply files in the viewer by default'() {
+    for (const name of ['cube.obj', 'bracket.stl', 'cloud.ply']) {
+      const input = await openInEditor(name);
+      assert.equal(input.viewType, VIEW_TYPE, name);
+    }
+  },
+
+  async 'reads an OBJ model in a worker thread, with its material library'() {
+    await openInEditor('cube.obj');
+    const saved = await vscode.env.clipboard.readText();
+    try {
+      let copied = '';
+      // The structure comes once the reading thread has read the file.
+      for (
+        const start = Date.now();
+        !copied.includes('Wavefront OBJ') && Date.now() - start < 30_000;
+      ) {
+        await vscode.env.clipboard.writeText('');
+        await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        copied = await vscode.env.clipboard.readText();
+      }
+      assert.match(copied, /cube\.obj:\nFile\n- Format: Wavefront OBJ\n/);
+      assert.match(copied, /\n- Material libraries: cube\.mtl\n/);
+      assert.match(copied, /\n- Materials: 3\n/);
+      // OBJ has no glTF JSON to show.
+      await vscode.commands.executeCommand('nightmesh.showJson');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      assert.equal(
+        vscode.window.visibleTextEditors.some(
+          (each) => each.document.uri.scheme === 'nightmesh-json',
+        ),
+        false,
+      );
+    } finally {
+      await vscode.env.clipboard.writeText(saved);
+    }
+  },
+
   async 'copies a reference to the model, with what the inspector says'() {
     await openInEditor('scene.glb');
     const saved = await vscode.env.clipboard.readText();

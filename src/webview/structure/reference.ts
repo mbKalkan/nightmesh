@@ -45,7 +45,7 @@ export function referenceOf(
   const inspection = details ? inspect(context, key) : undefined;
   return {
     location: location || undefined,
-    details: inspection && detailsOf(inspection),
+    details: inspection && detailsOf(inspection, context.source === undefined),
   };
 }
 
@@ -64,15 +64,18 @@ function locationOf(context: InspectContext, key: EntryKey, locale: string): str
 
   const kind = strings.kinds[parsed.kind].toLocaleLowerCase(locale);
   const name = model.displayName(collection, parsed.index);
-  const place = `${path}[${parsed.index}]`;
+  // A model read from OBJ, STL or PLY has no glTF JSON to point into.
+  const place = context.source ? '' : ` (${path}[${parsed.index}])`;
   const location =
     name === undefined
-      ? `${kind} ${parsed.index} (${place})`
-      : `${kind} ${JSON.stringify(name)} (${place})`;
+      ? `${kind} ${parsed.index}${place}`
+      : `${kind} ${JSON.stringify(name)}${place}`;
   if (parsed.kind !== 'node') return location;
 
   const above: string[] = [];
   for (let node = model.parent(parsed.index); node !== undefined; node = model.parent(node)) {
+    // The file's own node: a reference starts with the file already.
+    if (context.source && model.parent(node) === undefined) break;
     above.unshift(model.displayName('nodes', node) ?? `${strings.kinds.node} ${node}`);
     // A cycle in a damaged file would never end.
     if (above.length > model.items('nodes').length) break;
@@ -83,17 +86,22 @@ function locationOf(context: InspectContext, key: EntryKey, locale: string): str
   return `${location}, ${fill(strings.labels.under, shown.join(' › '))}`;
 }
 
-/** The inspector's sections, each a title and its rows as `- label: value`. */
-function detailsOf(inspection: Inspection): string {
+/**
+ * The inspector's sections, each a title and its rows as `- label: value`; with `places`, links
+ * say where the glTF JSON has what they name.
+ */
+function detailsOf(inspection: Inspection, places: boolean): string {
   return inspection.sections
     .filter((section) => section.rows.length > 0)
-    .map((section) => [section.title, ...section.rows.map((row) => `- ${rowText(row)}`)].join('\n'))
+    .map((section) =>
+      [section.title, ...section.rows.map((row) => `- ${rowText(row, places)}`)].join('\n'),
+    )
     .join('\n');
 }
 
-function rowText(row: Row): string {
+function rowText(row: Row, places: boolean): string {
   const value = [
-    row.links?.map(linkText).join(', '),
+    row.links?.map((link) => (places ? linkText(link) : link.text)).join(', '),
     row.text,
     row.json !== undefined ? oneLine(row.json) : undefined,
     row.note !== undefined ? `(${row.note})` : undefined,

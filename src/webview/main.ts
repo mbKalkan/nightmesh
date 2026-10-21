@@ -1,4 +1,5 @@
 import './styles/viewer.css';
+import { isMeshFormat } from '../shared/formats';
 import type {
   FailedMessage,
   HostToWebviewMessage,
@@ -20,6 +21,7 @@ import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
+import { unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
@@ -98,6 +100,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'structure':
       receiveStructure(message);
       break;
+    case 'progress':
+      showProgress(message.loadId, message.done, message.total);
+      break;
     case 'images':
       if (message.loadId === structureLoad) structure?.setImages(message.images, message.bytes);
       break;
@@ -126,6 +131,8 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       askToDraw(message.loadId, message.bytes);
       break;
     case 'showJson':
+      // OBJ, STL and PLY have no glTF JSON of their own.
+      if (!opened || isMeshFormat(opened.format)) break;
       if (message.atPointer && menuPointer !== undefined)
         vscode.postMessage({ type: 'json', pointer: menuPointer });
       else showJson(message.atPointer ? (menuKey ?? selectedKey) : selectedKey);
@@ -236,15 +243,46 @@ function showJson(key: string): void {
 function askToDraw(loadId: number, bytes: number): void {
   if (loadId < latestLoad || !strings) return;
   const text = strings;
-  shell.askToDraw(text.largeTitle, fill(text.largeMessage, metres.bytes(bytes)), text.draw, () => {
+  // OBJ, STL and PLY are read once the user says so; glTF's structure is read already.
+  const message = opened && isMeshFormat(opened.format) ? text.largeReadMessage : text.largeMessage;
+  shell.askToDraw(text.largeTitle, fill(message, metres.bytes(bytes)), text.draw, () => {
     shell.startLoading(text.loading);
     vscode.postMessage({ type: 'draw' });
   });
 }
 
+/** How much of an OBJ, STL or PLY file has been read, before there is a model to send. */
+function showProgress(loadId: number, done: number, total: number): void {
+  if (loadId < latestLoad || !strings || hasModel) return;
+  shell.setProgress(total > 0 ? done / total : undefined);
+  shell.setLoadingDetail(fill(strings.loadingBytes, metres.bytes(done), metres.bytes(total)));
+}
+
+/** The units and up axis of the OBJ, STL or PLY file shown, decided with its structure. */
+let units: Units | undefined;
+
+/**
+ * glTF made from an OBJ, STL or PLY file, scaled and turned as the file's units and up axis
+ * say; other glTF as it is. `drawn` for what the 3D view draws: far-away geometry around the
+ * origin.
+ */
+function inUnits(json: string, drawn = false): string {
+  const format = opened?.format;
+  if (!format || !isMeshFormat(format)) return json;
+  const decided = units ?? unitsFor(format, json);
+  // A large file's header, shown before it is read, has no geometry to decide by yet.
+  if (json.includes('"meshes"')) units = decided;
+  return withUnits(json, decided, drawn);
+}
+
 function open(message: OpenMessage): void {
   // The host sends this once per viewer; the preferences then are the ones it starts with.
   if (!opened) {
+    // Show glTF JSON is in the context menu of glTF models only.
+    document.body.dataset.vscodeContext = JSON.stringify({
+      preventDefaultContextMenuItems: true,
+      nightmeshGltf: !isMeshFormat(message.format),
+    });
     preferences = message.preferences ?? {};
     shell.setLayout({ ...DEFAULT_LAYOUT, ...preferences.layout });
     showBackground();
@@ -276,7 +314,7 @@ function open(message: OpenMessage): void {
     });
     shell.addBelowViewport(animationBar.element);
   }
-  structure ??= new StructureView(shell, strings, message.locale, {
+  structure ??= new StructureView(shell, strings, message.locale, message.format, {
     selected: (key) => {
       const changed = key !== selectedKey;
       selectedKey = key;
@@ -447,7 +485,13 @@ function receiveStructure(message: StructureMessage): void {
   if (message.loadId < latestLoad || !opened) return;
   latestLoad = message.loadId;
   structureLoad = message.loadId;
-  structure?.setStructure(message, opened.fileName, opened.format);
+  // A file read anew decides its units again; a reload of the same file keeps them.
+  if (!message.reload) units = undefined;
+  structure?.setStructure(
+    { ...message, json: inUnits(message.json) },
+    opened.fileName,
+    opened.format,
+  );
   // The new file's animations are read next; until then nothing is said about them.
   animationBar?.setMotion([]);
   shell.setPanelsAvailable(true);
@@ -577,7 +621,9 @@ async function build(current: Arrival): Promise<void> {
     }
     const { parseModel } = await import('./scene');
     const decoders = await target.decoders(current.message.extensions);
-    const gltf = await parseModel(current.message.json, current.parts, decoders);
+    const readFromMesh = opened !== undefined && isMeshFormat(opened.format);
+    const json = inUnits(current.message.json, true);
+    const gltf = await parseModel(json, current.parts, decoders, readFromMesh);
     if (current !== arrival) return;
     target.show(gltf, current.message.reload && hasModel);
     shell.stopLoading();

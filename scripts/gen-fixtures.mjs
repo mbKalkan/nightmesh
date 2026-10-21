@@ -698,6 +698,461 @@ async function compressedTextures() {
   return doc;
 }
 
+// OBJ, STL and PLY
+
+/** Numbers in text formats: six decimals at most, without trailing zeros. */
+const num = (value) => String(Number(value.toFixed(6)));
+const line = (...words) =>
+  words.map((word) => (typeof word === 'number' ? num(word) : word)).join(' ');
+const text = (lines) => Buffer.from(`${lines.join('\n')}\n`);
+
+/** Triangles of a box from `min` to `max`, wound outward, as STL lists facets: 12 of them. */
+function boxFacets([x0, y0, z0], [x1, y1, z1]) {
+  const corners = [
+    [x0, y0, z0],
+    [x1, y0, z0],
+    [x1, y1, z0],
+    [x0, y1, z0],
+    [x0, y0, z1],
+    [x1, y0, z1],
+    [x1, y1, z1],
+    [x0, y1, z1],
+  ];
+  // Each side as a quad, counterclockwise seen from outside, with its normal.
+  const sides = [
+    [
+      [0, 3, 2, 1],
+      [0, 0, -1],
+    ],
+    [
+      [4, 5, 6, 7],
+      [0, 0, 1],
+    ],
+    [
+      [0, 1, 5, 4],
+      [0, -1, 0],
+    ],
+    [
+      [2, 3, 7, 6],
+      [0, 1, 0],
+    ],
+    [
+      [1, 2, 6, 5],
+      [1, 0, 0],
+    ],
+    [
+      [0, 4, 7, 3],
+      [-1, 0, 0],
+    ],
+  ];
+  return sides.flatMap(([[a, b, c, d], normal]) => [
+    { normal, corners: [corners[a], corners[b], corners[c]] },
+    { normal, corners: [corners[a], corners[c], corners[d]] },
+  ]);
+}
+
+/** A bracket in millimetres with Z up, as CAD writes STL: a base plate and an upright. */
+const bracket = () => [...boxFacets([0, 0, 0], [40, 20, 5]), ...boxFacets([0, 0, 5], [6, 20, 25])];
+
+/** A binary STL: an 80-byte header, the facet count, then 50 bytes a facet. */
+function binaryStl(header, facets, attribute = () => 0) {
+  const bytes = Buffer.alloc(84 + facets.length * 50);
+  (typeof header === 'string' ? Buffer.from(header.padEnd(80, ' '), 'latin1') : header).copy(bytes);
+  bytes.writeUInt32LE(facets.length, 80);
+  facets.forEach(({ normal, corners }, index) => {
+    const at = 84 + index * 50;
+    [...normal, ...corners.flat()].forEach((value, i) => bytes.writeFloatLE(value, at + i * 4));
+    bytes.writeUInt16LE(attribute(index), at + 48);
+  });
+  return bytes;
+}
+
+function asciiStl(solids) {
+  const lines = [];
+  for (const [name, facets] of solids) {
+    lines.push(`solid ${name}`);
+    for (const { normal, corners } of facets) {
+      lines.push(`  facet normal ${line(...normal)}`, '    outer loop');
+      for (const corner of corners) lines.push(`      vertex ${line(...corner)}`);
+      lines.push('    endloop', '  endfacet');
+    }
+    lines.push(`endsolid ${name}`);
+  }
+  return text(lines);
+}
+
+/** A box of two materials, a ground plane and an outline, in metres with Y up. */
+function cubeObj() {
+  return text([
+    `# ${GENERATOR}`,
+    '# A box of two materials on a ground plane, with its top edges as lines.',
+    'mtllib cube.mtl',
+    'o Box',
+    ...[
+      [-0.5, 0, 0.5],
+      [0.5, 0, 0.5],
+      [0.5, 1, 0.5],
+      [-0.5, 1, 0.5],
+      [-0.5, 0, -0.5],
+      [0.5, 0, -0.5],
+      [0.5, 1, -0.5],
+      [-0.5, 1, -0.5],
+    ].map((v) => line('v', ...v)),
+    ...[
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ].map((vt) => line('vt', ...vt)),
+    ...[
+      [0, 0, 1],
+      [0, 0, -1],
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+    ].map((vn) => line('vn', ...vn)),
+    's off',
+    'usemtl Checker',
+    'f 1/1/1 2/2/1 3/3/1 4/4/1',
+    'f 4/1/5 3/2/5 7/3/5 8/4/5',
+    'usemtl Painted',
+    'f 6/1/2 5/2/2 8/3/2 7/4/2',
+    'f 2/1/3 6/2/3 7/3/3 3/4/3',
+    'f 5/1/4 1/2/4 4/3/4 8/4/4',
+    'f 5/1/6 6/2/6 2/3/6 1/4/6',
+    'o Ground',
+    ...[
+      [-1.5, -0.01, 1.5],
+      [1.5, -0.01, 1.5],
+      [1.5, -0.01, -1.5],
+      [-1.5, -0.01, -1.5],
+    ].map((v) => line('v', ...v)),
+    'usemtl Grass',
+    'f 9/1/5 10/2/5 11/3/5 12/4/5',
+    'o Outline',
+    'l 4 3 7 8 4',
+  ]);
+}
+
+const cubeMtl = () =>
+  text([
+    `# ${GENERATOR}`,
+    'newmtl Checker',
+    'Kd 0.8 0.8 0.8',
+    'Ns 250',
+    'map_Kd checker.png',
+    '',
+    'newmtl Painted',
+    'Kd 0.9 0.35 0.2',
+    'Ns 100',
+    '',
+    'newmtl Grass',
+    'Kd 0.3 0.6 0.25',
+    'Ns 10',
+  ]);
+
+/** A pyramid in groups, with negative indices, a quad, vertex colors and no normals. */
+const pyramidObj = () =>
+  text([
+    '# Negative indices, polygons, groups and vertex colors, without normals or texture coordinates.',
+    'g Base',
+    line('v', -1, 0, -1, 0.9, 0.2, 0.2),
+    line('v', 1, 0, -1, 0.2, 0.9, 0.2),
+    line('v', 1, 0, 1, 0.2, 0.2, 0.9),
+    line('v', -1, 0, 1, 0.9, 0.9, 0.2),
+    'f -1 -2 -3 -4',
+    'g Sides',
+    line('v', 0, 1.5, 0, 1, 1, 1),
+    'f 1 5 2',
+    'f 2 5 3',
+    'f 3 5 4',
+    'f 4 5 1',
+  ]);
+
+/** Vertices alone, with colors: a point cloud as scanners write it in OBJ. */
+function pointsObj() {
+  const lines = [`# ${GENERATOR}`, '# A point cloud: vertices that no face uses.'];
+  for (let i = 0; i < 400; i++) {
+    const angle = i * 0.25;
+    const radius = 0.2 + i / 400;
+    lines.push(
+      line(
+        'v',
+        Math.cos(angle) * radius,
+        i / 200,
+        Math.sin(angle) * radius,
+        i / 400,
+        0.4,
+        1 - i / 400,
+      ),
+    );
+  }
+  return text(lines);
+}
+
+/** An OBJ with what goes wrong in real files: see `problems.mtl`. */
+const problemsObj = () =>
+  text([
+    `# ${GENERATOR}`,
+    'mtllib problems.mtl',
+    'o Panel',
+    line('v', 0, 0, 0),
+    line('v', 1, 0, 0),
+    line('v', 1, 1, 0),
+    line('v', 0, 1, 0),
+    line('vt', 0, 0),
+    line('vt', 1, 0),
+    line('vt', 1, 1),
+    line('vt', 0, 1),
+    'usemtl Textured',
+    'f 1/1 2/2 3/3 4/4',
+    '# A face naming a vertex the file lacks.',
+    'f 1 2 99',
+    'usemtl Undefined',
+    'f 1 3 4',
+    '# A free-form curve, which is valid OBJ but not drawn.',
+    'cstype bspline',
+    'deg 2',
+    'curv 0 1 1 2 3',
+    'end',
+  ]);
+
+/**
+ * A texture by an absolute Windows path, found by its name next to the model; one that isn't
+ * there; one in a format browsers can't show.
+ */
+const problemsMtl = () =>
+  text([
+    'newmtl Textured',
+    'Kd 1 1 1',
+    'map_Kd C:\\Users\\artist\\textures\\checker.png',
+    'map_Bump -bm 0.5 bumps.tga',
+    'map_Ke stone.tga',
+  ]);
+
+/** A 2 × 2 uncompressed TGA, an image format browsers don't show. */
+function tga() {
+  const bytes = Buffer.alloc(18 + 2 * 2 * 3);
+  bytes[2] = 2;
+  bytes.writeUInt16LE(2, 12);
+  bytes.writeUInt16LE(2, 14);
+  bytes[16] = 24;
+  bytes.fill(128, 18);
+  return bytes;
+}
+
+/** What a compiler's object file starts with: binary, not an OBJ model. */
+function objectFile() {
+  const bytes = Buffer.alloc(64);
+  bytes.writeUInt16LE(0x8664, 0);
+  bytes.writeUInt16LE(2, 2);
+  bytes.write('.text', 20, 'latin1');
+  return bytes;
+}
+
+/** An octahedron: six vertices with colors and normals, eight faces. */
+const OCTAHEDRON = {
+  vertices: [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ],
+  colors: [
+    [230, 60, 50],
+    [60, 200, 90],
+    [250, 220, 70],
+    [40, 90, 220],
+    [240, 240, 240],
+    [30, 30, 30],
+  ],
+  faces: [
+    [0, 2, 4],
+    [4, 2, 1],
+    [1, 2, 5],
+    [5, 2, 0],
+    [4, 3, 0],
+    [1, 3, 4],
+    [5, 3, 1],
+    [0, 3, 5],
+  ],
+};
+
+function octahedronPly() {
+  const { vertices, colors, faces } = OCTAHEDRON;
+  return text([
+    'ply',
+    'format ascii 1.0',
+    `comment ${GENERATOR}`,
+    'obj_info An octahedron with vertex colors and normals',
+    `element vertex ${vertices.length}`,
+    'property float x',
+    'property float y',
+    'property float z',
+    'property float nx',
+    'property float ny',
+    'property float nz',
+    'property uchar red',
+    'property uchar green',
+    'property uchar blue',
+    `element face ${faces.length}`,
+    'property list uchar int vertex_indices',
+    'end_header',
+    ...vertices.map((v, i) => line(...v, ...v, ...colors[i])),
+    ...faces.map((face) => line(face.length, ...face)),
+  ]);
+}
+
+/** The bracket's box corners as a PLY mesh of quads, in either byte order. */
+function bracketPly(littleEndian) {
+  const boxes = [
+    [
+      [0, 0, 0],
+      [40, 20, 5],
+    ],
+    [
+      [0, 0, 5],
+      [6, 20, 25],
+    ],
+  ];
+  const vertices = [];
+  const faces = [];
+  for (const [[x0, y0, z0], [x1, y1, z1]] of boxes) {
+    const base = vertices.length;
+    vertices.push(
+      [x0, y0, z0],
+      [x1, y0, z0],
+      [x1, y1, z0],
+      [x0, y1, z0],
+      [x0, y0, z1],
+      [x1, y0, z1],
+      [x1, y1, z1],
+      [x0, y1, z1],
+    );
+    for (const quad of [
+      [0, 3, 2, 1],
+      [4, 5, 6, 7],
+      [0, 1, 5, 4],
+      [2, 3, 7, 6],
+      [1, 2, 6, 5],
+      [0, 4, 7, 3],
+    ]) {
+      faces.push(quad.map((corner) => base + corner));
+    }
+  }
+  const header = text([
+    'ply',
+    `format ${littleEndian ? 'binary_little_endian' : 'binary_big_endian'} 1.0`,
+    `comment ${GENERATOR}`,
+    `element vertex ${vertices.length}`,
+    'property double x',
+    'property double y',
+    'property double z',
+    'property ushort red',
+    'property ushort green',
+    'property ushort blue',
+    'property ushort alpha',
+    `element face ${faces.length}`,
+    'property list uchar int vertex_indices',
+    'end_header',
+  ]);
+  const body = Buffer.alloc(vertices.length * 32 + faces.length * 17);
+  let at = 0;
+  const write = (method, value, size) => {
+    body[`${method}${littleEndian ? 'LE' : 'BE'}`](value, at);
+    at += size;
+  };
+  vertices.forEach(([x, y, z], i) => {
+    for (const value of [x, y, z]) write('writeDouble', value, 8);
+    // A shade of blue rising with the height, opaque.
+    for (const value of [8000 + i * 2000, 20000 + i * 3000, 60000, 65535]) {
+      write('writeUInt16', value, 2);
+    }
+  });
+  for (const face of faces) {
+    body[at++] = face.length;
+    for (const index of face) write('writeInt32', index, 4);
+  }
+  return Buffer.concat([header, body]);
+}
+
+/**
+ * Points with colors at UTM-like coordinates hundreds of kilometres from the origin, as a
+ * scanner writes them in doubles; one without coordinates (NaN); a camera element to pass over.
+ */
+function cloudPly() {
+  const count = 600;
+  const header = text([
+    'ply',
+    'format binary_little_endian 1.0',
+    `comment ${GENERATOR}`,
+    'comment Georeferenced points, as a terrestrial scanner writes them',
+    `element vertex ${count + 1}`,
+    'property double x',
+    'property double y',
+    'property double z',
+    'property uchar red',
+    'property uchar green',
+    'property uchar blue',
+    'element camera 1',
+    'property float view_px',
+    'property float view_py',
+    'property float view_pz',
+    'end_header',
+  ]);
+  const body = Buffer.alloc((count + 1) * 27 + 12);
+  let at = 0;
+  for (let i = 0; i <= count; i++) {
+    const angle = i * 0.13;
+    const [x, y, z] =
+      i === 300
+        ? [Number.NaN, Number.NaN, Number.NaN]
+        : [
+            500000.25 + Math.cos(angle) * (2 + i / 100),
+            4100000.5 + Math.sin(angle) * (2 + i / 100),
+            100 + i / 60,
+          ];
+    for (const value of [x, y, z]) {
+      body.writeDoubleLE(value, at);
+      at += 8;
+    }
+    body[at++] = Math.round(80 + (i / count) * 170);
+    body[at++] = 140;
+    body[at++] = Math.round(250 - (i / count) * 170);
+  }
+  for (const value of [500000, 4100000, 120]) {
+    body.writeFloatLE(value, at);
+    at += 4;
+  }
+  return Buffer.concat([header, body]);
+}
+
+/** A textured quad as MeshLab writes it: the texture in a comment, coordinates per corner. */
+const texturedPly = () =>
+  text([
+    'ply',
+    'format ascii 1.0',
+    `comment ${GENERATOR}`,
+    'comment TextureFile checker.png',
+    'element vertex 4',
+    'property float x',
+    'property float y',
+    'property float z',
+    'element face 2',
+    'property list uchar int vertex_indices',
+    'property list uchar float texcoord',
+    'end_header',
+    line(0, 0, 0),
+    line(1, 0, 0),
+    line(1, 1, 0),
+    line(0, 1, 0),
+    line(3, 0, 1, 2, 6, 0, 0, 1, 0, 1, 1),
+    line(3, 0, 2, 3, 6, 0, 0, 1, 1, 0, 1),
+  ]);
+
 // Writing
 
 /** A GLB container: 12-byte header, then a JSON chunk padded with spaces and a BIN chunk. */
@@ -811,6 +1266,52 @@ write(
 );
 write('outside-folder.gltf', Buffer.from(await triangleWithBuffer('../outside/triangle.bin')));
 write('absolute-path.gltf', Buffer.from(await triangleWithBuffer('/models/triangle.bin')));
+
+// OBJ, STL and PLY models that open.
+write('cube.obj', cubeObj());
+write('cube.mtl', cubeMtl());
+write('pyramid.obj', pyramidObj());
+write('points.obj', pointsObj());
+// Binary, with a header that starts like ASCII STL, as SolidWorks writes it.
+const bracketStl = write(
+  'bracket.stl',
+  binaryStl('solid bracket, in millimetres with Z up', bracket()),
+);
+write(
+  'solids.stl',
+  asciiStl([
+    ['base', boxFacets([0, 0, 0], [30, 30, 4])],
+    ['peg', boxFacets([12, 12, 4], [18, 18, 20])],
+  ]),
+);
+{
+  // Materialise Magics: a default color in the header, and facets with colors of their own.
+  const header = Buffer.alloc(80, 0x20);
+  header.write('Nightmesh fixture COLOR=', 0, 'latin1');
+  header.set([200, 200, 210, 255], 24);
+  write(
+    'colored.stl',
+    binaryStl(header, bracket(), (index) => (index < 12 ? 0x8000 : 31 | (10 << 5) | (2 << 10))),
+  );
+}
+write('octahedron.ply', octahedronPly());
+write('bracket.ply', bracketPly(true));
+write('bracket-be.ply', bracketPly(false));
+write('cloud.ply', cloudPly());
+write('textured.ply', texturedPly());
+
+// OBJ, STL and PLY files that can't be shown, or only partly.
+write('problems.obj', problemsObj());
+write('problems.mtl', problemsMtl());
+write('stone.tga', tga());
+write(
+  'missing-library.obj',
+  text(['mtllib nowhere.mtl', 'usemtl Something', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3']),
+);
+write('object-file.obj', objectFile());
+write('not-a-model.stl', Buffer.from('This is not an STL model.\n'));
+write('truncated.stl', bracketStl.subarray(0, 84 + 50 * 10 + 20));
+write('not-a-model.ply', text(['ply', 'format unknown 1.0', 'end_header']));
 
 if (LARGE) {
   mkdirSync(join(OUT, 'generated'), { recursive: true });

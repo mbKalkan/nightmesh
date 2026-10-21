@@ -1,0 +1,172 @@
+solid base
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0
+      vertex 0 30 0
+      vertex 30 30 0
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0
+      vertex 30 30 0
+      vertex 30 0 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 4
+      vertex 30 0 4
+      vertex 30 30 4
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 4
+      vertex 30 30 4
+      vertex 0 30 4
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 0 0 0
+      vertex 30 0 0
+      vertex 30 0 4
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 0 0 0
+      vertex 30 0 4
+      vertex 0 0 4
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 30 30 0
+      vertex 0 30 0
+      vertex 0 30 4
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 30 30 0
+      vertex 0 30 4
+      vertex 30 30 4
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 30 0 0
+      vertex 30 30 0
+      vertex 30 30 4
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 30 0 0
+      vertex 30 30 4
+      vertex 30 0 4
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 0 0 4
+      vertex 0 30 4
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 0 30 4
+      vertex 0 30 0
+    endloop
+  endfacet
+endsolid base
+solid peg
+  facet normal 0 0 -1
+    outer loop
+      vertex 12 12 4
+      vertex 12 18 4
+      vertex 18 18 4
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 12 12 4
+      vertex 18 18 4
+      vertex 18 12 4
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 12 12 20
+      vertex 18 12 20
+      vertex 18 18 20
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 12 12 20
+      vertex 18 18 20
+      vertex 12 18 20
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 12 12 4
+      vertex 18 12 4
+      vertex 18 12 20
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 12 12 4
+      vertex 18 12 20
+      vertex 12 12 20
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 18 18 4
+      vertex 12 18 4
+      vertex 12 18 20
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 18 18 4
+      vertex 12 18 20
+      vertex 18 18 20
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 18 12 4
+      vertex 18 18 4
+      vertex 18 18 20
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 18 12 4
+      vertex 18 18 20
+      vertex 18 12 20
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 12 12 4
+      vertex 12 12 20
+      vertex 12 18 20
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 12 12 4
+      vertex 12 18 20
+      vertex 12 18 4
+    endloop
+  endfacet
+endsolid peg

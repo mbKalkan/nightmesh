@@ -11,7 +11,8 @@ export interface ReportInputs {
   context: InspectContext;
   strings: ViewerStrings;
   statistics: Statistics;
-  size: SizeAnalysis;
+  /** Where the bytes go: for glTF only, as is the validation. */
+  size?: SizeAnalysis;
   validation?: ValidationReport;
 }
 
@@ -97,6 +98,8 @@ function markdown({ context, strings, statistics, size, validation }: ReportInpu
     }
   }
 
+  // A model read from OBJ, STL or PLY has no glTF file to size or validate.
+  if (!size) return `${lines.join('\n')}\n`;
   const sizes = strings.size;
   const share = (bytes: number) =>
     `${size.total > 0 ? Math.round((bytes / size.total) * 100) : 0}%`;
@@ -212,15 +215,20 @@ function json({ context, strings, statistics, size, validation }: ReportInputs):
   const name = (key: EntryKey) => entryName(context, strings, key);
   const list = (value: unknown) =>
     Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
+  const meshes = statistics.meshes.map((row) => ({ ...row, name: name(`mesh:${row.mesh}`) }));
+  if (!size) {
+    return {
+      file: { name: file.name, bytes: file.size, format: file.container },
+      source: context.source ?? null,
+      statistics: { ...statistics, meshes },
+    };
+  }
   return {
     file: { name: file.name, bytes: file.size, container: file.container, chunks: file.chunks },
     asset: model.root.asset ?? {},
     extensionsUsed: list(model.root.extensionsUsed),
     extensionsRequired: list(model.root.extensionsRequired),
-    statistics: {
-      ...statistics,
-      meshes: statistics.meshes.map((row) => ({ ...row, name: name(`mesh:${row.mesh}`) })),
-    },
+    statistics: { ...statistics, meshes },
     size: {
       ...size,
       largest: size.largest.map((entry) => ({ ...entry, name: name(entry.key) })),

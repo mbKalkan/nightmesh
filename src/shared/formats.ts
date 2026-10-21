@@ -1,8 +1,11 @@
-import type { ModelFormat } from './protocol';
+import type { MeshFormat, ModelFormat } from './protocol';
 
 const FORMATS: Readonly<Record<string, ModelFormat>> = {
   '.glb': 'glb',
   '.gltf': 'gltf',
+  '.obj': 'obj',
+  '.stl': 'stl',
+  '.ply': 'ply',
 };
 
 /** File extensions the viewer opens, with the leading dot. */
@@ -15,3 +18,17 @@ export function formatForPath(path: string): ModelFormat | undefined {
   }
   return FORMATS[path.slice(dot).toLowerCase()];
 }
+
+/** OBJ, STL and PLY: read into glTF on the way in, with no glTF JSON of their own to show. */
+export function isMeshFormat(format: ModelFormat): format is MeshFormat {
+  return format === 'obj' || format === 'stl' || format === 'ply';
+}
+
+/** What the formats are called where a sentence names them. */
+export const FORMAT_NAMES: Readonly<Record<ModelFormat, string>> = {
+  glb: 'GLB',
+  gltf: 'glTF',
+  obj: 'OBJ',
+  stl: 'STL',
+  ply: 'PLY',
+};

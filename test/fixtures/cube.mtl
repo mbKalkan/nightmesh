@@ -1,0 +1,13 @@
+# Nightmesh fixture generator
+newmtl Checker
+Kd 0.8 0.8 0.8
+Ns 250
+map_Kd checker.png
+
+newmtl Painted
+Kd 0.9 0.35 0.2
+Ns 100
+
+newmtl Grass
+Kd 0.3 0.6 0.25
+Ns 10

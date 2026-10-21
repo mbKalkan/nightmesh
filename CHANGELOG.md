@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OBJ, STL and PLY models** open in Nightmesh by default, read in a thread of their own so
+  VS Code stays responsive, with a progress bar for large files. The structure, inspector,
+  statistics, selection, shading modes, Copy Reference, screenshots and reports work as they do
+  for glTF.
+  - **OBJ:** objects and groups, a part for each material, polygons, lines and points, negative
+    indices, vertex colors, and MTL material libraries with their textures. A texture given by
+    an absolute path is looked for by its name next to the library and the model.
+  - **STL:** binary and ASCII, each ASCII solid on its own, and Materialise facet colors.
+    Vertices at the same place are welded, so the statistics count them once.
+  - **PLY:** ASCII and binary of either byte order; vertex normals, colors and texture
+    coordinates, faces and edges, and MeshLab's textures. A file without faces is drawn as a
+    point cloud.
+- For these formats the inspector shows what the file says about itself: an STL's header and
+  solids, a PLY's elements, properties and comments, an OBJ's statements and the MTL statements
+  of each material.
+- STL files are taken to be in millimetres with Z up, as CAD writes them; OBJ and PLY in metres
+  with Y up, or Z up when their coordinates are georeferenced. Georeferenced models are drawn
+  around their first point, where the view is precise; the inspector keeps their coordinates.
+- Parts the file gives no material are drawn matte grey from both sides.
+- Problems in a file are listed over the model: missing material libraries and textures,
+  textures in formats browsers can't show, faces naming vertices the file lacks, free-form
+  curves and surfaces, a file cut short. A binary `.obj` is said to be a compiler's object file.
+
 ## [0.2.0] - 2026-10-15
 
 Validation, size analysis, the glTF JSON and export.

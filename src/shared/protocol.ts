@@ -1,6 +1,50 @@
 // Messages exchanged between the extension host and the webview.
 
-export type ModelFormat = 'glb' | 'gltf';
+/** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
+export type MeshFormat = 'obj' | 'stl' | 'ply';
+
+export type ModelFormat = 'glb' | 'gltf' | MeshFormat;
+
+/**
+ * What an OBJ, STL or PLY file says about itself, for the inspector: the glTF the panels show for
+ * it is made up on the way in.
+ */
+export type SourceFacts = StlFacts | PlyFacts | ObjFacts;
+
+export interface StlFacts {
+  format: 'stl';
+  encoding: 'binary' | 'ascii';
+  /** A binary file's 80-byte header as text, when it is text. */
+  header?: string;
+  /** The names an ASCII file gives its solids, in order. */
+  solids?: string[];
+  /** Facets: what a binary file's header declares, or what an ASCII file has. */
+  triangles: number;
+  /** The facets carry colors, in Materialise Magics' convention. */
+  colors?: boolean;
+}
+
+export interface PlyFacts {
+  format: 'ply';
+  encoding: 'ascii' | 'binary_little_endian' | 'binary_big_endian';
+  version: string;
+  comments: string[];
+  objInfo: string[];
+  /** Each element with its count and properties as the header declares them: `float x`. */
+  elements: { name: string; count: number; properties: string[] }[];
+}
+
+export interface ObjFacts {
+  format: 'obj';
+  /** How many of each statement the file has, by keyword: `v`, `vt`, `f`, `usemtl`… */
+  statements: Record<string, number>;
+  /** Comments before the first statement, where exporters say who they are. */
+  comments: string[];
+  /** The material libraries the file names. */
+  mtllibs: string[];
+  /** Each material's MTL statements as written, by glTF material index; empty if none found. */
+  materials: { library?: string; statements: [string, string][] }[];
+}
 
 /** Kinds of things in a model, as the structure tree and inspector name them. */
 export type StructureKind =
@@ -96,6 +140,32 @@ export interface StructureStrings {
     /** What the glTF Validator found, in the model's details. */
     validation: string;
   };
+  /** What an OBJ, STL or PLY file says about itself. */
+  source: SourceStrings;
+}
+
+/** Words for what an OBJ, STL or PLY file says about itself, in the inspector. */
+export interface SourceStrings {
+  format: string;
+  encoding: string;
+  encodings: Record<'binary' | 'ascii' | 'binary_little_endian' | 'binary_big_endian', string>;
+  version: string;
+  header: string;
+  /** The PLY header's elements, as a section. */
+  elements: string;
+  solids: string;
+  facets: string;
+  colors: string;
+  /** STL facet colors as Materialise Magics writes them. */
+  materialise: string;
+  comments: string;
+  libraries: string;
+  /** OBJ's statements, as a section: how many of each. */
+  statements: string;
+  /** Next to statements that are read but not drawn. */
+  notDrawn: string;
+  /** A material an OBJ file uses that its libraries don't define. */
+  notDefined: string;
 }
 
 /** Words for the animation bar below the view. */
@@ -177,6 +247,8 @@ export interface ViewerStrings {
   largeTitle: string;
   /** Why a large model waits to be drawn: `{0}` is how many bytes it sends. */
   largeMessage: string;
+  /** The same for a file that is read before it is drawn: OBJ, STL and PLY. */
+  largeReadMessage: string;
   draw: string;
   errorTitle: string;
   errorWebGL: string;
@@ -358,11 +430,21 @@ export interface StructureMessage {
   fileSize: number;
   /** A GLB's chunk sizes in bytes, as its header gives them. */
   chunks?: { json: number; bin?: number };
+  /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
+  source?: SourceFacts;
+}
+
+/** How much of an OBJ, STL or PLY file has been read, before there is a model to send. */
+export interface ProgressMessage {
+  type: 'progress';
+  loadId: number;
+  done: number;
+  total: number;
 }
 
 /** An image's size and format, as its file's header gives them. */
 export interface ImageInfo {
-  format: 'png' | 'jpeg' | 'webp' | 'ktx2' | 'avif' | 'gif';
+  format: 'png' | 'jpeg' | 'webp' | 'ktx2' | 'avif' | 'gif' | 'bmp';
   width: number;
   height: number;
   /** Mipmap levels stored in the file (KTX2); others are generated on the GPU. */
@@ -452,6 +534,7 @@ export interface FailedMessage {
 export type HostToWebviewMessage =
   | OpenMessage
   | StructureMessage
+  | ProgressMessage
   | ImagesMessage
   | AnimationsMessage
   | ModelMessage

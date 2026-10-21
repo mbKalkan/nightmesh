@@ -1,0 +1,13 @@
+# Negative indices, polygons, groups and vertex colors, without normals or texture coordinates.
+g Base
+v -1 0 -1 0.9 0.2 0.2
+v 1 0 -1 0.2 0.9 0.2
+v 1 0 1 0.2 0.2 0.9
+v -1 0 1 0.9 0.9 0.2
+f -1 -2 -3 -4
+g Sides
+v 0 1.5 0 1 1 1
+f 1 5 2
+f 2 5 3
+f 3 5 4
+f 4 5 1

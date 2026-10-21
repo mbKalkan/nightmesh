@@ -15,6 +15,10 @@ export function viewerStrings(t: Translate): ViewerStrings {
       'Drawing it means loading {0} into the view, which takes a while and a lot of memory. Its structure and statistics are ready in the panels.',
       '{0}',
     ),
+    largeReadMessage: t(
+      'Reading and drawing it means loading {0}, which takes a while and a lot of memory.',
+      '{0}',
+    ),
     draw: t('Draw Model'),
     errorTitle: t("This model can't be displayed"),
     errorWebGL: t(
@@ -273,6 +277,28 @@ function structureStrings(t: Translate): StructureStrings {
       under: t('under {0}', '{0}'),
       validation: t('Validation'),
     },
+    source: {
+      format: t('Format'),
+      encoding: t('Encoding'),
+      encodings: {
+        binary: t('Binary'),
+        ascii: t('ASCII'),
+        binary_little_endian: t('Binary, little-endian'),
+        binary_big_endian: t('Binary, big-endian'),
+      },
+      version: t('Version'),
+      header: t('Header'),
+      elements: t('Elements'),
+      solids: t('Solids'),
+      facets: t('Facets'),
+      colors: t('Colors'),
+      materialise: t('Facet colors (Materialise)'),
+      comments: t('Comments'),
+      libraries: t('Material libraries'),
+      statements: t('Statements'),
+      notDrawn: t('not drawn'),
+      notDefined: t("The material libraries don't define this material."),
+    },
   };
 }
 
@@ -304,5 +330,22 @@ export function loadTexts(t: Translate): LoadTexts {
         : kind === 'textures'
           ? t('Textures left out: {0}', count)
           : t('Animations left out: {0}', count),
+    notMesh: (format, objectFile) =>
+      objectFile
+        ? t(
+            "This .obj file isn't a 3D model: it is binary, as the object files compilers write are.",
+          )
+        : format === 'obj'
+          ? t("The file isn't an OBJ model, or it is damaged.")
+          : format === 'stl'
+            ? t("The file isn't an STL model, or it is damaged.")
+            : t("The file isn't a PLY model, or it is damaged."),
+    noGeometry: t('This file has no faces, lines or points to draw.'),
+    badFaces: (count) =>
+      t('Faces left out because they are incomplete or name vertices the file lacks: {0}', count),
+    freeForm: (count) => t("Free-form curves and surfaces aren't drawn: {0}", count),
+    missingMaterials: (names) => t("Materials the material libraries don't define: {0}", names),
+    imageFormat: (name) =>
+      t("{0} isn't shown: textures are shown from PNG, JPEG, WebP, GIF and BMP files.", name),
   };
 }

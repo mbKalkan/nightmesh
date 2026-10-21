@@ -1,4 +1,13 @@
-import type { Material, Mesh } from 'three';
+import {
+  DoubleSide,
+  type Line,
+  type LineBasicMaterial,
+  type Material,
+  type Mesh,
+  type MeshStandardMaterial,
+  type Points,
+  type PointsMaterial,
+} from 'three';
 import { GLTFLoader, type GLTF, type GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Decoders } from './modelView';
@@ -12,6 +21,8 @@ export function parseModel(
   json: string,
   parts: ReadonlyMap<string, ArrayBuffer>,
   decoders: Decoders = {},
+  /** The glTF was made from an OBJ, STL or PLY file. */
+  readFromMesh = false,
 ): Promise<GLTF> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   if (decoders.draco) loader.setDRACOLoader(decoders.draco);
@@ -29,7 +40,49 @@ export function parseModel(
     return partsPlugin(parser, parts);
   });
   loader.register(variantsPlugin);
+  if (readFromMesh) loader.register(meshFormatsPlugin);
   return loader.parseAsync(json, '');
+}
+
+/** Points are this many pixels wide, rather than glTF's one: a scan's points stay visible. */
+const POINT_SIZE = 2;
+/** Linear grey of surfaces the file gives no material: light, as CAD and slicer tools show them. */
+const SURFACE_GREY = 0.4;
+/** Linear grey of lines and points without colors: visible on dark and light backgrounds. */
+const LINE_GREY = 0.35;
+
+/**
+ * OBJ, STL and PLY files often give no material, and glTF's default is a white metal, dark in
+ * most light: those parts are drawn matte grey instead, from both sides as the formats don't say
+ * which is the front. Points are drawn larger.
+ */
+function meshFormatsPlugin(parser: GLTFParser) {
+  return {
+    name: 'nightmesh_mesh_formats',
+    afterRoot: async (gltf: GLTF) => {
+      const meshes =
+        (parser.json as { meshes?: { primitives: { material?: number }[] }[] }).meshes ?? [];
+      gltf.scene.traverse((object) => {
+        const association = parser.associations.get(object);
+        if (association?.meshes === undefined || association.primitives === undefined) return;
+        const primitive = meshes[association.meshes]?.primitives[association.primitives];
+        const drawable = object as Mesh & Line & Points;
+        const colored = drawable.geometry?.attributes.color !== undefined;
+        if (drawable.isPoints) (drawable.material as PointsMaterial).size = POINT_SIZE;
+        if (primitive?.material !== undefined) return;
+        if (drawable.isPoints || drawable.isLine) {
+          if (!colored)
+            (drawable.material as PointsMaterial | LineBasicMaterial).color.setScalar(LINE_GREY);
+        } else if (drawable.isMesh) {
+          const material = drawable.material as MeshStandardMaterial;
+          material.metalness = 0;
+          material.roughness = 0.5;
+          material.side = DoubleSide;
+          if (!colored) material.color.setScalar(SURFACE_GREY);
+        }
+      });
+    },
+  };
 }
 
 /** A mesh's material for each KHR_materials_variants variant it has one for, by variant index. */

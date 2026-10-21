@@ -1,13 +1,23 @@
 // Turns a model file into the messages that bring it to the webview. Free of VS Code APIs, so
 // the browser tests can feed the webview exactly what the extension host would.
 import { DRAWN_EXTENSIONS } from '../../shared/gltfExtensions';
-import type { HostToWebviewMessage, ImageInfo } from '../../shared/protocol';
+import { isMeshFormat } from '../../shared/formats';
+import type {
+  HostToWebviewMessage,
+  ImageInfo,
+  MeshFormat,
+  ModelFormat,
+} from '../../shared/protocol';
 import { MAX_JSON_BYTES, readGlbLayout, sniff, withoutByteOrderMark } from './container';
 import { animationMotion } from './animationMotion';
 import { IMAGE_HEADER_BYTES, readImageInfo } from './imageInfo';
+import { meshMaterials } from './mesh/materials';
+import { MeshFormatError, type ParsedMesh } from './mesh/geometry';
+import { HEAD_BYTES, headerFacts, looksLike, parseInThread, type MeshParser } from './mesh/parse';
+import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
-import type { ByteSource } from './sources';
+import { memorySource, type ByteSource } from './sources';
 
 /** Why a resource the model refers to isn't there. */
 export type ResourceProblem =
@@ -27,14 +37,35 @@ export interface LoadTexts {
   resource(problem: ResourceProblem, name: string): string;
   truncated: string;
   dropped(kind: 'primitives' | 'textures' | 'animations', count: number): string;
+  /** An OBJ, STL or PLY file that isn't one; `objectFile` for an `.obj` that is binary. */
+  notMesh(format: MeshFormat, objectFile: boolean): string;
+  /** An OBJ, STL or PLY file with nothing to draw in it. */
+  noGeometry: string;
+  /** Faces, lines or points that couldn't be read or name vertices that aren't there. */
+  badFaces(count: number): string;
+  /** OBJ's free-form curves and surfaces, which aren't drawn. */
+  freeForm(count: number): string;
+  /** Materials an OBJ file uses that its libraries don't have. */
+  missingMaterials(names: string): string;
+  /** A texture in a format browsers can't show. */
+  imageFormat(name: string): string;
 }
 
 export interface LoadOptions {
   loadId: number;
   reload: boolean;
   texts: LoadTexts;
+  /**
+   * What the file is by its extension. OBJ, STL and PLY are read into glTF; anything else is
+   * glTF, told apart from GLB by its content.
+   */
+  format?: ModelFormat;
+  /** The file's name, which the top node of an OBJ, STL or PLY model takes. */
+  fileName?: string;
   /** A model that sends more bytes than this asks first; the default is `LARGE_MODEL_BYTES`. */
   largeBytes?: number;
+  /** Reads OBJ, STL and PLY files; by default in the calling thread. */
+  parseMesh?: MeshParser;
 }
 
 /**
@@ -55,21 +86,37 @@ const MESSAGE_BYTES = 16 * 1024 * 1024;
 export async function* loadMessages(
   source: ByteSource,
   openResource: ResourceOpener,
-  { loadId, reload, texts, largeBytes = LARGE_MODEL_BYTES }: LoadOptions,
+  options: LoadOptions,
 ): AsyncGenerator<HostToWebviewMessage> {
-  const failed = (message: string, details: string[] = []): HostToWebviewMessage => ({
-    type: 'failed',
-    loadId,
-    reload,
-    message,
-    details,
-  });
+  const resources = new Resources(openResource, options.texts);
+  try {
+    if (options.format && isMeshFormat(options.format)) {
+      yield* meshMessages(source, options.format, resources, options);
+    } else {
+      yield* gltfMessages(source, resources, options);
+    }
+  } finally {
+    await resources.close();
+  }
+}
 
+const failure = (
+  { loadId, reload }: LoadOptions,
+  message: string,
+  details: string[] = [],
+): HostToWebviewMessage => ({ type: 'failed', loadId, reload, message, details });
+
+async function* gltfMessages(
+  source: ByteSource,
+  resources: Resources,
+  options: LoadOptions,
+): AsyncGenerator<HostToWebviewMessage> {
+  const { loadId, reload, texts } = options;
   const head = await source.read(0, Math.min(64, source.size));
   const kind = sniff(head);
-  if (kind === 'empty') return yield failed(texts.empty);
-  if (kind === 'lfsPointer') return yield failed(texts.lfsPointer);
-  if (kind === 'unknown') return yield failed(texts.damaged);
+  if (kind === 'empty') return yield failure(options, texts.empty);
+  if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
+  if (kind === 'unknown') return yield failure(options, texts.damaged);
 
   let text: string;
   let bin: ResourceData | undefined;
@@ -78,7 +125,8 @@ export async function* loadMessages(
   if (kind === 'glb') {
     const layout = await readGlbLayout(source);
     if ('failure' in layout) {
-      return yield failed(
+      return yield failure(
+        options,
         layout.failure === 'version' ? texts.version(String(layout.version)) : texts.damaged,
       );
     }
@@ -89,7 +137,7 @@ export async function* loadMessages(
     }
     truncated = layout.truncated;
   } else {
-    if (source.size > MAX_JSON_BYTES) return yield failed(texts.damaged);
+    if (source.size > MAX_JSON_BYTES) return yield failure(options, texts.damaged);
     text = new TextDecoder().decode(await source.read(0, source.size));
   }
 
@@ -98,84 +146,212 @@ export async function* loadMessages(
   try {
     json = JSON.parse(text) as Gltf;
   } catch {
-    return yield failed(texts.damaged);
+    return yield failure(options, texts.damaged);
   }
   if (!json || typeof json !== 'object' || typeof json.asset?.version !== 'string') {
-    return yield failed(texts.damaged);
+    return yield failure(options, texts.damaged);
   }
-  if (!json.asset.version.startsWith('2.')) return yield failed(texts.version(json.asset.version));
+  if (!json.asset.version.startsWith('2.')) {
+    return yield failure(options, texts.version(json.asset.version));
+  }
   // The structure shows right away, and stays when the model can't be drawn.
   yield { type: 'structure', loadId, reload, json: text, fileSize: source.size, chunks };
   const missing = (json.extensionsRequired ?? []).filter((name) => !DRAWN_EXTENSIONS.has(name));
-  if (missing.length > 0) return yield failed(texts.extensions(missing.join(', ')));
+  if (missing.length > 0) return yield failure(options, texts.extensions(missing.join(', ')));
 
-  const opened = new Map<string, Promise<ByteSource | ResourceProblem>>();
-  const problems = new Map<string, string>();
-  const resource = async (uri: string): Promise<ResourceData | undefined> => {
-    if (!opened.has(uri)) opened.set(uri, openResource(uri));
-    const result = await opened.get(uri)!;
+  const buffers = await Promise.all(
+    (json.buffers ?? []).map((buffer, index) =>
+      buffer.uri !== undefined
+        ? resources.data(buffer.uri)
+        : index === 0 && kind === 'glb'
+          ? bin
+          : undefined,
+    ),
+  );
+  yield* drawMessages(json, buffers, resources, options, truncated ? [texts.truncated] : []);
+}
+
+/**
+ * OBJ, STL and PLY: read into geometry (in a worker thread in the extension), made into glTF,
+ * and from there sent as a glTF model is.
+ */
+async function* meshMessages(
+  source: ByteSource,
+  format: MeshFormat,
+  resources: Resources,
+  options: LoadOptions,
+): AsyncGenerator<HostToWebviewMessage> {
+  const { loadId, reload, texts, largeBytes = LARGE_MODEL_BYTES } = options;
+  const fileName = options.fileName ?? '';
+  const head = await source.read(0, Math.min(HEAD_BYTES, source.size));
+  const kind = sniff(head);
+  if (kind === 'empty') return yield failure(options, texts.empty);
+  if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
+  const looks = looksLike(format, head, source.size);
+  if (looks !== 'yes') return yield failure(options, texts.notMesh(format, looks === 'objectFile'));
+
+  // A large file is read only once the user says so: reading takes memory in proportion. Its
+  // header shows in the meantime.
+  let waited = false;
+  if (source.size > largeBytes) {
+    yield {
+      type: 'structure',
+      loadId,
+      reload,
+      json: JSON.stringify(emptyGltf(fileName)),
+      fileSize: source.size,
+      source: headerFacts(format, head, source.size),
+    };
+    yield { type: 'large', loadId, bytes: source.size };
+    waited = true;
+  }
+
+  let mesh: ParsedMesh | undefined;
+  try {
+    for await (const event of (options.parseMesh ?? parseInThread)(format, source)) {
+      if (event.type === 'progress') {
+        yield { type: 'progress', loadId, done: event.done, total: source.size };
+      } else {
+        mesh = event.mesh;
+      }
+    }
+  } catch (error) {
+    if (error instanceof MeshFormatError)
+      return yield failure(options, texts.notMesh(format, false));
+    throw error;
+  }
+  if (!mesh) return;
+
+  const materials = await meshMaterials(mesh, resources, texts);
+  const { json, buffers } = toGltf(mesh, fileName, materials.specs, materials.images);
+  if (!json.meshes?.length) return yield failure(options, texts.noGeometry);
+  yield {
+    type: 'structure',
+    loadId,
+    // Once the user has waited, the panels keep what they show, as for a file that changed.
+    reload: reload || waited,
+    json: JSON.stringify(json),
+    fileSize: source.size,
+    source: materials.facts,
+  };
+  const notices = [...materials.notices];
+  for (const problem of mesh.problems) {
+    if (problem.kind === 'truncated') notices.push(texts.truncated);
+    else if (problem.kind === 'faces') notices.push(texts.badFaces(problem.count));
+    else notices.push(texts.freeForm(problem.count));
+  }
+  const data = buffers.map((bytes): ResourceData => ({
+    source: arraySource(bytes),
+    offset: 0,
+    available: bytes.length,
+  }));
+  // The user was asked already, before reading.
+  yield* drawMessages(json, data, resources, { ...options, largeBytes: Infinity }, notices);
+}
+
+/** A model with nothing in it but the file's node, while a large file waits to be read. */
+function emptyGltf(fileName: string): Gltf & Record<string, unknown> {
+  return {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: fileName } as never],
+  };
+}
+
+/**
+ * Images, then the model and its parts: the part of a load glTF and the formats read into it
+ * share. `notices` go after what couldn't be opened.
+ */
+async function* drawMessages(
+  json: Gltf,
+  buffers: readonly (ResourceData | undefined)[],
+  resources: Resources,
+  { loadId, reload, texts, largeBytes = LARGE_MODEL_BYTES }: LoadOptions,
+  notices: readonly string[],
+): AsyncGenerator<HostToWebviewMessage> {
+  const images = await Promise.all(
+    (json.images ?? []).map((image) =>
+      image.uri !== undefined ? resources.data(image.uri) : undefined,
+    ),
+  );
+  const plan = planRender(json, buffers, images);
+  const infos = await imageInfos(plan);
+  // The loader can't read an image from a bufferView without its type, which glTF doesn't
+  // require of images given by URI, and which some exporters leave out of the others too.
+  plan.json.images?.forEach((image, index) => {
+    const format = infos[index]?.format;
+    if (!image.mimeType && format) image.mimeType = `image/${format}`;
+  });
+  const imageParts = new Map(plan.parts.map((part) => [part.key, part.length]));
+  const imageBytes = (plan.json.images ?? []).map(
+    (image) => imageParts.get(`bufferView:${image.bufferView}`) ?? null,
+  );
+  yield { type: 'images', loadId, images: infos, bytes: imageBytes };
+  if (plan.json.animations?.length) {
+    yield { type: 'animations', loadId, motion: await animationMotion(plan) };
+  }
+
+  const said = [...resources.problems.values(), ...notices];
+  if (!plan.drawable) {
+    return yield { type: 'failed', loadId, reload, message: texts.nothingDrawn, details: said };
+  }
+  for (const kind of ['primitives', 'textures', 'animations'] as const) {
+    if (plan.dropped[kind] > 0) said.push(texts.dropped(kind, plan.dropped[kind]));
+  }
+
+  // The caller waits for the user's word before it asks for the next message.
+  if (plan.bytes > largeBytes) yield { type: 'large', loadId, bytes: plan.bytes };
+  yield {
+    type: 'model',
+    loadId,
+    reload,
+    json: JSON.stringify(plan.json),
+    extensions: json.extensionsUsed ?? [],
+    parts: plan.parts.length,
+    bytes: plan.bytes,
+    notices: said,
+  };
+  yield* partMessages(plan.parts, loadId);
+}
+
+/**
+ * Resources a model refers to, each opened once and closed when the load ends; what couldn't
+ * be opened is kept, as sentences for the user, by URI.
+ */
+export class Resources {
+  private readonly opened = new Map<string, Promise<ByteSource | ResourceProblem>>();
+  readonly problems = new Map<string, string>();
+
+  constructor(
+    private readonly openResource: ResourceOpener,
+    private readonly texts: LoadTexts,
+  ) {}
+
+  /** Opens a resource, or says why it can't: nothing is said to the user. */
+  open(uri: string): Promise<ByteSource | ResourceProblem> {
+    if (!this.opened.has(uri)) this.opened.set(uri, this.openResource(uri));
+    return this.opened.get(uri)!;
+  }
+
+  /** Where a resource's bytes are; undefined, said to the user, when it can't be opened. */
+  async data(uri: string, name = resourceName(uri)): Promise<ResourceData | undefined> {
+    const result = await this.open(uri);
     if (typeof result === 'string') {
-      problems.set(uri, texts.resource(result, resourceName(uri)));
+      this.problem(uri, result, name);
       return undefined;
     }
     return { source: result, offset: 0, available: result.size };
-  };
+  }
 
-  try {
-    const buffers = await Promise.all(
-      (json.buffers ?? []).map((buffer, index) =>
-        buffer.uri !== undefined
-          ? resource(buffer.uri)
-          : index === 0 && kind === 'glb'
-            ? bin
-            : undefined,
-      ),
-    );
-    const images = await Promise.all(
-      (json.images ?? []).map((image) =>
-        image.uri !== undefined ? resource(image.uri) : undefined,
-      ),
-    );
-    const plan = planRender(json, buffers, images);
-    const infos = await imageInfos(plan);
-    // The loader can't read an image from a bufferView without its type, which glTF doesn't
-    // require of images given by URI, and which some exporters leave out of the others too.
-    plan.json.images?.forEach((image, index) => {
-      const format = infos[index]?.format;
-      if (!image.mimeType && format) image.mimeType = `image/${format}`;
-    });
-    const imageParts = new Map(plan.parts.map((part) => [part.key, part.length]));
-    const imageBytes = (plan.json.images ?? []).map(
-      (image) => imageParts.get(`bufferView:${image.bufferView}`) ?? null,
-    );
-    yield { type: 'images', loadId, images: infos, bytes: imageBytes };
-    if (plan.json.animations?.length) {
-      yield { type: 'animations', loadId, motion: await animationMotion(plan) };
-    }
+  /** Says why a resource couldn't be opened, once for each. */
+  problem(uri: string, problem: ResourceProblem, name: string): void {
+    this.problems.set(uri, this.texts.resource(problem, name));
+  }
 
-    const notices = [...problems.values()];
-    if (truncated) notices.push(texts.truncated);
-    if (!plan.drawable) return yield failed(texts.nothingDrawn, notices);
-    for (const kind of ['primitives', 'textures', 'animations'] as const) {
-      if (plan.dropped[kind] > 0) notices.push(texts.dropped(kind, plan.dropped[kind]));
-    }
-
-    // The caller waits for the user's word before it asks for the next message.
-    if (plan.bytes > largeBytes) yield { type: 'large', loadId, bytes: plan.bytes };
-    yield {
-      type: 'model',
-      loadId,
-      reload,
-      json: JSON.stringify(plan.json),
-      extensions: json.extensionsUsed ?? [],
-      parts: plan.parts.length,
-      bytes: plan.bytes,
-      notices,
-    };
-    yield* partMessages(plan.parts, loadId);
-  } finally {
-    for (const result of opened.values()) {
-      const value = await result;
+  async close(): Promise<void> {
+    for (const result of this.opened.values()) {
+      const value = await result.catch(() => 'unreadable' as const);
       if (typeof value !== 'string') await value.close();
     }
   }
@@ -192,6 +368,23 @@ async function imageInfos(plan: RenderPlan): Promise<(ImageInfo | null)[]> {
       return readImageInfo(head) ?? null;
     }),
   );
+}
+
+/**
+ * A block of memory to send as it is: a read of all of it hands out the array itself when the
+ * array is all of its buffer, so a large one isn't copied on the way to the webview.
+ */
+function arraySource(bytes: Uint8Array): ByteSource {
+  const whole = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength;
+  const copy = memorySource(bytes);
+  return {
+    size: bytes.length,
+    read: (offset, length) =>
+      whole && offset === 0 && length === bytes.length
+        ? Promise.resolve(bytes)
+        : copy.read(offset, length),
+    close: async () => {},
+  };
 }
 
 async function* partMessages(parts: Part[], loadId: number): AsyncGenerator<HostToWebviewMessage> {

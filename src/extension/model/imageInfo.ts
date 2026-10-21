@@ -11,7 +11,14 @@ const MAX_SIDE = 1 << 16;
 
 /** The size and format of the image starting at `bytes`, or undefined if it can't be told. */
 export function readImageInfo(bytes: Uint8Array): ImageInfo | undefined {
-  const info = png(bytes) ?? jpeg(bytes) ?? webp(bytes) ?? ktx2(bytes) ?? avif(bytes) ?? gif(bytes);
+  const info =
+    png(bytes) ??
+    jpeg(bytes) ??
+    webp(bytes) ??
+    ktx2(bytes) ??
+    avif(bytes) ??
+    gif(bytes) ??
+    bmp(bytes);
   if (!info) return undefined;
   const valid = (side: number) => Number.isInteger(side) && side > 0 && side <= MAX_SIDE;
   return valid(info.width) && valid(info.height) ? info : undefined;
@@ -126,4 +133,19 @@ function gif(bytes: Uint8Array): ImageInfo | undefined {
   if (bytes.length < 10 || ascii(bytes, 0, 4) !== 'GIF8') return undefined;
   const data = view(bytes);
   return { format: 'gif', width: data.getUint16(6, true), height: data.getUint16(8, true) };
+}
+
+/** BMP, as older OBJ models' textures often are; the height is negative for top-down rows. */
+function bmp(bytes: Uint8Array): ImageInfo | undefined {
+  if (bytes.length < 26 || ascii(bytes, 0, 2) !== 'BM') return undefined;
+  const data = view(bytes);
+  // OS/2's 12-byte header keeps the size in 16 bits; the others in 32.
+  if (data.getUint32(14, true) === 12) {
+    return { format: 'bmp', width: data.getUint16(18, true), height: data.getUint16(20, true) };
+  }
+  return {
+    format: 'bmp',
+    width: data.getInt32(18, true),
+    height: Math.abs(data.getInt32(22, true)),
+  };
 }

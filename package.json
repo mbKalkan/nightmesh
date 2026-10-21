@@ -89,6 +89,33 @@
         "extensions": [
           ".gltf"
         ]
+      },
+      {
+        "id": "wavefront-obj",
+        "aliases": [
+          "Wavefront OBJ"
+        ],
+        "extensions": [
+          ".obj"
+        ]
+      },
+      {
+        "id": "stlascii",
+        "aliases": [
+          "STL"
+        ],
+        "extensions": [
+          ".stl"
+        ]
+      },
+      {
+        "id": "ply",
+        "aliases": [
+          "PLY"
+        ],
+        "extensions": [
+          ".ply"
+        ]
       }
     ],
     "customEditors": [
@@ -101,6 +128,15 @@
           },
           {
             "filenamePattern": "*.gltf"
+          },
+          {
+            "filenamePattern": "*.obj"
+          },
+          {
+            "filenamePattern": "*.stl"
+          },
+          {
+            "filenamePattern": "*.ply"
           }
         ],
         "priority": "default"
@@ -145,7 +181,7 @@
         },
         {
           "command": "nightmesh.showJson",
-          "when": "activeCustomEditorId == nightmesh.viewer"
+          "when": "activeCustomEditorId == nightmesh.viewer && nightmesh.gltf"
         },
         {
           "command": "nightmesh.saveScreenshot",
@@ -169,7 +205,7 @@
         },
         {
           "command": "nightmesh.showJson",
-          "when": "webviewId == 'nightmesh.viewer'",
+          "when": "webviewId == 'nightmesh.viewer' && nightmeshGltf",
           "group": "navigation@1"
         }
       ]
