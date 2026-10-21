@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowestTextContrast } from './contrast';
 import { openViewer } from './harness';
+import { areaOf } from './pixels';
 import type { ThemeName } from './themes';
 
 const SCREENS = 'test-results/screens';
@@ -90,5 +91,44 @@ test('keeps a measurement on the model when its units change', async ({ page }) 
     'aria-label',
     /^Size of the model.*: 40 in × 25 in × 20 in$/,
   );
+  expect(viewer.problems).toEqual([]);
+});
+
+/** The front corners at the bottom of the base, at either end, a few pixels off each. */
+const BASE_LEFT = { x: 304 + 3, y: 500 - 2 };
+const BASE_RIGHT = { x: 655 - 3, y: 632 + 2 };
+/** The dark theme's focus border, which the ruler is drawn in. */
+const FOCUS = [0x00, 0x78, 0xd4];
+
+test('snaps to a corner near the click, ringed before it is clicked', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('bracket.stl');
+  await button(page).click();
+  await page.locator('.nm-measure').evaluate((badge) => (badge.style.visibility = 'hidden'));
+
+  // Resting near the corner rings it: the ring's middle is on the corner, not the pointer.
+  await page.mouse.move(BASE_LEFT.x, BASE_LEFT.y);
+  const canvas = (await page.locator('.nm-canvas').boundingBox())!;
+  await expect
+    .poll(async () => {
+      const ring = await areaOf(page, '.nm-canvas', FOCUS);
+      if (!ring) return Infinity;
+      const x = canvas.x + (ring.left + ring.right) / 2;
+      const y = canvas.y + (ring.top + ring.bottom) / 2;
+      return Math.hypot(x - 304, y - 500);
+    })
+    .toBeLessThanOrEqual(2);
+  await page.mouse.move(BASE_LEFT.x + 200, BASE_LEFT.y - 300);
+  await expect.poll(() => areaOf(page, '.nm-canvas', FOCUS)).toBeUndefined();
+
+  // From corner to corner: the base's length, exactly.
+  await page.mouse.click(BASE_LEFT.x, BASE_LEFT.y);
+  await page.mouse.click(BASE_RIGHT.x, BASE_RIGHT.y);
+  await expect(badge(page)).toHaveAttribute(
+    'aria-label',
+    'Distance: 40 mm (X 40 mm, Y 0 mm, Z 0 mm)',
+  );
+  await expect(page.locator('.nm-ruler-label')).toHaveText('40 mm');
+  await page.screenshot({ path: `${SCREENS}/measure-snap-dark.png` });
   expect(viewer.problems).toEqual([]);
 });

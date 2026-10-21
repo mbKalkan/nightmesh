@@ -56,7 +56,8 @@ for files of hundreds of megabytes.
 - The size of the model, or of what is selected, in the corner of the view.
 - **Measure** the distance between two points on the model: click them with the ruler on (the
   toolbar or <kbd>M</kbd>), and the length shows over the line, with how far apart they are
-  along X, Y and Z in the corner. In the file's units for OBJ, STL and PLY.
+  along X, Y and Z in the corner. Clicks near a corner snap to it, so edges measure exactly. In
+  the file's units for OBJ, STL and PLY.
 - Models are lit by a built-in environment, so they look right without any setup.
 - Draco and meshopt compressed meshes, quantized models and KTX2 (Basis Universal) textures open
   too. Their decoders load only when a model needs them.
