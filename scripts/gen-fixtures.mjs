@@ -9,6 +9,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { Camera, Document, Format, Logger, NodeIO, Primitive } from '@gltf-transform/core';
 import {
   ALL_EXTENSIONS,
+  EXTMeshGPUInstancing,
   KHRLightsPunctual,
   KHRMaterialsClearcoat,
   KHRMaterialsEmissiveStrength,
@@ -412,6 +413,27 @@ function sceneModel({ edited = false } = {}) {
 }
 
 /** A row of spheres, one per kind of material the inspector shows. */
+/** Three boxes, a metre each and two metres apart, drawn as instances of one mesh. */
+function instanced() {
+  const doc = newDocument();
+  const material = doc.createMaterial('Clay').setBaseColorFactor([0.8, 0.75, 0.7, 1]);
+  const box = mesh(doc, 'Box', boxGeometry(1), material);
+  const instances = doc
+    .createExtension(EXTMeshGPUInstancing)
+    .setRequired(true)
+    .createInstancedMesh()
+    .setAttribute(
+      'TRANSLATION',
+      accessor(doc, 'VEC3', new Float32Array([-2, 0.5, 0, 0, 0.5, 0, 2, 0.5, 0])),
+    );
+  scene(
+    doc,
+    'Instances',
+    doc.createNode('Boxes').setMesh(box).setExtension('EXT_mesh_gpu_instancing', instances),
+  );
+  return doc;
+}
+
 function materials() {
   const doc = newDocument();
   const sphere = sphereGeometry(0.4, 32, 16);
@@ -1262,6 +1284,7 @@ await writeGltf('triangle.gltf', triangle());
 const sceneGlb = await writeGlb('scene.glb', sceneModel());
 await writeGlb('scene-edited.glb', sceneModel({ edited: true }));
 await writeGlb('materials.glb', materials());
+await writeGlb('instanced.glb', instanced());
 await writeGlb('animated.glb', animated());
 await writeGlb('variants.glb', variants());
 // Many exporters leave out the type of an image given by URI, which glTF allows.

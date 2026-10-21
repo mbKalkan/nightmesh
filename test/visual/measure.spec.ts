@@ -132,3 +132,54 @@ test('snaps to a corner near the click, ringed before it is clicked', async ({ p
   await page.screenshot({ path: `${SCREENS}/measure-snap-dark.png` });
   expect(viewer.problems).toEqual([]);
 });
+
+test('snaps to skinned vertices as they are posed', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('animated.glb');
+  // A second into the wave, the arm's top half is bent far to the right.
+  await page.locator('.nm-clips').selectOption('Wave');
+  await page.locator('.nm-timeline').evaluate((slider) => {
+    (slider as HTMLInputElement).value = '1';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await button(page).click();
+  await page.locator('.nm-measure').evaluate((badge) => (badge.style.visibility = 'hidden'));
+
+  // At the bend, right of where the arm stands unposed, a vertex is ringed.
+  await page.mouse.move(633, 288);
+  const canvas = (await page.locator('.nm-canvas').boundingBox())!;
+  await expect
+    .poll(async () => {
+      const ring = await areaOf(page, '.nm-canvas', FOCUS);
+      if (!ring) return Infinity;
+      const x = canvas.x + (ring.left + ring.right) / 2;
+      const y = canvas.y + (ring.top + ring.bottom) / 2;
+      return Math.hypot(x - 633, y - 288);
+    })
+    .toBeLessThanOrEqual(8);
+
+  // Across the arm below the bend: its width, exactly.
+  await page.mouse.click(560, 420);
+  await page.mouse.click(578, 420);
+  await expect(badge(page)).toHaveAttribute(
+    'aria-label',
+    'Distance: 0.2 m (X 0.2 m, Y 0 m, Z 0 m)',
+  );
+  expect(viewer.problems).toEqual([]);
+});
+
+test('snaps to the vertices of every GPU instance', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  // Three one-metre boxes, two metres apart, drawn as instances of one mesh.
+  await viewer.open('instanced.glb');
+  await page.locator('.nm-viewport').focus();
+  await page.keyboard.press('1');
+  await page.keyboard.press('m');
+  // From the first box's front bottom left corner to the third's.
+  await page.mouse.click(266 + 3, 448 - 2);
+  await page.mouse.click(673 + 3, 448 - 2);
+  await expect(badge(page)).toHaveAttribute('aria-label', 'Distance: 4 m (X 4 m, Y 0 m, Z 0 m)');
+  await page.screenshot({ path: `${SCREENS}/measure-instanced-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});

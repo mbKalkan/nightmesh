@@ -14,6 +14,7 @@ const VALID = [
   'scene.glb',
   'scene-edited.glb',
   'materials.glb',
+  'instanced.glb',
   'animated.glb',
   'variants.glb',
   'textured.gltf',

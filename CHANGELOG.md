@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the view gives it with how far apart the points are along X, Y and Z, in the file's units
   for OBJ, STL and PLY. A click near a corner snaps to it, so an edge measures exactly; a ring
   shows the corner a click would take. Points are read from what the GPU draws, so they work on
-  compressed, skinned and instanced meshes, lines and point clouds too. Escape stops measuring.
+  compressed, skinned (as posed) and instanced meshes, lines and point clouds too. Escape stops
+  measuring.
 
 - **Comparing two versions of a model.** When VS Code shows two versions side by side (Source
   Control, the Timeline, Compare Selected):
