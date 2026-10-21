@@ -30,21 +30,24 @@ const GRID_REACH = 1.5;
 const GRID_MIN_CELLS = 5;
 
 /**
- * The size of a grid cell for a model this wide on the ground, in metres: a power of ten, so the
- * model is 2 to 20 cells across.
+ * The size of a grid cell for a model this wide on the ground, in the same unit: a power of ten,
+ * so the model is 2 to 20 cells across.
  */
 export function gridCell(extent: number): number {
   return extent > 0 && Number.isFinite(extent) ? 10 ** Math.floor(Math.log10(extent / 2)) : 1;
 }
 
 /**
- * Drawn around the model to read it by: a ground grid under it, in metre cells, the world's axes
- * through the origin, and its bounding box. None is picked, framed or measured.
+ * Drawn around the model to read it by: a ground grid under it, in cells of a power of ten metres
+ * (or of the file's own unit), the world's axes through the origin, and its bounding box. None is
+ * picked, framed or measured.
  */
 export class Helpers {
   readonly group = new Group();
   /** The grid's cell size in metres, once fitted to a model. */
   cell: number | undefined;
+  /** The unit the cells are a power of ten of, in metres. */
+  private unit = 1;
   private readonly grid = new LineSegments(
     new BufferGeometry(),
     new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }),
@@ -143,12 +146,21 @@ export class Helpers {
     this.boundsGeometry.computeBoundingSphere();
   }
 
+  /**
+   * Makes the cells a power of ten of `unit` metres: the unit of an OBJ, STL or PLY file, so a
+   * model in inches lies on a grid of inches.
+   */
+  setUnit(unit: number): void {
+    this.unit = unit;
+    if (this.box) this.fit(this.box);
+  }
+
   /** Lays the grid under `box`, centered below it, and sizes the axes to it. */
   fit(box: Box3): void {
     this.box = box.clone();
     const size = box.getSize(new Vector3());
     const extent = Math.max(size.x, size.z) || size.y || 1;
-    const cell = gridCell(extent);
+    const cell = gridCell(extent / this.unit) * this.unit;
     this.cell = cell;
     const cells = Math.max(GRID_MIN_CELLS, Math.ceil((extent * GRID_REACH) / cell));
     const half = cells * cell;

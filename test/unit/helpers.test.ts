@@ -41,6 +41,17 @@ describe('Helpers', () => {
     helpers.dispose();
   });
 
+  it("lays the grid in powers of ten of the file's unit", () => {
+    const helpers = new Helpers();
+    // A wheel 5 inches across: inch squares, not centimetre ones.
+    helpers.setUnit(0.0254);
+    helpers.fit(new Box3(new Vector3(-0.0635, 0, -0.0635), new Vector3(0.0635, 0.075, 0.0635)));
+    expect(helpers.cell).toBeCloseTo(0.0254, 12);
+    helpers.setUnit(0.001);
+    expect(helpers.cell).toBeCloseTo(0.01, 12);
+    helpers.dispose();
+  });
+
   it('draws the axes through the origin, and shows only what is asked for', () => {
     const helpers = new Helpers();
     expect(helpers.gridShown).toBe(true);

@@ -26,9 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - STL files are taken to be in millimetres with Z up, as CAD writes them; OBJ and PLY in metres
   with Y up, or Z up when their coordinates are georeferenced. The **View** menu sets the units
   (millimetres, centimetres, metres, inches, feet) and which axis is up; the next file of the
-  same format opens that way. Sizes in the view and the inspector are given in the file's units.
-  Georeferenced models are drawn around their first point, where the view is precise; the
-  inspector keeps their coordinates.
+  same format opens that way. Sizes in the view and the inspector, and the grid's squares, are
+  in the file's units. Georeferenced models are drawn around their first point, where the view
+  is precise; the inspector keeps their coordinates.
 - Parts the file gives no material are drawn matte grey from both sides.
 - Problems in a file are listed over the model: missing material libraries and textures,
   textures in formats browsers can't show, faces naming vertices the file lacks, free-form
