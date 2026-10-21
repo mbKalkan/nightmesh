@@ -1,8 +1,11 @@
 import type {
+  CompareTarget,
+  DiffSide,
   ImageInfo,
   LengthUnit,
   MeshCheck,
   ModelFormat,
+  ModelSummary,
   Motion,
   StructureMessage,
   ValidationMessage,
@@ -11,19 +14,29 @@ import type {
 import { isMeshFormat } from '../../shared/formats';
 import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
+import { compare, COLLECTIONS, type Comparison } from './compare';
+import { COLLECTION_KINDS, CompareView } from './compareView';
 import { inspect, type InspectContext } from './details';
 import { referenceOf, type Reference } from './reference';
 import { fill, Formatter } from './format';
 import { GltfModel } from './gltf';
 import { InspectorView, type TexturePreview } from './inspectorView';
-import { ancestors, initiallyExpanded, outline, type EntryKey } from './outline';
+import {
+  ancestors,
+  entryKey,
+  initiallyExpanded,
+  outline,
+  parseKey,
+  type EntryKey,
+} from './outline';
 import { entryAt, entryPointer } from './pointers';
 import { buildReport } from './report';
 import { sizeAnalysis } from './sizes';
 import { SizeView } from './sizeView';
 import { statistics } from './statistics';
 import { StatisticsView } from './statisticsView';
-import { StructureTree } from './tree';
+import { summarize } from './summary';
+import { StructureTree, type TreeMark } from './tree';
 import { ModelUsage } from './usage';
 import { ValidationView } from './validationView';
 
@@ -38,6 +51,8 @@ export interface StructureEvents {
   showJson(pointer: string): void;
   /** A texture's image as the 3D view has it, for the inspector to show. */
   preview(texture: number): Promise<TexturePreview>;
+  /** While the model is compared with another version: its summary, each time it changes. */
+  summarized(summary: ModelSummary): void;
 }
 
 /**
@@ -51,6 +66,14 @@ export class StructureView {
   private readonly statistics: StatisticsView;
   private readonly validation: ValidationView;
   private readonly size: SizeView;
+  private readonly changes: CompareView;
+  /** Which side of a comparison the model is, while VS Code compares two versions of it. */
+  private comparing: DiffSide | undefined;
+  /** This side and the other in short, while compared, and what differs between them. */
+  private summary: ModelSummary | undefined;
+  private sentSummary: string | undefined;
+  private peerSummary: ModelSummary | undefined;
+  private marked = false;
   /** Each image's own bytes, from the host. */
   private imageBytes: readonly (number | null)[] | undefined;
   private readonly panel: SidePanel;
@@ -64,7 +87,7 @@ export class StructureView {
   private readonly gltf: boolean;
 
   constructor(
-    shell: Shell,
+    private readonly shell: Shell,
     private readonly strings: ViewerStrings,
     private readonly locale: string,
     /** The viewer's file format, which stays for its lifetime. */
@@ -97,9 +120,19 @@ export class StructureView {
       (key) => this.select(key),
       (text) => events.copy(text),
     );
+    this.changes = new CompareView(strings.structure, this.format, (key) => this.select(key));
     this.panel = shell.inspectorPanel;
     shell.structurePanel.body.replaceChildren(this.tree.element);
+    this.showTabs(shell.inspectorTab);
+  }
+
+  /** The right panel's tabs, with the changes first while two versions are compared. */
+  private showTabs(active: string): void {
+    const { strings } = this;
     const tabs = [
+      ...(this.comparing
+        ? [{ id: 'changes', label: strings.structure.compare.tab, content: this.changes.element }]
+        : []),
       { id: 'inspector', label: strings.structure.inspector, content: this.inspector.element },
       { id: 'statistics', label: strings.structure.statistics, content: this.statistics.element },
       // The glTF Validator and the size of the file's glTF parts don't apply to a model read
@@ -111,8 +144,120 @@ export class StructureView {
           ]
         : []),
     ];
-    const tab = tabs.some(({ id }) => id === shell.inspectorTab) ? shell.inspectorTab : 'inspector';
-    shell.inspectorPanel.setTabs(tabs, tab, (id) => (shell.inspectorTab = id));
+    const tab = tabs.some(({ id }) => id === active) ? active : 'inspector';
+    // The changes tab is there only while comparing: it isn't the one to open next time.
+    this.panel.setTabs(tabs, tab, (id) => {
+      if (id !== 'changes') this.shell.inspectorTab = id;
+    });
+    this.showBadge();
+    this.showComparison();
+  }
+
+  /**
+   * Makes the model one side of a comparison, with the changes in a tab of their own and marked
+   * in the tree, or no longer one.
+   */
+  setComparing(side: DiffSide | undefined): void {
+    const tabs = !this.comparing !== !side;
+    this.comparing = side;
+    this.peerSummary = undefined;
+    this.sentSummary = undefined;
+    if (tabs) this.showTabs(side ? 'changes' : this.shell.inspectorTab);
+    this.summarize();
+  }
+
+  /** The other side of the comparison in short, from the host. */
+  setPeerSummary(summary: ModelSummary): void {
+    if (!this.comparing) return;
+    this.peerSummary = summary;
+    this.showComparison();
+  }
+
+  /** What the other side of a comparison calls `key`, to select it there too. */
+  compareTarget(key: EntryKey): CompareTarget {
+    const parsed = parseKey(key);
+    const collection = COLLECTIONS.find((each) => COLLECTION_KINDS[each] === parsed?.kind);
+    const entry = collection && parsed && this.summary?.[collection][parsed.index];
+    return collection && entry ? { collection, key: entry.key } : { key };
+  }
+
+  /** The entry the other side of a comparison selected, as this side has it, if it does. */
+  entryFor(target: CompareTarget): EntryKey | undefined {
+    const { collection, key } = target;
+    if (!collection) {
+      return this.context && (inspect(this.context, key) || this.tree.hasTopLevel(key))
+        ? key
+        : undefined;
+    }
+    const entry = this.summary?.[collection].find((each) => each.key === key);
+    return entry && entryKey(COLLECTION_KINDS[collection], entry.index);
+  }
+
+  /** While compared: this side's summary, for the other side when it changed, compared again. */
+  private summarize(): void {
+    if (this.comparing && this.context) {
+      const { model, file, images, motion, check } = this.context;
+      this.summary = summarize(model, {
+        fileSize: file.size,
+        images,
+        imageBytes: this.imageBytes,
+        motion,
+        check,
+      });
+      const sent = JSON.stringify(this.summary);
+      if (sent !== this.sentSummary) {
+        this.sentSummary = sent;
+        this.events.summarized(this.summary);
+      }
+    } else {
+      this.summary = undefined;
+    }
+    this.showComparison();
+  }
+
+  private showComparison(): void {
+    const side = this.comparing;
+    const { summary, peerSummary } = this;
+    const comparison =
+      side && summary && peerSummary
+        ? side === 'original'
+          ? compare(summary, peerSummary)
+          : compare(peerSummary, summary)
+        : undefined;
+    if (side) {
+      this.changes.show(comparison, side);
+      const count = comparison?.changes.length;
+      const words = this.strings.structure.compare;
+      this.panel.setBadge(
+        'changes',
+        count ? this.format.count(count) : undefined,
+        count === 1 ? words.one : fill(words.many, this.format.count(count ?? 0)),
+      );
+    }
+    const marks = comparison && side ? this.marks(comparison, side) : new Map<EntryKey, TreeMark>();
+    if (marks.size > 0 || this.marked) this.tree.setMarks(marks);
+    this.marked = marks.size > 0;
+  }
+
+  /** The changes on this side, for the tree, and a dot on what holds them. */
+  private marks(comparison: Comparison, side: DiffSide): Map<EntryKey, TreeMark> {
+    const words = this.strings.structure.compare;
+    const marks = new Map<EntryKey, TreeMark>();
+    for (const change of comparison.changes) {
+      const index = side === 'original' ? change.original : change.modified;
+      if (index === undefined) continue;
+      const key = entryKey(COLLECTION_KINDS[change.collection], index);
+      marks.set(key, { kind: change.kind, label: words[change.kind] });
+    }
+    const model = this.context?.model;
+    if (!model) return marks;
+    const contains: TreeMark = { kind: 'contains', label: words.contains };
+    for (const key of [...marks.keys()]) {
+      for (const above of ancestors(model, key)) {
+        if (!marks.has(above)) marks.set(above, contains);
+      }
+    }
+    return marks;
   }
 
   /**
@@ -152,6 +297,7 @@ export class StructureView {
     this.statistics.show(statistics(model), model);
     this.showSize();
     this.show(this.selected, keep);
+    this.summarize();
   }
 
   /** Image sizes from the host: they fill in texture details and the texture memory. */
@@ -162,6 +308,7 @@ export class StructureView {
     this.showStatistics();
     this.showSize();
     this.render(true);
+    this.summarize();
   }
 
   private showSize(): void {
@@ -182,6 +329,7 @@ export class StructureView {
     this.format.setLength(unit);
     this.showStatistics();
     this.render(true);
+    if (this.comparing) this.showComparison();
   }
 
   private showStatistics(): void {
@@ -195,6 +343,7 @@ export class StructureView {
     if (!this.context) return;
     this.context.check = check;
     this.render(true);
+    this.summarize();
   }
 
   /** Whether each animation moves anything, from the host: the inspector says so. */
@@ -203,6 +352,7 @@ export class StructureView {
     this.context.motion = motion;
     this.showStatistics();
     this.render(true);
+    this.summarize();
   }
 
   /** What the glTF Validator says about the model, from the host. */

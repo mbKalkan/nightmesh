@@ -163,6 +163,29 @@ export interface StructureStrings {
   };
   /** What an OBJ, STL or PLY file says about itself. */
   source: SourceStrings;
+  compare: CompareStrings;
+}
+
+/** Words for the Changes tab and the tree's marks, while two versions of a model are compared. */
+export interface CompareStrings {
+  tab: string;
+  /** How the two versions are compared, above the changes. */
+  note: string;
+  /** Until the other version's summary arrives. */
+  waiting: string;
+  none: string;
+  /** How many changes: one, and `{0}` for any other number. */
+  one: string;
+  many: string;
+  added: string;
+  removed: string;
+  changed: string;
+  /** On what holds a change: a group, a scene, the nodes above a changed one. */
+  contains: string;
+  /** What changed about a thing, beside glTF's own property names. */
+  visibility: string;
+  geometry: string;
+  bounds: string;
 }
 
 /** Words for what an OBJ, STL or PLY file says about itself, in the inspector. */
@@ -596,6 +619,52 @@ export interface CameraState {
   zoom: number;
 }
 
+/** The kinds of things a comparison matches between two versions of a model. */
+export type SummaryCollection = 'nodes' | 'meshes' | 'materials' | 'textures' | 'animations';
+
+/** One thing in a model's summary. */
+export interface SummaryEntry {
+  /** What matches it in the other version: its name, with the names above it for a node. */
+  key: string;
+  /** Its glTF index in this version. */
+  index: number;
+  /** What it is, by aspect, written so that equal things read the same. */
+  facets: Record<string, string>;
+}
+
+export interface SummaryTotals {
+  fileSize: number;
+  nodes: number;
+  drawCalls: number;
+  vertices: number;
+  triangles: number;
+  materials: number;
+  textures: number;
+}
+
+/** A model in short, for the other side of a comparison to find what changed. */
+export interface ModelSummary {
+  totals: SummaryTotals;
+  /** The scene's size along X, Y and Z, in metres. */
+  dimensions?: number[];
+  /** An OBJ, STL or PLY model's mesh check, in the file's units. */
+  check?: MeshCheck;
+  nodes: SummaryEntry[];
+  meshes: SummaryEntry[];
+  materials: SummaryEntry[];
+  textures: SummaryEntry[];
+  animations: SummaryEntry[];
+}
+
+/**
+ * An entry of the structure as the other side of a comparison can find it: a thing it matches by
+ * name, or else an entry key (`model`, `scene:0`, `group:meshes`).
+ */
+export interface CompareTarget {
+  collection?: SummaryCollection;
+  key: string;
+}
+
 /** The check of an OBJ, STL or PLY model's triangles, once its parts are sent. */
 export interface MeshCheckMessage {
   type: 'meshCheck';
@@ -626,7 +695,11 @@ export type HostToWebviewMessage =
   /** The viewer is one side of a comparison, or no longer is. */
   | { type: 'diff'; side: DiffSide | undefined }
   /** The other side of the comparison moved its camera. */
-  | { type: 'peerCamera'; camera: CameraState };
+  | { type: 'peerCamera'; camera: CameraState }
+  /** The other side of the comparison, in short, to find what changed. */
+  | { type: 'peerSummary'; summary: ModelSummary }
+  /** The other side of the comparison selected something: select it here too. */
+  | { type: 'peerSelect'; target: CompareTarget };
 
 /**
  * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
@@ -662,4 +735,8 @@ export type WebviewToHostMessage =
   /** The user changed a preference; the host keeps them all for the next viewer. */
   | { type: 'preferences'; preferences: Preferences }
   /** The camera moved, in a viewer that is one side of a comparison. */
-  | { type: 'camera'; camera: CameraState };
+  | { type: 'camera'; camera: CameraState }
+  /** The model in short, in a viewer that is one side of a comparison, for the other side. */
+  | { type: 'summary'; summary: ModelSummary }
+  /** The selection changed, in a viewer that is one side of a comparison. */
+  | { type: 'compareSelect'; target: CompareTarget };

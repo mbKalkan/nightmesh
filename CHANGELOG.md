@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- When VS Code compares two versions of a model side by side (Source Control, the Timeline,
-  Compare Selected), both sides move together: orbiting, panning, zooming, standard views and
-  the projection in one go to the other. The newer side frames both when they open.
+- **Comparing two versions of a model.** When VS Code shows two versions side by side (Source
+  Control, the Timeline, Compare Selected):
+  - Both sides move together: orbiting, panning, zooming, standard views and the projection in
+    one go to the other. The newer side frames both when they open.
+  - A **Changes** tab lists what was added, removed or changed: nodes, meshes, materials,
+    textures and animations, matched by name, with what changed about each (transform,
+    geometry, a material's properties…), and the totals of both versions with the difference.
+  - The structure marks the changes as Source Control marks files: A, D and M in its colors,
+    and a dot on what holds a change.
+  - Selecting something on one side selects the same on the other.
 - glTF models with nodes hidden by `KHR_node_visibility` open, with those nodes and all below
   them hidden, lights included. The view frames and measures what is shown, and the statistics
   count it; a hidden node can still be selected in the structure.

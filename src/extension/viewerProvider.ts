@@ -217,6 +217,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           this.diffs.ready(member);
         } else if (message.type === 'camera') {
           this.diffs.camera(member, message.camera);
+        } else if (message.type === 'summary') {
+          this.diffs.summary(member, message.summary);
+        } else if (message.type === 'compareSelect') {
+          this.diffs.select(member, message.target);
         } else if (message.type === 'reload') {
           void load(true);
         } else if (message.type === 'draw') {

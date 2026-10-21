@@ -21,6 +21,24 @@ interface VisibleRow {
  * The tree takes focus as a whole and points `aria-activedescendant` at the focused row; arrow
  * keys move and select, Left and Right fold, typing jumps to a name.
  */
+/** The letters VS Code's Source Control marks files with; a dot for what holds a change. */
+const MARK_LETTERS: Readonly<Record<TreeMark['kind'], string>> = {
+  added: 'A',
+  removed: 'D',
+  changed: 'M',
+  contains: '•',
+};
+
+/**
+ * How an entry differs from the other version of the model, as VS Code's Source Control marks
+ * files: added, removed or changed, or holding something that is.
+ */
+export interface TreeMark {
+  kind: 'added' | 'removed' | 'changed' | 'contains';
+  /** What the mark says, for screen readers and as a tooltip. */
+  label: string;
+}
+
 export class StructureTree {
   readonly element: HTMLElement;
   private readonly rows: HTMLElement;
@@ -35,6 +53,7 @@ export class StructureTree {
   private frame = 0;
   private typed = '';
   private typedAt = 0;
+  private marks: ReadonlyMap<EntryKey, TreeMark> = new Map();
 
   constructor(
     label: string,
@@ -78,6 +97,20 @@ export class StructureTree {
     if (!keepScroll) this.element.scrollTop = 0;
     this.revealFocused();
     this.render();
+  }
+
+  /** Marks entries as a comparison found them; an empty map takes the marks away. */
+  setMarks(marks: ReadonlyMap<EntryKey, TreeMark>): void {
+    this.marks = marks;
+    // Rows are made with their marks: they are made again.
+    this.rows.replaceChildren();
+    this.rendered.clear();
+    this.render();
+  }
+
+  /** Whether `key` is one of the entries at the top: the model, a scene or a group. */
+  hasTopLevel(key: EntryKey): boolean {
+    return this.entries.some((entry) => entry.key === key);
   }
 
   expandedKeys(): EntryKey[] {
@@ -232,6 +265,19 @@ export class StructureTree {
       description.className = 'nm-tree-description';
       description.textContent = entry.description;
       element.append(description);
+    }
+    const mark = this.marks.get(entry.key);
+    if (mark) {
+      element.classList.add(`nm-change-${mark.kind}`);
+      element.title += ` (${mark.label})`;
+      const letter = document.createElement('span');
+      letter.className = 'nm-change-mark';
+      letter.textContent = MARK_LETTERS[mark.kind];
+      letter.setAttribute('aria-hidden', 'true');
+      const spoken = document.createElement('span');
+      spoken.className = 'nm-sr-only';
+      spoken.textContent = `, ${mark.label}`;
+      element.append(spoken, letter);
     }
     if (entry.count !== undefined) {
       const count = document.createElement('span');

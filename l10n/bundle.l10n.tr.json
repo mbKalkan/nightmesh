@@ -257,5 +257,17 @@
   "Non-manifold edges": "Manifold olmayan kenarlar",
   "Edges between faces wound opposite ways": "Yüzlerin ters sarıldığı kenarlar",
   "Shells": "Kabuklar",
-  "Faces without area": "Alanı olmayan yüzler"
+  "Faces without area": "Alanı olmayan yüzler",
+  "Changes": "Değişiklikler",
+  "Things are matched by name. Geometry is compared by its counts and bounds, not vertex by vertex.": "Öğeler adlarıyla eşleştirilir. Geometri tek tek tepe noktalarıyla değil, sayıları ve sınırlarıyla karşılaştırılır.",
+  "Waiting for the other version…": "Öteki sürüm bekleniyor…",
+  "No changes found.": "Değişiklik bulunmadı.",
+  "1 change": "1 değişiklik",
+  "{0} changes": "{0} değişiklik",
+  "Added": "Eklendi",
+  "Removed": "Silindi",
+  "Changed": "Değişti",
+  "Contains changes": "Değişiklik içeriyor",
+  "Visibility": "Görünürlük",
+  "Bounds": "Sınırlar"
 }

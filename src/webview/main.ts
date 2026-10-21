@@ -84,6 +84,8 @@ let menuKey: string | undefined;
 let menuPointer: string | undefined;
 /** True while the glTF JSON document selects in the viewer, which needn't be told back. */
 let selectingFromJson = false;
+/** True while the other side of a comparison selects here, which needn't be told back. */
+let selectingFromPeer = false;
 /** The context menu the 3D view opened, having set `menuKey` to what is under the pointer. */
 let viewContextMenu: Event | undefined;
 /** The row or link the context menu was opened on, outlined while the menu shows. */
@@ -154,6 +156,19 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'peerCamera':
       receivePeerCamera(message.camera);
       break;
+    case 'peerSummary':
+      if (diffSide) structure?.setPeerSummary(message.summary);
+      break;
+    case 'peerSelect': {
+      if (!diffSide || !structure) break;
+      // What the other side has and this one doesn't: nothing is selected here.
+      const key = structure.entryFor(message.target) ?? 'model';
+      if (key === selectedKey) break;
+      selectingFromPeer = true;
+      structure.select(key);
+      selectingFromPeer = false;
+      break;
+    }
     case 'select': {
       const key = structure?.entryAt(message.pointer);
       if (key === undefined || key === selectedKey) break;
@@ -249,6 +264,7 @@ function receiveSide(side: DiffSide | undefined): void {
   diffSide = side;
   followed = false;
   peerCamera = undefined;
+  structure?.setComparing(side);
   // A model drawn before this viewer knew it was compared: the other side looks from here.
   if (side === 'modified' && hasModel && shownView) cameraMoved(shownView.cameraState());
 }
@@ -428,6 +444,10 @@ function open(message: OpenMessage): void {
       if (changed && !selectingFromJson) {
         vscode.postMessage({ type: 'selected', pointer: structure?.pointerOf(key) ?? '' });
       }
+      // The other side of a comparison selects the same thing, as far as it has it.
+      if (changed && diffSide && !selectingFromPeer && structure) {
+        vscode.postMessage({ type: 'compareSelect', target: structure.compareTarget(key) });
+      }
       void view?.then((target) => {
         target?.select(key);
         // Picking an animation in the structure makes it the one the bar plays.
@@ -439,6 +459,7 @@ function open(message: OpenMessage): void {
     preview: async (texture) => (await view)?.textureImage(texture),
     copy: (text) => vscode.postMessage({ type: 'copy', text }),
     showJson: (pointer) => vscode.postMessage({ type: 'json', pointer }),
+    summarized: (summary) => vscode.postMessage({ type: 'summary', summary }),
   });
 }
 

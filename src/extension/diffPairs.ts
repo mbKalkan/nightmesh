@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import type { CameraState, DiffSide, HostToWebviewMessage } from '../shared/protocol';
+import type {
+  CameraState,
+  CompareTarget,
+  DiffSide,
+  HostToWebviewMessage,
+  ModelSummary,
+} from '../shared/protocol';
 import { DIFF_LABEL_SEPARATOR, orderSides, type DiffCandidate } from './diffSides';
 
 /** The two viewers of a comparison are created together; a lone one stops waiting after this. */
@@ -12,8 +18,9 @@ export interface DiffMember {
   ready: boolean;
   side?: DiffSide;
   peer?: DiffMember;
-  /** Where its camera last was, for a peer that comes later. */
+  /** Where its camera last was, and its model in short, for a peer that comes later. */
   camera?: CameraState;
+  summary?: ModelSummary;
 }
 
 interface Waiting {
@@ -24,7 +31,8 @@ interface Waiting {
 
 /**
  * Pairs up the two viewers of a comparison and relays what they share: where the camera is, so
- * both sides look at their model from the same place.
+ * both sides look at their model from the same place; each model in short, for the other side to
+ * find what changed; and what is selected, to select the same on both sides.
  *
  * VS Code compares files that have a custom editor by opening one editor per version side by
  * side, in a tab whose input the API doesn't expose and whose label reads "a.glb ↔ b.glb".
@@ -64,6 +72,19 @@ export class DiffPairs {
     if (peer?.ready) void peer.post({ type: 'peerCamera', camera });
   }
 
+  /** Passes a viewer's summary of its model on to the other side. */
+  summary(member: DiffMember, summary: ModelSummary): void {
+    member.summary = summary;
+    const { peer } = member;
+    if (peer?.ready) void peer.post({ type: 'peerSummary', summary });
+  }
+
+  /** Passes what a viewer selected on to the other side. */
+  select(member: DiffMember, target: CompareTarget): void {
+    const { peer } = member;
+    if (peer?.ready) void peer.post({ type: 'peerSelect', target });
+  }
+
   remove(member: DiffMember): void {
     for (const [column, waiting] of this.waiting) {
       if (waiting.member === member) {
@@ -95,6 +116,8 @@ export class DiffPairs {
     void member.post({ type: 'diff', side: member.side });
     const camera = member.peer?.camera;
     if (camera) void member.post({ type: 'peerCamera', camera });
+    const summary = member.peer?.summary;
+    if (summary) void member.post({ type: 'peerSummary', summary });
   }
 }
 

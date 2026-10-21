@@ -276,11 +276,16 @@ function triangle() {
 }
 
 /** A node hierarchy with meshes, lines and points, cameras, lights and a second scene. */
-function sceneModel() {
+/**
+ * Box, Sphere and a Group of a small box and points, with cameras and a light. `edited` is the
+ * next version of it, to compare: the box moves, the points go, a tall box comes, the clay turns
+ * blue.
+ */
+function sceneModel({ edited = false } = {}) {
   const doc = newDocument();
   const material = doc
     .createMaterial('Clay')
-    .setBaseColorFactor([0.8, 0.75, 0.7, 1])
+    .setBaseColorFactor(edited ? [0.55, 0.65, 0.8, 1] : [0.8, 0.75, 0.7, 1])
     .setRoughnessFactor(0.8);
   const box = mesh(doc, 'Box', boxGeometry(1), material);
   const sphere = mesh(doc, 'Sphere', sphereGeometry(0.5), material);
@@ -317,7 +322,12 @@ function sceneModel() {
   );
 
   const root = doc.createNode('Root').setExtras({ note: 'Extras appear in the inspector.' });
-  root.addChild(doc.createNode('Box').setMesh(box).setTranslation([-1.5, 0.5, 0]));
+  root.addChild(
+    doc
+      .createNode('Box')
+      .setMesh(box)
+      .setTranslation([-1.5, 0.5, edited ? 0.75 : 0]),
+  );
   root.addChild(
     doc
       .createNode('Sphere')
@@ -330,7 +340,16 @@ function sceneModel() {
   group.addChild(
     doc.createNode('Small Box').setMesh(box).setTranslation([0, 0.25, 0]).setScale([0.5, 0.5, 0.5]),
   );
-  group.addChild(doc.createNode('Points').setMesh(cloud).setTranslation([0, 0.5, 0]));
+  if (edited) {
+    group.addChild(
+      doc.createNode('Tall Box').setMesh(box).setTranslation([0, 0.5, 0]).setScale([0.4, 1, 0.4]),
+    );
+    // The points' mesh goes with them.
+    for (const primitive of cloud.listPrimitives()) primitive.getAttribute('POSITION').dispose();
+    cloud.dispose();
+  } else {
+    group.addChild(doc.createNode('Points').setMesh(cloud).setTranslation([0, 0.5, 0]));
+  }
   root.addChild(group);
   root.addChild(doc.createNode('Axes').setMesh(axes));
 
@@ -1241,6 +1260,7 @@ mkdirSync(OUT, { recursive: true });
 const triangleGlb = await writeGlb('triangle.glb', triangle());
 await writeGltf('triangle.gltf', triangle());
 const sceneGlb = await writeGlb('scene.glb', sceneModel());
+await writeGlb('scene-edited.glb', sceneModel({ edited: true }));
 await writeGlb('materials.glb', materials());
 await writeGlb('animated.glb', animated());
 await writeGlb('variants.glb', variants());
