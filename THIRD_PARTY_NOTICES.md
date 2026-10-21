@@ -15,7 +15,8 @@ This extension bundles the following open-source components.
 
 The pictures in `docs/images`, which the README shows, are of models from the
 [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) at commit
-`edc7c9e`. `npm run screenshots` downloads them; they aren't part of the extension or of this
+`edc7c9e` and [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) at commit
+`11ebb4e`. `npm run screenshots` downloads them; they aren't part of the extension or of this
 repository.
 
 | Model | Credit | License |
@@ -24,6 +25,7 @@ repository.
 | Sheen Chair | Eric Chadwick, for Wayfair LLC, 2020 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Toy Car | Guido Odendahl (model) and Eric Chadwick (extensions and scene), 2020 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Fox | PixelMannen (model, CC0 1.0), tomkranis (rigging and animation, CC BY 4.0), @AsoboStudio and @scurest (conversion to glTF, CC BY 4.0) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| Mars 2020 5 inch wheel | NASA | Free and without copyright, as the collection says; see [NASA's media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media). No endorsement by NASA is implied. |
 
 The models are shown as they are, rendered by Nightmesh.
 
