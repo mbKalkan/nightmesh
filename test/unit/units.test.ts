@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Formatter, withoutNoise } from '../../src/webview/structure/format';
-import { fileTransform, unitsFor, withUnits } from '../../src/webview/units';
+import { fileTransform, statedUnit, unitsFor, withUnits } from '../../src/webview/units';
 
 /** glTF as the host makes it from a file: the file's node, and maybe a node moving it back. */
 const gltf = (translation?: number[]) =>
@@ -29,6 +29,22 @@ describe('units of OBJ, STL and PLY files', () => {
   it('takes georeferenced coordinates to have Z up, as their height', () => {
     expect(unitsFor('ply', gltf([500002, 4100001, 100]))).toEqual({ unit: 'm', up: 'z' });
     expect(unitsFor('obj', gltf([500002, 4100001, 100]))).toEqual({ unit: 'm', up: 'z' });
+  });
+
+  it('takes the unit an OBJ file names in its comments, as Maya writes it', () => {
+    const obj = (comments: string[]) => ({
+      format: 'obj' as const,
+      statements: {},
+      comments,
+      mtllibs: [],
+      materials: [],
+    });
+    const maya = 'This file uses centimeters as units for non-parametric coordinates.';
+    expect(statedUnit(obj(['Wavefront OBJ', maya]))).toBe('cm');
+    expect(statedUnit(obj(['This file uses millimetres as units']))).toBe('mm');
+    expect(statedUnit(obj(['Blender v2.74 (sub 0) OBJ File']))).toBeUndefined();
+    expect(statedUnit(obj(['This file uses furlongs as units']))).toBeUndefined();
+    expect(statedUnit(undefined)).toBeUndefined();
   });
 
   it("scales and turns the file's node to metres with Y up", () => {

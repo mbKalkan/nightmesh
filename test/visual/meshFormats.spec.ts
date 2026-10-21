@@ -114,6 +114,21 @@ test('stands an STL in millimetres with Z up, and takes other units from the Vie
   expect(viewer.problems).toEqual([]);
 });
 
+test('opens an OBJ file in the unit its comments name, as Maya writes it', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('maya.obj');
+  await expect(page.locator('.nm-measure')).toHaveAttribute(
+    'aria-label',
+    'Size of the model: width (X), height (Y) and depth (Z): 20 cm × 30 cm × 0 cm',
+  );
+  await page.locator('[data-action="view"]').click();
+  const item = (label: string) =>
+    page.locator('.nm-menu .nm-menu-item', { has: page.getByText(label, { exact: true }) });
+  await expect(item('Centimetres')).toHaveAttribute('aria-checked', 'true');
+  await expect(item('Y Up')).toHaveAttribute('aria-checked', 'true');
+  expect(viewer.problems).toEqual([]);
+});
+
 test('shows what the file says about itself in the inspector', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('cloud.ply');

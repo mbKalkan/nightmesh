@@ -1,0 +1,7 @@
+# Nightmesh fixture generator
+# This file uses centimeters as units for non-parametric coordinates.
+v 0 0 0
+v 20 0 0
+v 20 30 0
+v 0 30 0
+f 1 2 3 4

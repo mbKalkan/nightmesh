@@ -1321,6 +1321,19 @@ write(
   'only-material.obj',
   text(['mtllib only-material.mtl', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3']),
 );
+// The comment Maya writes at the top of every OBJ file it exports, naming the unit.
+write(
+  'maya.obj',
+  text([
+    `# ${GENERATOR}`,
+    '# This file uses centimeters as units for non-parametric coordinates.',
+    'v 0 0 0',
+    'v 20 0 0',
+    'v 20 30 0',
+    'v 0 30 0',
+    'f 1 2 3 4',
+  ]),
+);
 // UTF-16 with its byte order mark, as Windows tools can write text.
 write(
   'utf16.obj',
