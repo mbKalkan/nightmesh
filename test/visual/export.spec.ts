@@ -44,14 +44,18 @@ test('saves a screenshot of the view as a PNG', async ({ page }) => {
 
   await menu(page).click();
   await item(page, 'Save Screenshot…').click();
+  // Software WebGL draws the view again and encodes the PNG in about a second, but in several
+  // while other tests draw beside it.
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const sent = (window as unknown as { __sent: { type: string; data?: Uint8Array }[] })
-          .__sent;
-        const data = sent.find((message) => message.type === 'save')?.data;
-        return data ? [...data.subarray(0, 8)] : undefined;
-      }),
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const sent = (window as unknown as { __sent: { type: string; data?: Uint8Array }[] })
+            .__sent;
+          const data = sent.find((message) => message.type === 'save')?.data;
+          return data ? [...data.subarray(0, 8)] : undefined;
+        }),
+      { timeout: 20_000 },
     )
     .toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   const size = await page.evaluate(() => {
