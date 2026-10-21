@@ -22,7 +22,7 @@ import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
-import { fileTransform, unitsFor, withUnits, type Units } from './units';
+import { UNIT_METRES, fileTransform, unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
 
@@ -281,10 +281,11 @@ function inUnits(json: string, drawn = false): string {
   return withUnits(json, decided, drawn);
 }
 
-/** Shows lengths in a file's own unit, in the view and the panels. */
+/** Shows lengths in a file's own unit, in the view, its grid and the panels. */
 function showLengthsIn({ unit }: Units): void {
   metres.setLength(unit);
   structure?.setLengthUnit(unit);
+  shownView?.setGridUnit(UNIT_METRES[unit]);
 }
 
 /**
@@ -621,6 +622,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   created.setHighlightColor(highlightColor());
   created.setHelperColors(helperColors(shell.viewport));
   created.setHelpers(helpersShown());
+  if (units) created.setGridUnit(UNIT_METRES[units.unit]);
   created.select(selectedKey);
   return created;
 }

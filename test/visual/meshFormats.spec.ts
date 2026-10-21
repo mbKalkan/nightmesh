@@ -95,11 +95,14 @@ test('stands an STL in millimetres with Z up, and takes other units from the Vie
   }
   await expect(item('Z Up')).toHaveAttribute('aria-checked', 'true');
   await expect(item('Millimetres')).toHaveAttribute('aria-checked', 'true');
+  await expect(item('Grid (10 mm squares)')).toBeVisible();
   await page.screenshot({ path: `${SCREENS}/mesh-units-menu-dark.png` });
 
   await item('Inches').click();
   await expect(badge).toHaveAttribute('aria-label', size('40 in × 25 in × 20 in'));
   await page.locator('[data-action="view"]').click();
+  // Squares of inches, as of millimetres before.
+  await expect(item('Grid (10 in squares)')).toBeVisible();
   await item('Y Up').click();
   await expect(badge).toHaveAttribute('aria-label', size('40 in × 20 in × 25 in'));
   await expect(section(page, 'Contents')).toContainText(['Dimensions', '[40, 20, 25] in']);

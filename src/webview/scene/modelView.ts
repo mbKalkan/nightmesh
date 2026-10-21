@@ -251,6 +251,12 @@ export class ModelView {
     return this.helpers.cell;
   }
 
+  /** Draws the grid in squares of a power of ten of `unit` metres: the file's length unit. */
+  setGridUnit(unit: number): void {
+    this.helpers.setUnit(unit);
+    this.requestRender();
+  }
+
   /** Shows a loaded model in place of the one before; `keepCamera` keeps the view the user had. */
   show(gltf: GLTF, keepCamera: boolean): void {
     const model = gltf.scene;
