@@ -2,6 +2,15 @@ import type { LengthUnit } from '../../shared/protocol';
 import { UNIT_METRES } from '../units';
 
 /**
+ * A size along X, Y and Z without rounding noise: a flat model, turned to stand up, measures a
+ * hair (1e-16) thick, which is shown as 0.
+ */
+export function withoutNoise(values: readonly number[]): number[] {
+  const largest = Math.max(...values.map(Math.abs));
+  return values.map((value) => (Math.abs(value) < largest * 1e-9 ? 0 : value));
+}
+
+/**
  * Numbers as the inspector shows them. Counts and sizes follow VS Code's display language; values
  * from the file keep a dot and no grouping, so they can be copied back into code or JSON. Lengths
  * are given in metres and shown in the unit set, the file's own for OBJ, STL and PLY.
@@ -63,7 +72,9 @@ export class Formatter {
    * size in the view gives it.
    */
   dimensions(values: readonly number[]): string {
-    const shown = values.map((value) => Number((value / UNIT_METRES[this.unit]).toPrecision(4)));
+    const shown = withoutNoise(values).map((value) =>
+      Number((value / UNIT_METRES[this.unit]).toPrecision(4)),
+    );
     return `${this.vector(shown)} ${this.unit}`;
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Formatter } from '../../src/webview/structure/format';
+import { Formatter, withoutNoise } from '../../src/webview/structure/format';
 import { fileTransform, unitsFor, withUnits } from '../../src/webview/units';
 
 /** glTF as the host makes it from a file: the file's node, and maybe a node moving it back. */
@@ -63,5 +63,13 @@ describe('units of OBJ, STL and PLY files', () => {
     expect(format.metres(1.016)).toBe('40 in');
     format.setLength('ft');
     expect(format.metres(1)).toBe('3.281 ft');
+  });
+
+  it('shows a flat model turned upright as flat, not a hair thick', () => {
+    expect(withoutNoise([0.002, 4.4e-19, 0.002])).toEqual([0.002, 0, 0.002]);
+    expect(withoutNoise([0.002, 1e-6, 0.002])).toEqual([0.002, 1e-6, 0.002]);
+    const format = new Formatter('en');
+    format.setLength('mm');
+    expect(format.dimensions([0.002, 4.4e-19, 0.002])).toBe('[2, 0, 2] mm');
   });
 });

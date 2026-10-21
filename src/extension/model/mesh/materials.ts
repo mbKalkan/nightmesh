@@ -70,6 +70,10 @@ export async function meshMaterials(
     }
   }
 
+  if (mesh.facts.format === 'obj' && mesh.materials.length === 0 && libraries.size === 1) {
+    adoptOnlyMaterial(mesh, [...libraries.keys()][0]);
+  }
+
   const specs: MaterialSpec[] = [];
   const statements: { library?: string; statements: [string, string][] }[] = [];
   const missing: string[] = [];
@@ -138,6 +142,23 @@ async function materialSpec(
   if (mtl?.maps.emissive) spec.emissiveTexture = await image(mtl.maps.emissive);
   if (mtl?.maps.normal) spec.normalTexture = await image(mtl.maps.normal);
   return spec;
+}
+
+/**
+ * An OBJ file with a material library and no `usemtl` at all, its library defining a single
+ * material: the faces are taken to be in that material, as Open3D reads them.
+ */
+function adoptOnlyMaterial(mesh: ParsedMesh, name: string): void {
+  const index = mesh.materials.push({ name }) - 1;
+  const visit = (objects: ParsedMesh['objects']) => {
+    for (const object of objects) {
+      for (const part of object.parts) {
+        if (part.mode === 'triangles' && part.material === undefined) part.material = index;
+      }
+      visit(object.children);
+    }
+  };
+  visit(mesh.objects);
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));

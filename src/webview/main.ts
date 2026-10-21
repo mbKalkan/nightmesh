@@ -19,7 +19,7 @@ import { Shell } from './shell';
 import { AnimationBar } from './animationBar';
 import { Gizmo } from './gizmo';
 import { MenuButton, type MenuItem } from './menu';
-import { Formatter, fill } from './structure/format';
+import { Formatter, fill, withoutNoise } from './structure/format';
 import { StructureView } from './structure/structureView';
 import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
 import { UNIT_METRES, fileTransform, unitsFor, withUnits, type Units } from './units';
@@ -600,7 +600,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     },
     animation: (state) =>
       animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
-    measured: (size, selection) => shell.setSize(size, selection, (value) => metres.metres(value)),
+    measured: (size, selection) =>
+      shell.setSize(size && withoutNoise(size), selection, (value) => metres.metres(value)),
     menu: (node, x, y) => {
       menuKey = node === undefined ? 'model' : `node:${node}`;
       markMenuTarget(undefined);

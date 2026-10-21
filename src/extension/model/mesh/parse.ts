@@ -6,6 +6,7 @@ import { MeshFormatError, type MeshReader, type ParsedMesh } from './geometry';
 import { ObjReader } from './obj';
 import { PlyReader, plyHeaderFacts } from './ply';
 import { StlReader, stlEncoding } from './stl';
+import { utf16 } from './text';
 
 /** Pieces of this size are read and handed to the reader in turn. */
 export const CHUNK = 4 * 1024 * 1024;
@@ -61,7 +62,8 @@ export function looksLike(
     case 'stl':
       return stlEncoding(head, size) ? 'yes' : 'no';
     case 'obj':
-      return head.subarray(0, 1024).includes(0) ? 'objectFile' : 'yes';
+      // UTF-16 text has zeros too, after its byte order mark.
+      return utf16(head) || !head.subarray(0, 1024).includes(0) ? 'yes' : 'objectFile';
   }
 }
 

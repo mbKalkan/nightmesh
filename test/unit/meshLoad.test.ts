@@ -138,6 +138,22 @@ describe('loading OBJ, STL and PLY', () => {
     ]);
   });
 
+  it('matches material names written in Latin-1, as older exporters write them', async () => {
+    const messages = await loadAll('latin1.obj');
+    expect(modelOf(messages).notices).toEqual([]);
+    expect(structureOf(messages).gltf.materials).toEqual([
+      expect.objectContaining({ name: 'Terraindæk' }),
+    ]);
+  });
+
+  it("puts faces in a library's only material when the file selects none", async () => {
+    const messages = await loadAll('only-material.obj');
+    const { gltf } = structureOf(messages);
+    expect(gltf.materials).toEqual([expect.objectContaining({ name: 'Clay' })]);
+    expect(gltf.meshes[0].primitives[0].material).toBe(0);
+    expect(modelOf(messages).notices).toEqual([]);
+  });
+
   it('says why a file can not be shown', async () => {
     const failed = async (name: string) => {
       const messages = await loadAll(name);
