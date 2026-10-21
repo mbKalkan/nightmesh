@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     textures and animations, matched by name, with what changed about each (transform,
     geometry, a material's properties…), and the totals of both versions with the difference.
   - The structure marks the changes as Source Control marks files: A, D and M in its colors,
-    and a dot on what holds a change.
+    and a dot on what holds a change. In the view, boxes in the same colors frame the nodes
+    that were added, removed or changed (View › Changes turns them off).
   - Selecting something on one side selects the same on the other.
 - glTF models with nodes hidden by `KHR_node_visibility` open, with those nodes and all below
   them hidden, lights included. The view frames and measures what is shown, and the statistics

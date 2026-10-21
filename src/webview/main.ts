@@ -24,7 +24,13 @@ import { Gizmo } from './gizmo';
 import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill, withoutNoise } from './structure/format';
 import { StructureView } from './structure/structureView';
-import { helperColors, highlightColor, viewportBackground, watchTheme } from './theme';
+import {
+  changeColors,
+  helperColors,
+  highlightColor,
+  viewportBackground,
+  watchTheme,
+} from './theme';
 import { UNIT_METRES, fileTransform, statedUnit, unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
 import { vscode } from './vscodeApi';
@@ -32,6 +38,7 @@ import { vscode } from './vscodeApi';
 type SceneModule = typeof import('./scene');
 type View = InstanceType<SceneModule['ModelView']>;
 type Measurement = import('./scene/ruler').Measurement;
+type ViewChange = import('./scene/modelView').ViewChange;
 
 /** A model on its way from the host: its JSON, and its parts as they arrive. */
 interface Arrival {
@@ -208,6 +215,7 @@ watchTheme(
       current?.setBackground(viewportBackground(shell.viewport));
       current?.setHighlightColor(highlightColor());
       current?.setHelperColors(helperColors(shell.viewport));
+      current?.setChangeColors(changeColors());
     }),
 );
 
@@ -300,6 +308,9 @@ function setMeasuring(measuring: boolean): void {
   shownView.setMeasuring(measuring);
   shell.setMeasuring(measuring);
 }
+
+/** The nodes a comparison found changed on this side, for the 3D view to box. */
+let comparedNodes: ViewChange[] = [];
 
 /** How many ends the measurement had when last shown: its distance is said once it has two. */
 let measuredEnds = 0;
@@ -500,6 +511,10 @@ function open(message: OpenMessage): void {
     copy: (text) => vscode.postMessage({ type: 'copy', text }),
     showJson: (pointer) => vscode.postMessage({ type: 'json', pointer }),
     summarized: (summary) => vscode.postMessage({ type: 'summary', summary }),
+    compared: (nodes) => {
+      comparedNodes = nodes;
+      shownView?.setChanges(nodes);
+    },
   });
 }
 
@@ -583,6 +598,17 @@ function viewMenuItems(): MenuItem[] {
       checked: shown.bounds,
       run: () => setHelpers({ bounds: !shown.bounds }),
     },
+    // While two versions are compared: boxes around what changed.
+    ...(diffSide && strings
+      ? [
+          {
+            label: strings.structure.compare.tab,
+            kind: 'check' as const,
+            checked: current.changesShown,
+            run: () => current.setChangesShown(!current.changesShown),
+          },
+        ]
+      : []),
     'separator',
     ...(['theme', 'dark', 'neutral', 'light'] as const).map((background) => ({
       label: text.backgrounds[background],
@@ -738,6 +764,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());
   created.setHelperColors(helperColors(shell.viewport));
+  created.setChangeColors(changeColors());
+  created.setChanges(comparedNodes);
   created.setHelpers(helpersShown());
   if (units) created.setGridUnit(UNIT_METRES[units.unit]);
   created.select(selectedKey);

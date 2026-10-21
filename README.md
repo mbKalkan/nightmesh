@@ -170,7 +170,8 @@ for files of hundreds of megabytes.
 - **Compare two versions** side by side (Source Control, the Timeline, Compare Selected): both
   views move together, a **Changes** tab lists what was added, removed or changed (nodes,
   meshes, materials, textures, animations, and the totals), the structure marks it as Source
-  Control marks files, and selecting on one side selects the same on the other.
+  Control marks files, boxes in the same colors frame it in the view, and selecting on one side
+  selects the same on the other.
 - Earlier versions from Git (the Timeline, Source Control, a comparison) open as they were
   committed, including models kept in Git LFS whose content is on this machine.
 - Live reload that keeps your view when the file is saved.

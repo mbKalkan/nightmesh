@@ -14,7 +14,7 @@ import type {
 import { isMeshFormat } from '../../shared/formats';
 import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
-import { compare, COLLECTIONS, type Comparison } from './compare';
+import { compare, COLLECTIONS, type ChangeKind, type Comparison } from './compare';
 import { COLLECTION_KINDS, CompareView } from './compareView';
 import { inspect, type InspectContext } from './details';
 import { referenceOf, type Reference } from './reference';
@@ -53,6 +53,8 @@ export interface StructureEvents {
   preview(texture: number): Promise<TexturePreview>;
   /** While the model is compared with another version: its summary, each time it changes. */
   summarized(summary: ModelSummary): void;
+  /** The nodes a comparison found added, removed or changed on this side; none once it ends. */
+  compared(nodes: { key: EntryKey; kind: ChangeKind }[]): void;
 }
 
 /**
@@ -74,6 +76,8 @@ export class StructureView {
   private sentSummary: string | undefined;
   private peerSummary: ModelSummary | undefined;
   private marked = false;
+  /** The nodes last said to have changed, to say only what is new. */
+  private comparedNodes = '[]';
   /** Each image's own bytes, from the host. */
   private imageBytes: readonly (number | null)[] | undefined;
   private readonly panel: SidePanel;
@@ -237,6 +241,18 @@ export class StructureView {
     const marks = comparison && side ? this.marks(comparison, side) : new Map<EntryKey, TreeMark>();
     if (marks.size > 0 || this.marked) this.tree.setMarks(marks);
     this.marked = marks.size > 0;
+    // The 3D view boxes the nodes that changed, as this side has them.
+    const nodes = (comparison?.changes ?? []).flatMap((change) => {
+      const index = side === 'original' ? change.original : change.modified;
+      return change.collection === 'nodes' && index !== undefined
+        ? [{ key: entryKey('node', index), kind: change.kind }]
+        : [];
+    });
+    const said = JSON.stringify(nodes);
+    if (said !== this.comparedNodes) {
+      this.comparedNodes = said;
+      this.events.compared(nodes);
+    }
   }
 
   /** The changes on this side, for the tree, and a dot on what holds them. */
