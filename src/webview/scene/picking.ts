@@ -147,8 +147,8 @@ export class Picker {
    * The vertex nearest the pixel of `region`, at most `radius` pixels from it, that the model
    * doesn't hide: exactly where it is, and its object. Each mesh, line and point cloud is drawn
    * once more as its vertices alone, one pixel each, over the depth of the model, and each pixel
-   * written gets its vertex's position. Skinned and instanced meshes are left out, as their
-   * vertices can't be drawn as points the way they are posed; so are GPUs that can't draw floats.
+   * written gets its vertex's position: posed as the mesh is, skinned, morphed and instanced. GPUs
+   * that can't draw floats get nothing.
    */
   nearestVertex(
     renderer: WebGLRenderer,
@@ -172,7 +172,7 @@ export class Picker {
     model.traverseVisible((object) => {
       const drawable = object as Partial<Mesh & Line & Points & SkinnedMesh & InstancedMesh>;
       if (!(drawable.isMesh || drawable.isLine || drawable.isPoints)) return;
-      if (drawable.isSkinnedMesh || drawable.isInstancedMesh || !drawable.geometry) return;
+      if (!drawable.geometry) return;
       sources.push(object);
       const points = new Points(drawable.geometry, this.vertexMaterial(sources.length));
       points.matrixAutoUpdate = false;
@@ -182,6 +182,26 @@ export class Picker {
       if (drawable.morphTargetInfluences) {
         points.morphTargetInfluences = drawable.morphTargetInfluences;
         points.morphTargetDictionary = drawable.morphTargetDictionary;
+      }
+      // three.js skins and instances whatever says it is skinned or instanced, whichever way it
+      // draws it: the points take the mesh's bones, or its instances, to be where its faces are.
+      if (drawable.isSkinnedMesh) {
+        Object.assign(points, {
+          isSkinnedMesh: true,
+          skeleton: drawable.skeleton,
+          bindMode: drawable.bindMode,
+          bindMatrix: drawable.bindMatrix,
+          bindMatrixInverse: drawable.bindMatrixInverse,
+        });
+      }
+      if (drawable.isInstancedMesh) {
+        Object.assign(points, {
+          isInstancedMesh: true,
+          instanceMatrix: drawable.instanceMatrix,
+          instanceColor: null,
+          morphTexture: null,
+          count: drawable.count,
+        });
       }
       vertices.add(points);
     });
@@ -416,10 +436,17 @@ export class Picker {
     material.fog = false;
     material.onBeforeCompile = (shader) => {
       shader.uniforms.nmObject = object;
-      shader.vertexShader = `varying vec3 nmView;\n${shader.vertexShader}`.replace(
-        '#include <project_vertex>',
-        DISTANCE_VERTEX,
-      );
+      // Points have no skinning of their own: the mesh's, for points standing in for a mesh.
+      shader.vertexShader = `varying vec3 nmView;\n${shader.vertexShader}`
+        .replace(
+          '#include <morphtarget_pars_vertex>',
+          '#include <morphtarget_pars_vertex>\n#include <skinning_pars_vertex>',
+        )
+        .replace(
+          '#include <morphtarget_vertex>',
+          '#include <morphtarget_vertex>\n\t#include <skinbase_vertex>\n\t#include <skinning_vertex>',
+        )
+        .replace('#include <project_vertex>', DISTANCE_VERTEX);
       shader.fragmentShader =
         `varying vec3 nmView;\nuniform float nmObject;\n${shader.fragmentShader}`.replace(
           '#include <premultiplied_alpha_fragment>',
