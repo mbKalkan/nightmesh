@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-26
+
+Compare two versions of a model side by side, measure distances on it, and OBJ smoothing groups.
+
 ### Added
 
 - **Measure** the distance between two points on the model: turn the ruler on from the toolbar
@@ -195,7 +199,8 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mbKalkan/nightmesh/releases/tag/v0.1.0
