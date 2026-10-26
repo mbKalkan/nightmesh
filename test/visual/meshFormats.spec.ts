@@ -45,6 +45,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as ThemeName[]) {
 
 for (const fixture of [
   'pyramid.obj',
+  'smooth.obj',
   'points.obj',
   'solids.stl',
   'colored.stl',
@@ -74,6 +75,46 @@ test('draws parts without a material light grey, not dark as glTF metal', async 
   }
   expect(light / (pixels.width * pixels.height)).toBeGreaterThan(0.02);
   expect(viewer.problems).toEqual([]);
+});
+
+/**
+ * Across the middle of the view, seen from the front by its normals, the largest change of color
+ * from one pixel to the next on the model: small where normals turn smoothly, large at the edges
+ * of flat faces.
+ */
+async function largestStep(page: Page, fixture: string): Promise<number> {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open(fixture);
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  await page.locator('.nm-viewport').focus();
+  await page.keyboard.press('1');
+  await page.locator('[data-action="shading"]').click();
+  await page
+    .locator('.nm-menu .nm-menu-item', { has: page.getByText('Normals', { exact: true }) })
+    .click();
+  await page.waitForTimeout(500);
+  const pixels = await pixelsOf(page, '.nm-canvas');
+  const y = Math.round(pixels.height / 2);
+  const background = pixels.at(2, y);
+  const differs = (a: number[], b: number[]) =>
+    Math.max(...a.map((value, index) => Math.abs(value - b[index])));
+  const model: number[] = [];
+  for (let x = 0; x < pixels.width; x++) {
+    if (differs(pixels.at(x, y), background) > 20) model.push(x);
+  }
+  expect(model.length).toBeGreaterThan(100);
+  // A few pixels in from the outline, where the background blends in.
+  let largest = 0;
+  for (let x = model[0] + 4; x < model.at(-1)! - 4; x++) {
+    largest = Math.max(largest, differs(pixels.at(x, y), pixels.at(x + 1, y)));
+  }
+  await page.screenshot({ path: `${SCREENS}/mesh-${fixture.replace('.', '-')}-normals-dark.png` });
+  expect(viewer.problems).toEqual([]);
+  return largest;
+}
+
+test('draws faces without normals in an OBJ smoothing group round', async ({ page }) => {
+  expect(await largestStep(page, 'smooth.obj')).toBeLessThan(8);
 });
 
 test('stands an STL in millimetres with Z up, and takes other units from the View menu', async ({
