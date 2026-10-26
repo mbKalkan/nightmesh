@@ -9,16 +9,18 @@
 [![CI](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**View and inspect glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your dark theme.**
+**View, inspect, compare and measure glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your
+dark theme.**
 
 Nightmesh is a fast, offline, view-only viewer for 3D models: glTF (`.glb`, and `.gltf` with
 its `.bin` files and textures), OBJ with its materials and textures, STL and PLY. It shows the
 model in a 3D view that follows your color theme, and next to it what the file holds: its node
 tree, meshes, materials, textures and animations, how many triangles it draws and how big it
 is. A glTF's structure is there as soon as the file opens, before the geometry has loaded, even
-for files of hundreds of megabytes.
+for files of hundreds of megabytes. It compares two versions of a model side by side, as Source
+Control shows them, and measures distances on it.
 
-> **Preview.** glTF, GLB, OBJ, STL and PLY open today. 3D Tiles may follow.
+> **Preview.** glTF, GLB, OBJ, STL and PLY open today. 3D Tiles comes next, before 1.0.
 
 ![Nightmesh opening a concept car: the structure shows while the model loads, a door picked in the view is selected in the tree and described in the inspector, the paint changes to another variant, a wireframe is drawn over it, and the statistics count the scene](docs/images/demo.gif)
 
