@@ -124,6 +124,9 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'animations':
       if (message.loadId === structureLoad) receiveMotion(message.motion);
       break;
+    case 'instances':
+      if (message.loadId === structureLoad) structure?.setInstances(message.nodes);
+      break;
     case 'meshCheck':
       if (message.loadId === structureLoad) structure?.setMeshCheck(message.check);
       break;

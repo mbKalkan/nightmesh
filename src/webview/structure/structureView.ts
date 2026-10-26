@@ -2,6 +2,7 @@ import type {
   CompareTarget,
   DiffSide,
   ImageInfo,
+  InstancesMessage,
   LengthUnit,
   MeshCheck,
   ModelFormat,
@@ -366,6 +367,17 @@ export class StructureView {
   setMotion(motion: readonly (Motion | null)[]): void {
     if (!this.context) return;
     this.context.motion = motion;
+    this.showStatistics();
+    this.render(true);
+    this.summarize();
+  }
+
+  /** Where each node's GPU instances are, from the host: dimensions and bounds count them all. */
+  setInstances(nodes: InstancesMessage['nodes']): void {
+    if (!this.context) return;
+    const { instanceBounds } = this.context.model;
+    instanceBounds.clear();
+    for (const { node, min, max } of nodes) instanceBounds.set(node, { min, max });
     this.showStatistics();
     this.render(true);
     this.summarize();

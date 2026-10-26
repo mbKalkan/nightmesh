@@ -558,6 +558,17 @@ export interface AnimationsMessage {
 }
 
 /**
+ * Nodes drawn with GPU instances (EXT_mesh_gpu_instancing), each with the box around all its
+ * instances in the node's own space, read from their transforms in the binary data. Nodes whose
+ * transforms couldn't be read aren't listed.
+ */
+export interface InstancesMessage {
+  type: 'instances';
+  loadId: number;
+  nodes: { node: number; min: number[]; max: number[] }[];
+}
+
+/**
  * A model to draw. Its bytes follow in `part` and `parts` messages, `parts` keys in all;
  * the webview hands them to glTF's loader under those keys, so the loader never fetches.
  */
@@ -690,6 +701,7 @@ export type HostToWebviewMessage =
   | ProgressMessage
   | ImagesMessage
   | AnimationsMessage
+  | InstancesMessage
   | MeshCheckMessage
   | ModelMessage
   | LargeMessage

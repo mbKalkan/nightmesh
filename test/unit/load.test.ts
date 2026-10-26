@@ -27,10 +27,10 @@ async function loadAll(name: string): Promise<HostToWebviewMessage[]> {
   return messages;
 }
 
-/** The messages after the structure, image sizes and animation motion, checked on their own. */
+/** The messages after the structure, image sizes, animation motion and instances, on their own. */
 const load = async (name: string) =>
   (await loadAll(name)).filter(
-    (message) => !['structure', 'images', 'animations'].includes(message.type),
+    (message) => !['structure', 'images', 'animations', 'instances'].includes(message.type),
   );
 
 const failure = async (name: string) => {
@@ -108,6 +108,22 @@ describe('loadMessages', () => {
     ]);
     expect(messages[2]).toMatchObject({ motion: ['moves', 'moves', 'moves', 'moves', 'none'] });
     expect((await loadAll('scene.glb')).map((message) => message.type)).not.toContain('animations');
+  });
+
+  it('says where GPU instances are before the model is drawn', async () => {
+    const messages = await loadAll('instanced.glb');
+    expect(messages.map((message) => message.type).slice(0, 3)).toEqual([
+      'structure',
+      'images',
+      'instances',
+    ]);
+    // Three boxes a metre wide, at x = -2, 0 and 2, standing on the ground.
+    expect(messages[2]).toEqual({
+      type: 'instances',
+      loadId: 1,
+      nodes: [{ node: 0, min: [-2.5, 0, -0.5], max: [2.5, 1, 0.5] }],
+    });
+    expect((await loadAll('scene.glb')).map((message) => message.type)).not.toContain('instances');
   });
 
   it('asks before sending a model too large to draw lightly, and only then', async () => {

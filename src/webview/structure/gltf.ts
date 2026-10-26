@@ -56,6 +56,11 @@ export class GltfModel {
   private sceneOfRoot: Int32Array | undefined;
   private users = new Map<string, number[][]>();
   private textureUseList: TextureUse[][] | undefined;
+  /**
+   * By node, the box around its GPU instances in its own space, from the host, which reads their
+   * transforms; without it, a node measures as one instance of its mesh.
+   */
+  readonly instanceBounds = new Map<number, { min: number[]; max: number[] }>();
 
   constructor(json: unknown) {
     this.root = isObject(json) ? json : {};

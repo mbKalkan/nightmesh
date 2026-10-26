@@ -286,6 +286,21 @@ test('shows counts in the mesh table in full, however long', async ({ page }) =>
   expect(viewer.problems).toEqual([]);
 });
 
+test('measures every GPU instance, from their transforms, before the model is drawn', async ({
+  page,
+}) => {
+  // Without WebGL nothing is drawn: the sizes come from the instances the host read.
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.open('instanced.glb');
+  // Three one-metre boxes, two metres apart, on the ground.
+  await row(page, 'Boxes').click();
+  await expect(section(page, 'Node')).toContainText(['Dimensions', '[5, 1, 1] m']);
+  await page.locator('.nm-panel-tab', { hasText: 'Statistics' }).click();
+  await expect(page.locator('.nm-statistics dl')).toContainText('Instances3');
+  await expect(page.locator('.nm-statistics dl')).toContainText('Dimensions[5, 1, 1] m');
+  expect(viewer.problems).toEqual([]);
+});
+
 test('previews textures and gives their size and memory', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('textured.gltf');

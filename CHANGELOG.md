@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them hidden, lights included. The view frames and measures what is shown, and the statistics
   count it; a hidden node can still be selected in the structure.
 
+### Fixed
+
+- A node drawn with GPU instances (`EXT_mesh_gpu_instancing`) measures across all of them in
+  the inspector, the statistics, the report and a comparison, even before the model is drawn.
+  It measured as a single instance before.
+
 ## [0.3.0] - 2026-10-21
 
 OBJ, STL and PLY models, in their own units, with a mesh check for 3D printing.

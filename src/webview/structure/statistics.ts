@@ -107,7 +107,7 @@ export function statistics(
     // GPU instancing draws all of a node's instances in one call per primitive.
     result.drawCalls += row.primitives;
 
-    box.addMesh(model, mesh, world);
+    box.addNode(model, node, world);
   }
 
   for (const row of byMesh.values()) {

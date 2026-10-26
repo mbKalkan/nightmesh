@@ -49,6 +49,19 @@ export class BoxBuilder {
     }
   }
 
+  /** Adds what a node draws, placed by `world`: its mesh, or all its GPU instances. */
+  addNode(model: GltfModel, node: number, world: Matrix = IDENTITY): void {
+    const instances = model.instanceBounds.get(node);
+    if (instances) {
+      for (const corner of corners(instances.min, instances.max)) {
+        this.addPoint(transform(world, corner));
+      }
+      return;
+    }
+    const mesh = model.ref('meshes', model.items('nodes')[node]?.mesh);
+    if (mesh !== undefined) this.addMesh(model, mesh, world);
+  }
+
   addPoint(point: number[]): void {
     for (let axis = 0; axis < 3; axis++) {
       this.min[axis] = Math.min(this.min[axis], point[axis]);
@@ -79,8 +92,7 @@ export function nodesBounds(model: GltfModel, nodes: readonly number[]): Bounds 
   const stack = nodes.map((node) => ({ node, world: worldMatrix(model, node) }));
   while (stack.length > 0) {
     const { node, world } = stack.pop()!;
-    const mesh = model.ref('meshes', model.items('nodes')[node].mesh);
-    if (mesh !== undefined) box.addMesh(model, mesh, world);
+    box.addNode(model, node, world);
     for (const child of model.children(node)) {
       stack.push({ node: child, world: multiply(world, localMatrix(model.items('nodes')[child])) });
     }
@@ -97,8 +109,7 @@ export function nodeSize(model: GltfModel, node: number): number[] | undefined {
   const stack = [{ node, local: IDENTITY }];
   while (stack.length > 0) {
     const { node: current, local } = stack.pop()!;
-    const mesh = model.ref('meshes', model.items('nodes')[current].mesh);
-    if (mesh !== undefined) box.addMesh(model, mesh, local);
+    box.addNode(model, current, local);
     for (const child of model.children(current)) {
       stack.push({ node: child, local: multiply(local, localMatrix(model.items('nodes')[child])) });
     }
