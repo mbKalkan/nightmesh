@@ -1,6 +1,7 @@
 // Tells, from an animation's keyframes, whether it moves anything: exporters sometimes write a
 // clip with two identical keys per channel, which plays without anything moving.
 import type { Motion } from '../../shared/protocol';
+import { AccessorReader, type Accessor } from './accessors';
 import type { Gltf, Part } from './plan';
 
 /** Keyframe data read to tell, over all of a model's animations; past it, motion is unknown. */
@@ -8,31 +9,6 @@ export const MOTION_BYTES = 32 * 1024 * 1024;
 
 /** Values closer than this count as the same. */
 const EPSILON = 1e-5;
-
-const COMPONENTS: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
-
-/** Component types: their size in bytes, and the largest value of normalized integers. */
-const TYPES: Record<
-  number,
-  { size: number; read: (view: DataView, at: number) => number; max: number }
-> = {
-  5120: { size: 1, read: (view, at) => view.getInt8(at), max: 127 },
-  5121: { size: 1, read: (view, at) => view.getUint8(at), max: 255 },
-  5122: { size: 2, read: (view, at) => view.getInt16(at, true), max: 32767 },
-  5123: { size: 2, read: (view, at) => view.getUint16(at, true), max: 65535 },
-  5125: { size: 4, read: (view, at) => view.getUint32(at, true), max: 1 },
-  5126: { size: 4, read: (view, at) => view.getFloat32(at, true), max: 1 },
-};
-
-interface Accessor {
-  bufferView?: number;
-  byteOffset?: number;
-  componentType?: number;
-  normalized?: boolean;
-  count?: number;
-  type?: string;
-  sparse?: unknown;
-}
 
 interface Channel {
   sampler?: number;
@@ -69,36 +45,8 @@ export async function animationMotion(plan: {
     nodes?: Node[];
     meshes?: { weights?: number[] }[];
   };
-  const parts = new Map(plan.parts.map((part) => [part.key, part]));
-  let budget = MOTION_BYTES;
-
-  const read = async (index: number | undefined): Promise<number[] | undefined> => {
-    const accessor = index === undefined ? undefined : json.accessors?.[index];
-    const type = TYPES[accessor?.componentType ?? 0];
-    const components = COMPONENTS[accessor?.type ?? ''];
-    const count = accessor?.count;
-    if (!accessor || !type || !components || !Number.isInteger(count) || accessor.sparse)
-      return undefined;
-    const part = parts.get(`bufferView:${accessor.bufferView}`);
-    const stride =
-      (json.bufferViews?.[accessor.bufferView ?? -1] as { byteStride?: number } | undefined)
-        ?.byteStride ?? components * type.size;
-    const length = (count! - 1) * stride + components * type.size;
-    const offset = accessor.byteOffset ?? 0;
-    if (!part || count! < 1 || offset < 0 || offset + length > part.length || length > budget)
-      return undefined;
-    budget -= length;
-    const bytes = await part.source.read(part.offset + offset, length);
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const values: number[] = [];
-    for (let item = 0; item < count!; item++) {
-      for (let component = 0; component < components; component++) {
-        const raw = type.read(view, item * stride + component * type.size);
-        values.push(accessor.normalized ? Math.max(raw / type.max, -1) : raw);
-      }
-    }
-    return values;
-  };
+  const reader = new AccessorReader(json, plan.parts, MOTION_BYTES);
+  const read = (index: number | undefined) => reader.read(index);
 
   const results: (Motion | null)[] = [];
   for (const animation of json.animations ?? []) {

@@ -10,6 +10,7 @@ import type {
 } from '../../shared/protocol';
 import { MAX_JSON_BYTES, readGlbLayout, sniff, withoutByteOrderMark } from './container';
 import { animationMotion } from './animationMotion';
+import { instanceBounds } from './instances';
 import { IMAGE_HEADER_BYTES, readImageInfo } from './imageInfo';
 import { meshMaterials } from './mesh/materials';
 import { MeshFormatError, type ParsedMesh } from './mesh/geometry';
@@ -325,6 +326,10 @@ async function* drawMessages(
   yield { type: 'images', loadId, images: infos, bytes: imageBytes };
   if (plan.json.animations?.length) {
     yield { type: 'animations', loadId, motion: await animationMotion(plan) };
+  }
+  if (plan.json.extensionsUsed?.includes('EXT_mesh_gpu_instancing')) {
+    const nodes = await instanceBounds(plan);
+    if (nodes.length > 0) yield { type: 'instances', loadId, nodes };
   }
 
   const said = [...resources.problems.values(), ...notices];
