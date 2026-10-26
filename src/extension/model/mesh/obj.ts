@@ -1,6 +1,9 @@
 // Wavefront OBJ: vertices, texture coordinates and normals in lists of their own, faces that pick
 // one of each for every corner. Each object (`o`) and group (`g`) becomes a node; within one, the
 // faces of each material are a primitive, its vertices the distinct corners its faces use.
+// Faces without normals in a smoothing group (`s 1`) get normals averaged over the faces of that
+// group around each vertex, as Blender and 3ds Max draw them; other faces without normals stay
+// flat, in a primitive of their own.
 import type { ObjFacts } from '../../../shared/protocol';
 import { Growable, TripleIndex } from './arrays';
 import {
@@ -19,6 +22,8 @@ import { triangulate } from './polygon';
 import { Cursor, LineSplitter, concat, decodeText, utf16 } from './text';
 
 const NONE = -1;
+/** A corner's normal index at or below this is a made one: smoothed normal `SMOOTHED - index`. */
+const SMOOTHED = -2;
 const HASH = 0x23;
 const BACKSLASH = 0x5c;
 const SPACE = 0x20;
@@ -36,7 +41,7 @@ const FREE_FORM = new Set(['curv', 'curv2', 'surf']);
 const COMMENTS = 10;
 
 class Primitive {
-  /** Each distinct corner: its position, texture and normal index, or NONE. */
+  /** Each distinct corner: its position, texture and normal index (or NONE, or a smoothed one). */
   readonly corners = new Growable(Int32Array, 64);
   readonly indices = new Growable(Uint32Array, 64);
   readonly table = new TripleIndex(16);
@@ -72,8 +77,9 @@ class Node {
 
   constructor(readonly name: string | undefined) {}
 
-  primitive(mode: PartMode, material: number | undefined): Primitive {
-    const key = `${mode}:${material ?? ''}`;
+  /** Faces with normals and faces drawn flat, without, go in primitives apart. */
+  primitive(mode: PartMode, material: number | undefined, normals: boolean): Primitive {
+    const key = `${mode}:${material ?? ''}:${normals ? 'n' : ''}`;
     let primitive = this.primitives.get(key);
     if (!primitive) {
       primitive = new Primitive(mode, material);
@@ -103,6 +109,19 @@ export class ObjReader implements MeshReader {
   private brightest = 0;
   private readonly texcoords = new Growable(Float32Array, 1 << 14);
   private readonly normals = new Growable(Float32Array, 1 << 14);
+  /** The smoothing group of the faces read, from `s`: 0 when off. */
+  private smoothing = 0;
+  /**
+   * Smoothed normals: one for each vertex and smoothing group that a face without normals uses,
+   * as a sum of face normals weighted by the angle of each face at the vertex.
+   */
+  private readonly smoothedSums = new Growable(Float32Array, 3 * 256);
+  /** By vertex, the first group it was smoothed in and its smoothed normal there, plus 1… */
+  private groupAt = new Int32Array(0);
+  private smoothedAt = new Int32Array(0);
+  /** …and, for vertices on the border of groups, by vertex and group, those of other groups. */
+  private readonly otherIndex = new TripleIndex(64);
+  private readonly otherSmoothed = new Growable(Int32Array, 64);
   /** Vertices whose coordinates aren't numbers: faces using them are left out. */
   private readonly invalid = new Set<number>();
   /** The file's top level: a node for each object, and groups outside any. */
@@ -127,6 +146,8 @@ export class ObjReader implements MeshReader {
   private polygon = new Int32Array(3 * 64);
   private polygonXyz = new Float64Array(3 * 64);
   private polygonPart: Primitive | undefined;
+  /** Whether the polygon read has corners with smoothed normals. */
+  private polygonSmoothed = false;
   private first = true;
   /** For a file in UTF-16, as some Windows tools write text: read as UTF-8. */
   private transcoder: InstanceType<typeof TextDecoder> | undefined;
@@ -221,6 +242,9 @@ export class ObjReader implements MeshReader {
         else this.group = (this.object ?? this.root).child(name);
         return;
       }
+      case 's':
+        this.smoothing = smoothingGroup(cursor.rest());
+        return;
       case 'usemtl':
         return this.useMaterial(cursor.rest());
       case 'mtllib':
@@ -299,8 +323,18 @@ export class ObjReader implements MeshReader {
       this.broken++;
       return;
     }
-    const primitive = this.current().primitive(mode, this.material);
     const corners = this.polygon;
+    let withNormals = mode === 'triangles';
+    this.polygonSmoothed = false;
+    for (let i = 0; withNormals && i < count; i++) {
+      if (corners[i * 3 + 2] !== NONE) continue;
+      if (this.smoothing === 0) withNormals = false;
+      else {
+        corners[i * 3 + 2] = this.smoothed(corners[i * 3]);
+        this.polygonSmoothed = true;
+      }
+    }
+    const primitive = this.current().primitive(mode, this.material, withNormals);
     if (mode === 'triangles' && count === 3) {
       this.polygonPart = primitive;
       this.polygonTriangle(0, 1, 2);
@@ -339,7 +373,87 @@ export class ObjReader implements MeshReader {
     polygonPart!.corner(polygon[a * 3], polygon[a * 3 + 1], polygon[a * 3 + 2]);
     polygonPart!.corner(polygon[b * 3], polygon[b * 3 + 1], polygon[b * 3 + 2]);
     polygonPart!.corner(polygon[c * 3], polygon[c * 3 + 1], polygon[c * 3 + 2]);
+    if (this.polygonSmoothed) this.smoothTriangle(a, b, c);
   };
+
+  /** The smoothed normal of a vertex in the current smoothing group, as a normal index. */
+  private smoothed(v: number): number {
+    if (v >= this.smoothedAt.length) {
+      const size = Math.max(v + 1, this.positions.array.length / 3);
+      const groups = new Int32Array(size);
+      groups.set(this.groupAt);
+      this.groupAt = groups;
+      const smoothed = new Int32Array(size);
+      smoothed.set(this.smoothedAt);
+      this.smoothedAt = smoothed;
+    }
+    const group = this.smoothing | 0;
+    const first = this.smoothedAt[v];
+    if (first === 0) {
+      const index = this.newSmoothed();
+      this.groupAt[v] = group;
+      this.smoothedAt[v] = index + 1;
+      return SMOOTHED - index;
+    }
+    if (this.groupAt[v] === group) return SMOOTHED - (first - 1);
+    const other = this.otherIndex.index(v, group, 0);
+    if (this.otherIndex.added) this.otherSmoothed.push(this.newSmoothed());
+    return SMOOTHED - this.otherSmoothed.array[other];
+  }
+
+  private newSmoothed(): number {
+    this.smoothedSums.push3(0, 0, 0);
+    return this.smoothedSums.length / 3 - 1;
+  }
+
+  /**
+   * Adds a triangle's normal to the smoothed normals of its corners, weighted by its angle at
+   * each: a polygon cut into triangles then counts as much as the polygon.
+   */
+  private smoothTriangle(a: number, b: number, c: number): void {
+    const { polygon } = this;
+    const p = this.positions.array;
+    const pa = polygon[a * 3] * 3;
+    const pb = polygon[b * 3] * 3;
+    const pc = polygon[c * 3] * 3;
+    const abx = p[pb] - p[pa];
+    const aby = p[pb + 1] - p[pa + 1];
+    const abz = p[pb + 2] - p[pa + 2];
+    const acx = p[pc] - p[pa];
+    const acy = p[pc + 1] - p[pa + 1];
+    const acz = p[pc + 2] - p[pa + 2];
+    const bcx = acx - abx;
+    const bcy = acy - aby;
+    const bcz = acz - abz;
+    const nx = aby * acz - abz * acy;
+    const ny = abz * acx - abx * acz;
+    const nz = abx * acy - aby * acx;
+    // Twice the area: the length of every pair of edges' cross product, so each angle is
+    // atan2 of it and the edges' dot product.
+    const doubled = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (!(doubled > 0)) return;
+    this.addSmoothed(polygon[a * 3 + 2], doubled, abx * acx + aby * acy + abz * acz, nx, ny, nz);
+    this.addSmoothed(polygon[b * 3 + 2], doubled, -(abx * bcx + aby * bcy + abz * bcz), nx, ny, nz);
+    this.addSmoothed(polygon[c * 3 + 2], doubled, acx * bcx + acy * bcy + acz * bcz, nx, ny, nz);
+  }
+
+  /** Adds a face normal `n`, of length `doubled`, to a smoothed one, by its angle at the corner. */
+  private addSmoothed(
+    vn: number,
+    doubled: number,
+    dot: number,
+    nx: number,
+    ny: number,
+    nz: number,
+  ): void {
+    if (vn > SMOOTHED) return;
+    const weight = Math.atan2(doubled, dot) / doubled;
+    const sums = this.smoothedSums.array;
+    const at = (SMOOTHED - vn) * 3;
+    sums[at] += nx * weight;
+    sums[at + 1] += ny * weight;
+    sums[at + 2] += nz * weight;
+  }
 
   private current(): Node {
     if (this.group) return this.group;
@@ -475,13 +589,27 @@ export class ObjReader implements MeshReader {
     }
     // Normals only when every corner has one: a few missing would draw black.
     if (primitive.withNormal > 0 && primitive.withoutNormal === 0) {
-      const source = this.normals.array;
+      const read = this.normals.array;
+      const sums = this.smoothedSums.array;
       const normals = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        const vn = corners[i * 3 + 2] * 3;
-        normals[i * 3] = source[vn];
-        normals[i * 3 + 1] = source[vn + 1];
-        normals[i * 3 + 2] = source[vn + 2];
+        const vn = corners[i * 3 + 2];
+        if (vn >= 0) {
+          normals[i * 3] = read[vn * 3];
+          normals[i * 3 + 1] = read[vn * 3 + 1];
+          normals[i * 3 + 2] = read[vn * 3 + 2];
+          continue;
+        }
+        const at = (SMOOTHED - vn) * 3;
+        const [x, y, z] = [sums[at], sums[at + 1], sums[at + 2]];
+        const length = Math.sqrt(x * x + y * y + z * z);
+        // Only faces of no area meet here: they don't show, any direction does.
+        if (!(length > 0)) normals[i * 3 + 1] = 1;
+        else {
+          normals[i * 3] = x / length;
+          normals[i * 3 + 1] = y / length;
+          normals[i * 3 + 2] = z / length;
+        }
       }
       part.normals = normals;
     }
@@ -508,6 +636,17 @@ function resolve(index: number, count: number): number {
   if (!Number.isFinite(index) || index === 0) return NONE;
   const resolved = index > 0 ? index - 1 : count + index;
   return resolved >= 0 && resolved < count ? resolved : NONE;
+}
+
+/**
+ * The group an `s` statement starts: a number, 0 or `off` for none. Any other word, as `on`,
+ * smooths.
+ */
+function smoothingGroup(text: string): number {
+  const word = text.split(/\s+/)[0].toLowerCase();
+  if (!word || word === 'off') return 0;
+  const group = Number(word);
+  return Number.isInteger(group) ? group : 1;
 }
 
 /**

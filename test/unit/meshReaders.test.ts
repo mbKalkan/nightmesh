@@ -210,6 +210,40 @@ describe('OBJ', () => {
     expect(triangles(mesh.objects[1].parts[0])).toBe(4);
   });
 
+  it('smooths faces without normals in their smoothing group, and keeps the rest flat', () => {
+    const mesh = read('smooth.obj', 7);
+    expect(mesh.facts).toMatchObject({ statements: { v: 32, f: 18, s: 3 } });
+    const [smooth, flat] = mesh.objects[0].parts;
+    // The side and the top: the top rim is two rings of vertices, one in each group.
+    expect([vertices(smooth), triangles(smooth)]).toEqual([48, 32 + 14]);
+    // The bottom, smoothing off, apart: drawn flat from its winding.
+    expect([vertices(flat), triangles(flat), flat.normals]).toEqual([16, 14, undefined]);
+    const p = smooth.positions;
+    const n = smooth.normals!;
+    let up = 0;
+    let round = 0;
+    for (let v = 0; v < vertices(smooth); v++) {
+      const [x, y, z] = p.subarray(v * 3, v * 3 + 3);
+      const [nx, ny, nz] = n.subarray(v * 3, v * 3 + 3);
+      expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1, 5);
+      if (ny > 0.5) {
+        expect([y, nx, ny, nz].map((value) => value.toFixed(5))).toEqual(
+          ['2', '0', '1', '0'].map((value) => Number(value).toFixed(5)),
+        );
+        up++;
+      } else {
+        // Out from the axis, as the radius is 1: the quads on either side count alike.
+        expect([nx - x, ny, nz - z].map((value) => Math.abs(value) < 1e-5)).toEqual([
+          true,
+          true,
+          true,
+        ]);
+        round++;
+      }
+    }
+    expect([up, round]).toEqual([16, 32]);
+  });
+
   it('draws vertices that no face uses as a point cloud', () => {
     const [part] = parts(read('points.obj').objects);
     expect([part.mode, vertices(part), part.colors?.length]).toEqual(['points', 400, 1600]);

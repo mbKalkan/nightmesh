@@ -66,8 +66,9 @@ for files of hundreds of megabytes.
 
 ### OBJ, STL and PLY
 
-- **OBJ** with its MTL materials and textures, objects and groups, polygons, lines and points.
-  **STL**, binary and ASCII, with Materialise colors. **PLY**, ASCII and binary, meshes and
+- **OBJ** with its MTL materials and textures, objects and groups, polygons, lines and points;
+  surfaces without normals are smooth where the file puts them in a smoothing group and sharp
+  between groups, as Blender and 3ds Max draw them. **STL**, binary and ASCII, with Materialise colors. **PLY**, ASCII and binary, meshes and
   point clouds, with vertex colors and textures. They are read in a thread of their own, so VS
   Code stays responsive with files of hundreds of megabytes.
 - The structure, inspector, statistics, selection, shading, Copy Reference and export work as

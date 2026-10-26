@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and a dot on what holds a change. In the view, boxes in the same colors frame the nodes
     that were added, removed or changed (View › Changes turns them off).
   - Selecting something on one side selects the same on the other.
+- OBJ files without normals draw their smoothing groups (`s 1`, `s 2`…) smooth, with sharp
+  edges between groups, as Blender and 3ds Max do; faces with smoothing off stay flat. They
+  were all drawn flat before.
 - glTF models with nodes hidden by `KHR_node_visibility` open, with those nodes and all below
   them hidden, lights included. The view frames and measures what is shown, and the statistics
   count it; a hidden node can still be selected in the structure.

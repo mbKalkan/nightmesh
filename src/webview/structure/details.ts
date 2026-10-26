@@ -295,7 +295,7 @@ const SOURCE_FORMATS: Record<SourceFacts['format'], string> = {
 };
 
 /** OBJ statements Nightmesh draws or reads; the others are listed as not drawn. */
-const READ_STATEMENTS = ['v', 'vt', 'vn', 'f', 'l', 'p', 'o', 'g', 'usemtl', 'mtllib'];
+const READ_STATEMENTS = ['v', 'vt', 'vn', 'f', 'l', 'p', 'o', 'g', 's', 'usemtl', 'mtllib'];
 
 /** Comments and header lines shown, at most. */
 const COMMENT_LIMIT = 20;

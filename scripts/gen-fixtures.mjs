@@ -931,6 +931,36 @@ const pyramidObj = () =>
     'f 4 5 1',
   ]);
 
+/**
+ * A cylinder without normals in smoothing groups: the side in group 1 draws round, the top in
+ * group 2 and the bottom with smoothing off draw flat, with sharp rims.
+ */
+function smoothObj() {
+  const segments = 16;
+  const lines = [
+    `# ${GENERATOR}`,
+    '# A cylinder without normals: side in smoothing group 1, top in group 2, bottom off.',
+    'o Cylinder',
+  ];
+  for (const y of [0, 2]) {
+    for (let i = 0; i < segments; i++) {
+      const angle = (2 * Math.PI * i) / segments;
+      lines.push(line('v', Math.cos(angle), y, Math.sin(angle)));
+    }
+  }
+  const bottom = (i) => (i % segments) + 1;
+  const top = (i) => (i % segments) + 1 + segments;
+  lines.push('s 1');
+  for (let i = 0; i < segments; i++) {
+    lines.push(line('f', bottom(i), top(i), top(i + 1), bottom(i + 1)));
+  }
+  lines.push('s 2');
+  lines.push(line('f', ...Array.from({ length: segments }, (_, i) => top(segments - i))));
+  lines.push('s off');
+  lines.push(line('f', ...Array.from({ length: segments }, (_, i) => bottom(i))));
+  return text(lines);
+}
+
 /** Vertices alone, with colors: a point cloud as scanners write it in OBJ. */
 function pointsObj() {
   const lines = [`# ${GENERATOR}`, '# A point cloud: vertices that no face uses.'];
@@ -1340,6 +1370,7 @@ write('absolute-path.gltf', Buffer.from(await triangleWithBuffer('/models/triang
 write('cube.obj', cubeObj());
 write('cube.mtl', cubeMtl());
 write('pyramid.obj', pyramidObj());
+write('smooth.obj', smoothObj());
 write('points.obj', pointsObj());
 // Binary, with a header that starts like ASCII STL, as SolidWorks writes it.
 const bracketStl = write(
