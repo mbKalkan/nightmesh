@@ -70,10 +70,7 @@ export async function readB3dm(source: ByteSource): Promise<B3dm> {
     featureTable: { json: featureJson, binary: featureBinary },
     batchTable: { json: batchJson, binary: batchBinary },
     batchLength: batchLength ?? count(featureTable.BATCH_LENGTH),
-    properties: Object.entries(batchTable)
-      .filter(([name]) => name !== 'extensions' && name !== 'extras')
-      .map(([name, value]) => ({ name, type: propertyType(value) })),
-    extensions: isObject(batchTable.extensions) ? Object.keys(batchTable.extensions) : [],
+    ...batchFacts(batchTable),
   };
   const center = await rtcCenter(
     source,
@@ -92,14 +89,31 @@ async function readJson(
   length: number,
 ): Promise<Record<string, unknown>> {
   if (length === 0 || length > MAX_TABLE_JSON || offset + length > source.size) return {};
+  return parseTable(await source.read(offset, length));
+}
+
+/** A table's JSON from its bytes; empty when it isn't an object. */
+export function parseTable(bytes: Uint8Array): Record<string, unknown> {
   try {
-    const text = new TextDecoder().decode(await source.read(offset, length));
+    const text = new TextDecoder().decode(bytes);
     // Tables are padded with spaces, and some writers pad with zeros.
     const value: unknown = JSON.parse(withoutByteOrderMark(text).replace(/\0+$/, ''));
     return isObject(value) ? value : {};
   } catch {
     return {};
   }
+}
+
+/** A batch table's properties, with what each holds, and its extensions. */
+export function batchFacts(
+  batchTable: Record<string, unknown>,
+): Pick<TileFacts, 'properties' | 'extensions'> {
+  return {
+    properties: Object.entries(batchTable)
+      .filter(([name]) => name !== 'extensions' && name !== 'extras')
+      .map(([name, value]) => ({ name, type: propertyType(value) })),
+    extensions: isObject(batchTable.extensions) ? Object.keys(batchTable.extensions) : [],
+  };
 }
 
 /** What a batch table property holds: values in its JSON, or numbers in the binary body. */
@@ -130,8 +144,8 @@ async function rtcCenter(
   return center as [number, number, number];
 }
 
-const count = (value: unknown): number =>
+export const count = (value: unknown): number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
+export const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

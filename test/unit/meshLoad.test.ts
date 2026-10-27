@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
-import { fileSource } from '../../src/extension/model/sources';
+import { fileSource, memorySource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
 import { formatForPath } from '../../src/shared/formats';
 import type { HostToWebviewMessage, StructureMessage } from '../../src/shared/protocol';
@@ -192,5 +192,43 @@ describe('loading OBJ, STL and PLY', () => {
   it('says how far reading has come', async () => {
     const progress = (await loadAll('points.obj')).filter((message) => message.type === 'progress');
     expect(progress).toEqual([{ type: 'progress', loadId: 1, done: 17133, total: 17133 }]);
+  });
+
+  it('reads a pnts tile into points, and says so when they are compressed', async () => {
+    const messages = await loadAll('tiles/points.pnts');
+    const { source, gltf } = structureOf(messages);
+    expect(source).toMatchObject({ format: 'pnts', points: 24 * 48 + 1 });
+    const [primitive] = gltf.meshes[0].primitives;
+    expect(primitive.mode).toBe(0);
+    expect(Object.keys(primitive.attributes).sort()).toEqual(['COLOR_0', 'POSITION']);
+    expect(modelOf(messages).notices).toEqual([]);
+
+    const json = JSON.stringify({
+      POINTS_LENGTH: 1,
+      extensions: { '3DTILES_draco_point_compression': { properties: { POSITION: 0 } } },
+    }).padEnd(36);
+    const bytes = new Uint8Array(28 + json.length);
+    bytes.set(new TextEncoder().encode(`pnts`));
+    const view = new DataView(bytes.buffer);
+    view.setUint32(4, 1, true);
+    view.setUint32(8, bytes.length, true);
+    view.setUint32(12, json.length, true);
+    bytes.set(new TextEncoder().encode(json), 28);
+    const compressed: HostToWebviewMessage[] = [];
+    const options = {
+      loadId: 1,
+      reload: false,
+      texts,
+      format: 'pnts' as const,
+      fileName: 'a.pnts',
+    };
+    for await (const message of loadMessages(memorySource(bytes), async () => 'missing', options)) {
+      compressed.push(message);
+    }
+    expect(types(compressed).filter((type) => type !== 'progress')).toEqual([
+      'structure',
+      'failed',
+    ]);
+    expect(compressed.at(-1)).toMatchObject({ message: expect.stringMatching(/Draco/) });
   });
 });

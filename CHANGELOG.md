@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of files from before 3D Tiles 1.0), the sizes of its feature and batch tables, how many
   features it has, its `RTC_CENTER`, and the batch table's properties with their types. The Size
   tab counts the tile's header and tables apart.
+- **pnts tiles open on their own**: a `.pnts` point cloud opens as a PLY point cloud does, in
+  metres with Z up, with its colors (RGB, RGBA, RGB565 or one for the whole tile) and normals,
+  plain or packed. Quantized positions are read within their volume. The inspector shows the
+  tile's header and tables, its point count, the data its feature table gives, `RTC_CENTER` and
+  the batch table's properties. Points compressed with Draco aren't read yet: the tile says so
+  and shows what it says about itself.
 
 ### Changed
 

@@ -1295,31 +1295,131 @@ async function writeGltf(name, doc, edit = () => {}) {
 }
 
 /**
- * A Batched 3D Model tile: a header, a feature table (empty by default), a batch table and the
- * GLB. Its sections start at multiples of 8 bytes, as the 3D Tiles specification asks: JSON is
- * padded with spaces, binary with zeros.
+ * A 3D Tiles tile file: a header, a feature table (empty by default) and a batch table, each JSON
+ * and binary, then `tail`. Its sections start at multiples of 8 bytes, as the 3D Tiles
+ * specification asks: JSON is padded with spaces, binary with zeros.
  */
-function b3dm(glbBytes, { featureTable = { BATCH_LENGTH: 0 }, batchTable, batchBinary } = {}) {
+function tileFile(
+  magic,
+  { featureTable = { BATCH_LENGTH: 0 }, featureBinary, batchTable, batchBinary },
+  tail = new Uint8Array(),
+) {
   const pad = (bytes, at, fill) => {
     const padded = Buffer.alloc(((at + bytes.length + 7) & ~7) - at, fill);
     bytes.copy(padded);
     return padded;
   };
-  const featureJson = pad(Buffer.from(JSON.stringify(featureTable)), 28, 0x20);
-  let at = 28 + featureJson.length;
-  const batchJson = batchTable
-    ? pad(Buffer.from(JSON.stringify(batchTable)), at, 0x20)
-    : Buffer.alloc(0);
-  at += batchJson.length;
-  const batchBody = batchBinary ? pad(Buffer.from(batchBinary), at, 0) : Buffer.alloc(0);
+  const sections = [];
+  let at = 28;
+  for (const [data, fill] of [
+    [Buffer.from(JSON.stringify(featureTable)), 0x20],
+    [featureBinary && Buffer.from(featureBinary), 0],
+    [batchTable && Buffer.from(JSON.stringify(batchTable)), 0x20],
+    [batchBinary && Buffer.from(batchBinary), 0],
+  ]) {
+    const section = data ? pad(data, at, fill) : Buffer.alloc(0);
+    sections.push(section);
+    at += section.length;
+  }
   const header = Buffer.alloc(28);
-  header.write('b3dm', 0, 'ascii');
+  header.write(magic, 0, 'ascii');
   header.writeUInt32LE(1, 4);
-  header.writeUInt32LE(at + batchBody.length + glbBytes.length, 8);
-  header.writeUInt32LE(featureJson.length, 12);
-  header.writeUInt32LE(batchJson.length, 20);
-  header.writeUInt32LE(batchBody.length, 24);
-  return Buffer.concat([header, featureJson, batchJson, batchBody, Buffer.from(glbBytes)]);
+  header.writeUInt32LE(at + tail.length, 8);
+  sections.forEach((section, index) => header.writeUInt32LE(section.length, 12 + 4 * index));
+  return Buffer.concat([header, ...sections, Buffer.from(tail)]);
+}
+
+/** A Batched 3D Model tile: the tile's tables, then the GLB. */
+function b3dm(glbBytes, tables = {}) {
+  return tileFile('b3dm', tables, glbBytes);
+}
+
+/** Typed arrays one after another, each starting at a multiple of 4 bytes, and where each is. */
+function packed(...arrays) {
+  const offsets = [];
+  let length = 0;
+  for (const array of arrays) {
+    offsets.push(length);
+    length += (array.byteLength + 3) & ~3;
+  }
+  const bytes = new Uint8Array(length);
+  arrays.forEach((array, index) =>
+    bytes.set(new Uint8Array(array.buffer, array.byteOffset, array.byteLength), offsets[index]),
+  );
+  return { bytes, offsets };
+}
+
+/**
+ * Point Cloud tiles: a dome of colored points around `RTC_CENTER` with an intensity for each in
+ * the batch table; and the same dome quantized, with see-through colors and normals packed in
+ * two bytes, as compact writers store them.
+ */
+function pointClouds() {
+  const rings = 24;
+  const around = 48;
+  const points = [];
+  for (let ring = 0; ring <= rings; ring++) {
+    const polar = (ring / rings) * (Math.PI / 2);
+    const count = ring === rings ? 1 : around;
+    for (let i = 0; i < count; i++) {
+      const azimuth = (i / count) * 2 * Math.PI;
+      // A tile's own frame has Z up.
+      points.push([
+        Math.cos(azimuth) * Math.cos(polar),
+        Math.sin(azimuth) * Math.cos(polar),
+        Math.sin(polar),
+      ]);
+    }
+  }
+  const radius = 10;
+  const colors = points.flatMap(([x, y, z]) =>
+    [x, y, z].map((value) => Math.round(((value + 1) / 2) * 255)),
+  );
+  const positions = new Float32Array(points.flat().map((value) => value * radius));
+  const rgb = new Uint8Array(colors);
+  const plain = packed(positions, rgb);
+  write(
+    'tiles/points.pnts',
+    tileFile('pnts', {
+      featureTable: {
+        POINTS_LENGTH: points.length,
+        RTC_CENTER: eastNorthUp(41.0082, 28.9784).slice(12, 15),
+        POSITION: { byteOffset: plain.offsets[0] },
+        RGB: { byteOffset: plain.offsets[1] },
+      },
+      featureBinary: plain.bytes,
+      batchTable: { intensity: points.map(([, , z]) => Math.round(z * 100)) },
+    }),
+  );
+
+  const quantized = new Uint16Array(
+    points.flat().map((value, i) => Math.round(((value + (i % 3 === 2 ? 0 : 1)) / 2) * 65535)),
+  );
+  const rgba = new Uint8Array(
+    points.flatMap(([, , z], i) => [...colors.slice(i * 3, i * 3 + 3), z > 0.5 ? 255 : 128]),
+  );
+  // Octahedral normals: the unit sphere folded onto a square, two bytes a point.
+  const oct = new Uint8Array(
+    points.flatMap(([x, y, z]) => {
+      const sum = Math.abs(x) + Math.abs(y) + Math.abs(z);
+      return [x / sum, y / sum].map((value) => Math.round(((value + 1) / 2) * 255));
+    }),
+  );
+  const compact = packed(quantized, rgba, oct);
+  write(
+    'tiles/quantized.pnts',
+    tileFile('pnts', {
+      featureTable: {
+        POINTS_LENGTH: points.length,
+        QUANTIZED_VOLUME_OFFSET: [-radius, -radius, 0],
+        QUANTIZED_VOLUME_SCALE: [2 * radius, 2 * radius, 2 * radius],
+        POSITION_QUANTIZED: { byteOffset: compact.offsets[0] },
+        RGBA: { byteOffset: compact.offsets[1] },
+        NORMAL_OCT16P: { byteOffset: compact.offsets[2] },
+      },
+      featureBinary: compact.bytes,
+    }),
+  );
 }
 
 /**
@@ -1502,6 +1602,7 @@ async function writeTilesets() {
   );
   write('tiles/damaged.b3dm', Buffer.from('b3dm, but nothing else of one'));
   write('tiles/batched.b3dm', await batchedTile());
+  pointClouds();
   write(
     'tiles/problems.json',
     json({

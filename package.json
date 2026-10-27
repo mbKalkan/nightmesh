@@ -125,6 +125,15 @@
         "extensions": [
           ".b3dm"
         ]
+      },
+      {
+        "id": "pnts",
+        "aliases": [
+          "3D Tiles Point Cloud"
+        ],
+        "extensions": [
+          ".pnts"
+        ]
       }
     ],
     "customEditors": [
@@ -149,6 +158,9 @@
           },
           {
             "filenamePattern": "*.b3dm"
+          },
+          {
+            "filenamePattern": "*.pnts"
           }
         ],
         "priority": "default"

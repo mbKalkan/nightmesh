@@ -231,3 +231,37 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
     expect(viewer.problems).toEqual([]);
   });
 }
+
+for (const [fixture, theme] of [
+  ['points.pnts', 'dark'],
+  ['quantized.pnts', 'light'],
+] as [string, ThemeName][]) {
+  test(`draws the points of ${fixture}, with what the tile says, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open(`tiles/${fixture}`);
+
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    await expect(page.locator('.nm-error')).toBeHidden();
+    await expect(page.locator('.nm-notice')).toBeHidden();
+    // Like PLY: no glTF of its own to validate or show.
+    await expect(page.locator('.nm-panel-right [role="tab"]')).toHaveText([
+      'Inspector',
+      'Statistics',
+    ]);
+    await expect(page.locator('[data-action="json"]')).toBeHidden();
+    const file = page
+      .locator('.nm-section', { has: page.locator('.nm-section-title', { hasText: 'File' }) })
+      .first()
+      .locator('dt, dd');
+    await expect(file).toContainText(['Format', 'Point Cloud (pnts)', 'Points', '1,153']);
+    // A tile's frame has Z up, in metres: the dome stands 10 m tall.
+    await expect(page.locator('.nm-measure')).toHaveAttribute(
+      'aria-label',
+      'Size of the model: width (X), height (Y) and depth (Z): 20 m × 10 m × 20 m',
+    );
+    await page.screenshot({ path: `${SCREENS}/pnts-${fixture.replace('.', '-')}-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}

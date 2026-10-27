@@ -45,6 +45,8 @@ export interface LoadTexts {
   notMesh(format: MeshFormat, objectFile: boolean): string;
   /** An OBJ, STL or PLY file with nothing to draw in it. */
   noGeometry: string;
+  /** A pnts tile whose points are compressed with Draco. */
+  compressedPoints: string;
   /** Faces, lines or points that couldn't be read or name vertices that aren't there. */
   badFaces(count: number): string;
   /** OBJ's free-form curves and surfaces, which aren't drawn. */
@@ -297,7 +299,20 @@ async function* meshModelMessages(
   const materials = await meshMaterials(mesh, resources, texts);
   const { json, buffers } = toGltf(mesh, fileName, materials.specs, materials.images);
   if (!json.meshes?.length) {
-    yield failure(options, texts.noGeometry);
+    if (!mesh.problems.some((problem) => problem.kind === 'compressed')) {
+      yield failure(options, texts.noGeometry);
+      return false;
+    }
+    // What the tile says about itself shows all the same.
+    yield {
+      type: 'structure',
+      loadId,
+      reload,
+      json: JSON.stringify(json),
+      fileSize: source.size,
+      source: materials.facts,
+    };
+    yield failure(options, texts.compressedPoints);
     return false;
   }
   yield {
@@ -313,7 +328,7 @@ async function* meshModelMessages(
   for (const problem of mesh.problems) {
     if (problem.kind === 'truncated') notices.push(texts.truncated);
     else if (problem.kind === 'faces') notices.push(texts.badFaces(problem.count));
-    else notices.push(texts.freeForm(problem.count));
+    else if (problem.kind === 'freeForm') notices.push(texts.freeForm(problem.count));
   }
   const data = buffers.map((bytes): ResourceData => ({
     source: arraySource(bytes),

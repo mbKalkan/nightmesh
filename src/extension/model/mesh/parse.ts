@@ -7,6 +7,7 @@ import { checkMesh, trianglesOf } from './check';
 import { MeshFormatError, type MeshReader, type ParsedMesh } from './geometry';
 import { ObjReader } from './obj';
 import { PlyReader, plyHeaderFacts } from './ply';
+import { PntsReader, isPnts } from './pnts';
 import { StlReader, stlEncoding } from './stl';
 import { utf16 } from './text';
 
@@ -36,6 +37,8 @@ export function createReader(format: MeshFormat, size: number): MeshReader {
       return new StlReader(size);
     case 'ply':
       return new PlyReader(size);
+    case 'pnts':
+      return new PntsReader(size);
   }
 }
 
@@ -71,6 +74,8 @@ export function looksLike(
       return /^ply\r?\n/.test(new TextDecoder('latin1').decode(head.subarray(0, 5))) ? 'yes' : 'no';
     case 'stl':
       return stlEncoding(head, size) ? 'yes' : 'no';
+    case 'pnts':
+      return isPnts(head) ? 'yes' : 'no';
     case 'obj':
       // UTF-16 text has zeros too, after its byte order mark.
       return utf16(head) || !head.subarray(0, 1024).includes(0) ? 'yes' : 'objectFile';

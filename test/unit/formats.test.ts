@@ -9,6 +9,7 @@ describe('formatForPath', () => {
 
   it('recognizes b3dm tiles', () => {
     expect(formatForPath('/tiles/0/1.B3DM')).toBe('b3dm');
+    expect(formatForPath('/tiles/0/1.pnts')).toBe('pnts');
   });
 
   it('ignores other files and dots in folder names', () => {

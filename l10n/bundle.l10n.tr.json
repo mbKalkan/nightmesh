@@ -352,5 +352,8 @@
   "Center (RTC_CENTER)": "Merkez (RTC_CENTER)",
   "positions are relative to it; the view leaves it out": "konumlar buna göre; görünüm onu uygulamaz",
   "Feature properties": "Feature özellikleri",
-  "Batch table extensions": "Batch tablosu eklentileri"
+  "The file isn't a pnts tile, or it is damaged.": "Dosya bir pnts karosu değil ya da bozuk.",
+  "This tile's points are compressed with Draco, which Nightmesh doesn't read in pnts tiles yet.": "Bu karonun noktaları Draco ile sıkıştırılmış; Nightmesh pnts karolarında bunu henüz okumuyor.",
+  "Table extensions": "Tablo eklentileri",
+  "Point data": "Nokta verisi"
 }

@@ -1,36 +1,48 @@
 // Messages exchanged between the extension host and the webview.
 
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
-export type MeshFormat = 'obj' | 'stl' | 'ply';
+export type MeshFormat = 'obj' | 'stl' | 'ply' | 'pnts';
 
 export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'tileset';
 
-/**
- * What a Batched 3D Model (b3dm) tile says around the GLB it holds, for the inspector: the panels
- * show the GLB as they show any other.
- */
-export interface TileFacts {
-  format: 'b3dm';
+/** What a 3D Tiles tile file says in its header and its feature and batch tables. */
+export interface TileTables {
   version: number;
   /** The header's bytes: 28, or 20 or 24 in the layouts of files older than 3D Tiles 1.0. */
   header: number;
   featureTable: { json: number; binary: number };
   batchTable: { json: number; binary: number };
-  /** How many features the GLB's batch IDs count. */
+  /** How many features the batch IDs count. */
   batchLength: number;
   /** The point the model's positions are relative to, in the tileset's frame. */
   rtcCenter?: [number, number, number];
   /** The batch table's properties, each with what it holds: `JSON` or `FLOAT VEC3`. */
   properties: { name: string; type: string }[];
-  /** The batch table's extensions, such as `3DTILES_batch_table_hierarchy`. */
+  /** The tables' extensions, such as `3DTILES_batch_table_hierarchy`. */
   extensions: string[];
+}
+
+/**
+ * What a Batched 3D Model (b3dm) tile says around the GLB it holds, for the inspector: the panels
+ * show the GLB as they show any other.
+ */
+export interface TileFacts extends TileTables {
+  format: 'b3dm';
+}
+
+/** What a Point Cloud (pnts) tile says about itself; its glTF was made from its points. */
+export interface PntsFacts extends TileTables {
+  format: 'pnts';
+  points: number;
+  /** What the feature table gives, by name: `POSITION`, `RGB`, `RTC_CENTER`… */
+  semantics: string[];
 }
 
 /**
  * What an OBJ, STL or PLY file says about itself, for the inspector: the glTF the panels show for
  * it is made up on the way in.
  */
-export type SourceFacts = StlFacts | PlyFacts | ObjFacts;
+export type SourceFacts = StlFacts | PlyFacts | ObjFacts | PntsFacts;
 
 /**
  * What a 3D printing check finds in an OBJ, STL or PLY file's triangles, with corners at the same
@@ -206,6 +218,10 @@ export interface TileFileStrings {
   centerNote: string;
   properties: string;
   extensions: string;
+  /** The pnts format's name. */
+  pointCloud: string;
+  /** What a pnts tile's feature table gives: `POSITION`, `RGB`… */
+  semantics: string;
 }
 
 /** Words for the Changes tab and the tree's marks, while two versions of a model are compared. */
