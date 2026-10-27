@@ -361,6 +361,10 @@ body {
   color: var(--vscode-symbolIcon-classForeground, var(--vscode-icon-foreground));
 }
 
+.nm-icon-tile {
+  color: var(--vscode-symbolIcon-moduleForeground, var(--vscode-icon-foreground));
+}
+
 .nm-icon-material {
   color: var(--vscode-symbolIcon-colorForeground, var(--vscode-icon-foreground));
 }

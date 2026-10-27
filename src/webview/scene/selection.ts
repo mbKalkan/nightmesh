@@ -125,6 +125,12 @@ export class Highlight {
     }
   }
 
+  /** One box, along its own axes, placed in the scene by `matrix`: a 3D Tiles tile's volume. */
+  showBox(box: Box3, matrix: Matrix4): void {
+    this.clear();
+    this.add(box.clone(), undefined, matrix);
+  }
+
   /** Moves the boxes with their objects, after an animation moved them. */
   update(): void {
     for (const { frame, object } of this.frames) {
@@ -146,13 +152,14 @@ export class Highlight {
     this.behind.dispose();
   }
 
-  private add(box: Box3, object?: Object3D): void {
+  private add(box: Box3, object?: Object3D, matrix?: Matrix4): void {
     if (box.isEmpty()) return;
     // A little larger than the bounds, so edges don't fight the faces they'd lie on.
     box.expandByScalar(Math.max(box.getSize(new Vector3()).length() * 0.005, 1e-5));
     const frame = new Group();
     frame.matrixAutoUpdate = false;
     if (object) frame.matrix.copy(object.matrixWorld);
+    else if (matrix) frame.matrix.copy(matrix);
     for (const material of [this.front, this.behind]) {
       const helper = new Box3Helper(box);
       (helper.material as Material).dispose();

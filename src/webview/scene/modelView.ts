@@ -44,6 +44,8 @@ import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 import { Shading } from './shading';
+import { pathOf, tileAt, tileBox, tileState, type RendererTile } from './tileTree';
+import type { TilesLive } from '../structure/tileset';
 import type {
   CameraState,
   Environment,
@@ -65,8 +67,11 @@ export interface Decoders {
 }
 
 export interface ViewEvents {
-  /** A click on the model picked the node drawn there, or empty space; `frame` on double-click. */
-  picked(node: number | undefined, frame: boolean): void;
+  /**
+   * A click on the model picked what is drawn there, by its structure key (`node:3`, or a 3D
+   * Tiles `tile:0/2`), or empty space; `frame` on double-click.
+   */
+  picked(key: string | undefined, frame: boolean): void;
   /**
    * The size, in metres along X, Y and Z, of what is selected, or of the whole model when the
    * selection draws nothing; undefined when there is nothing drawn at all.
@@ -78,7 +83,7 @@ export interface ViewEvents {
    * A right-click that didn't drag, which opens the context menu: the node drawn under the
    * pointer, or undefined over empty space. A right-drag pans, and opens no menu.
    */
-  menu(node: number | undefined, x: number, y: number): void;
+  menu(key: string | undefined, x: number, y: number): void;
   /** The camera turned: its rotation as a quaternion, x, y, z and w, for the axes gizmo. */
   turned(rotation: [number, number, number, number]): void;
   /** The camera moved, or zoomed: at most once a frame, after it is drawn. */
@@ -90,6 +95,8 @@ export interface ViewEvents {
   ruled(measurement: Measurement | undefined): void;
   /** A length given in metres, as the view writes it over a measurement: in the unit set. */
   lengthText(metres: number): string;
+  /** The tileset's tiles came, went, or were drawn or hidden: what the renderer has changed. */
+  tilesChanged(): void;
   /** The view made its lighting environment, which the next views can start with. */
   environment(environment: Environment): void;
 }
@@ -164,6 +171,8 @@ export class ModelView {
   private tilesCamera: PerspectiveCamera | OrthographicCamera | undefined;
   /** Bounds of the whole tileset, as its tiles' bounding volumes say, once its root is read. */
   private readonly tilesBox = new Box3();
+  /** Each tile's content as drawn, by the tile's path. */
+  private tilePaths = new WeakMap<Object3D, string>();
   /** The structure entry selected, whose objects are highlighted. */
   private selected = 'model';
   /** Bounds of the whole model, which the clipping planes keep in view. */
@@ -525,13 +534,24 @@ export class ModelView {
     this.variantIndex = undefined;
     this.ownMaterials.clear();
     this.tilesBox.makeEmpty();
+    this.tilePaths = new WeakMap();
     const redraw = () => this.requestRender();
+    const changed = () => {
+      // A tile selected before the renderer read it gets its box once it has.
+      if (this.selected.startsWith('tile:')) this.showSelection();
+      this.events.tilesChanged();
+    };
     tiles.addEventListener('needs-render', redraw);
     tiles.addEventListener('needs-update', redraw);
-    tiles.addEventListener('load-model', ({ scene }) => {
+    tiles.addEventListener('load-model', ({ scene, tile }) => {
       prepareForUpload(scene);
+      this.tilePaths.set(scene, pathOf(tile as RendererTile));
       redraw();
+      changed();
     });
+    for (const type of ['dispose-model', 'tile-visibility-change', 'load-error'] as const) {
+      tiles.addEventListener(type, changed);
+    }
     tiles.addEventListener('load-root-tileset', () => {
       // The box in the tileset's own frame: one along the globe's axes would be far larger.
       tiles.group.updateMatrixWorld(true);
@@ -704,9 +724,48 @@ export class ModelView {
   /** Highlights what a structure entry stands for: a node, a mesh's nodes, a material's uses. */
   select(key: string): void {
     this.selected = key;
-    this.highlight.show(this.index?.objects(key) ?? []);
+    this.showSelection();
     this.measure();
+  }
+
+  private showSelection(): void {
+    const tile = this.selectedTile();
+    if (tile) this.highlight.showBox(tile.box, tile.matrix);
+    else this.highlight.show(this.index?.objects(this.selected) ?? []);
     this.requestRender();
+  }
+
+  /** The selected tile's bounding volume, as the renderer has it. */
+  private selectedTile(): { box: Box3; matrix: Matrix4 } | undefined {
+    const path = this.selected.startsWith('tile:') ? this.selected.slice(5) : undefined;
+    const tile = this.tiles && path !== undefined ? tileAt(this.tiles.root, path) : undefined;
+    return tile && this.tiles && tileBox(tile, this.tiles.group);
+  }
+
+  /** What the renderer has of the tileset shown, for the inspector. */
+  tilesLive(): TilesLive | undefined {
+    const tiles = this.tiles;
+    if (!tiles) return undefined;
+    return {
+      tile: (path) => {
+        const tile = tileAt(tiles.root, path);
+        return tile && tileState(tile);
+      },
+      stats: () => {
+        // Kept up to date by the renderer, though its types leave them out.
+        const { stats, lruCache } = tiles as unknown as {
+          stats: Record<'loaded' | 'queued' | 'downloading' | 'parsing' | 'failed', number>;
+          lruCache: { cachedBytes: number };
+        };
+        return {
+          loaded: stats.loaded,
+          drawn: tiles.visibleTiles.size,
+          downloading: stats.queued + stats.downloading + stats.parsing,
+          failed: stats.failed,
+          bytes: lruCache.cachedBytes,
+        };
+      },
+    };
   }
 
   /**
@@ -732,8 +791,12 @@ export class ModelView {
   frameSelection(): void {
     if (!this.model) return;
     const objects = this.index?.objects(this.selected) ?? [];
-    const box =
-      objects.length > 0 ? framingBounds(objects, this.modelSphere.radius) : this.modelBox();
+    const tile = this.selectedTile();
+    const box = tile
+      ? tile.box.clone().applyMatrix4(tile.matrix)
+      : objects.length > 0
+        ? framingBounds(objects, this.modelSphere.radius)
+        : this.modelBox();
     this.viewpoint.frame(box, this.viewpoint.direction());
   }
 
@@ -830,8 +893,12 @@ export class ModelView {
    */
   private measure(): void {
     const objects = this.index?.objects(this.selected) ?? [];
-    let size =
-      objects.length === 1 && this.selected.startsWith('node:') ? ownSize(objects[0]) : undefined;
+    const tile = this.selectedTile();
+    let size = tile
+      ? (tile.box.getSize(new Vector3()).toArray() as [number, number, number])
+      : objects.length === 1 && this.selected.startsWith('node:')
+        ? ownSize(objects[0])
+        : undefined;
     if (!size && objects.length > 0) size = worldSize(boundsOf(objects));
     const selection = size !== undefined;
     if (!size && this.model) size = worldSize(this.tiles ? this.tilesBox : visibleBox(this.model));
@@ -910,9 +977,9 @@ export class ModelView {
     );
   }
 
-  /** The node drawn under the pointer, if any. */
-  private pickAt(event: MouseEvent): number | undefined {
-    if (!this.model || !this.index) return undefined;
+  /** What is drawn under the pointer, if anything: a node, or a tileset's tile. */
+  private pickAt(event: MouseEvent): string | undefined {
+    if (!this.model || !(this.index || this.tiles)) return undefined;
     const object = this.picker.pick(
       this.renderer,
       this.scene,
@@ -921,7 +988,16 @@ export class ModelView {
       this.overlays(),
       this.regionAt(event),
     );
-    return object ? this.index.node(object) : undefined;
+    if (!object) return undefined;
+    if (this.tiles) {
+      for (let above: Object3D | null = object; above; above = above.parent) {
+        const path = this.tilePaths.get(above);
+        if (path !== undefined) return `tile:${path}`;
+      }
+      return undefined;
+    }
+    const node = this.index?.node(object);
+    return node === undefined ? undefined : `node:${node}`;
   }
 
   /**

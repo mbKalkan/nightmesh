@@ -1,0 +1,395 @@
+// A 3D Tiles tileset as its JSON says (D-046): the tile tree, read once, for the tree and the
+// inspector; what the renderer has of each tile comes from the view, when asked.
+import type { TileContentKind, TileState, TilesetStrings } from '../../shared/protocol';
+import { fill, type Formatter } from './format';
+import type { Inspection, Row, Section } from './details';
+import type { EntryKey, OutlineEntry } from './outline';
+
+/** Tiles in a tileset's own JSON past which the rest aren't listed: nothing real has them. */
+const MAX_TILES = 1_000_000;
+
+export type TileVolume =
+  | { kind: 'box'; values: number[] }
+  | { kind: 'region'; values: number[] }
+  | { kind: 'sphere'; values: number[] };
+
+export interface TileInfo {
+  /** The indices from the root down, `0` for the root: `0/2/1`. */
+  path: string;
+  parent?: string;
+  children: string[];
+  depth: number;
+  geometricError?: number;
+  refine?: 'ADD' | 'REPLACE';
+  /** The refinement is the parent's: the tile says none of its own. */
+  inherited: boolean;
+  contents: { uri: string; kind: TileContentKind }[];
+  volume?: TileVolume;
+  transform?: number[];
+  requestVolume: boolean;
+  implicit?: {
+    scheme?: string;
+    subtreeLevels?: number;
+    availableLevels?: number;
+    subtrees?: string;
+  };
+}
+
+/** What the renderer has of a tile, and of the whole tileset, at the moment. */
+export interface TilesLive {
+  tile(path: string): { state: TileState; drawn: boolean; error?: number } | undefined;
+  stats():
+    | { loaded: number; drawn: number; downloading: number; failed: number; bytes: number }
+    | undefined;
+}
+
+type Json = Record<string, unknown>;
+const isObject = (value: unknown): value is Json =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const num = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const numbers = (value: unknown, length: number) =>
+  Array.isArray(value) && value.length === length && value.every((n) => num(n) !== undefined)
+    ? (value as number[])
+    : undefined;
+
+export function contentKind(uri: string): TileContentKind {
+  const extension = /\.([a-z0-9]+)$/i.exec(uri.replace(/[?#].*$/, ''))?.[1].toLowerCase();
+  switch (extension) {
+    case 'b3dm':
+    case 'i3dm':
+    case 'pnts':
+    case 'cmpt':
+    case 'glb':
+    case 'gltf':
+      return extension;
+    case 'json':
+      return 'tileset';
+    default:
+      return 'other';
+  }
+}
+
+export class TilesetModel {
+  readonly tiles = new Map<string, TileInfo>();
+  readonly version?: string;
+  readonly tilesetVersion?: string;
+  readonly generator?: string;
+  readonly geometricError?: number;
+  readonly extensionsUsed: string[];
+  readonly extensionsRequired: string[];
+  readonly depth: number = 0;
+
+  constructor(json: string) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      parsed = {};
+    }
+    const tileset = isObject(parsed) ? parsed : {};
+    const asset = isObject(tileset.asset) ? tileset.asset : {};
+    this.version = typeof asset.version === 'string' ? asset.version : undefined;
+    this.tilesetVersion =
+      typeof asset.tilesetVersion === 'string' ? asset.tilesetVersion : undefined;
+    this.generator = typeof asset.generator === 'string' ? asset.generator : undefined;
+    this.geometricError = num(tileset.geometricError);
+    const names = (value: unknown) =>
+      Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
+    this.extensionsUsed = names(tileset.extensionsUsed);
+    this.extensionsRequired = names(tileset.extensionsRequired);
+    if (!isObject(tileset.root)) return;
+    // Walked without recursion: a deep tree mustn't run out of stack.
+    const stack: { json: Json; path: string; parent?: TileInfo }[] = [
+      { json: tileset.root, path: '0' },
+    ];
+    while (stack.length > 0 && this.tiles.size < MAX_TILES) {
+      const { json, path, parent } = stack.pop()!;
+      const info = readTile(json, path, parent);
+      this.tiles.set(path, info);
+      parent?.children.push(path);
+      this.depth = Math.max(this.depth, info.depth);
+      const children = Array.isArray(json.children) ? json.children : [];
+      for (let i = children.length - 1; i >= 0; i--) {
+        if (isObject(children[i]))
+          stack.push({ json: children[i] as Json, path: `${path}/${i}`, parent: info });
+      }
+    }
+    // Pushed in reverse to come off in order; children were added as they came off.
+    for (const tile of this.tiles.values()) tile.children.sort(byIndex);
+  }
+
+  get root(): TileInfo | undefined {
+    return this.tiles.get('0');
+  }
+
+  /** How many tiles the JSON has of each sort. */
+  counts(): { tiles: number; withContent: number; external: number; implicit: number } {
+    let [withContent, external, implicit] = [0, 0, 0];
+    for (const tile of this.tiles.values()) {
+      if (tile.contents.length > 0) withContent++;
+      if (tile.contents.some((content) => content.kind === 'tileset')) external++;
+      if (tile.implicit) implicit++;
+    }
+    return { tiles: this.tiles.size, withContent, external, implicit };
+  }
+}
+
+const byIndex = (a: string, b: string) =>
+  Number(a.slice(a.lastIndexOf('/') + 1)) - Number(b.slice(b.lastIndexOf('/') + 1));
+
+function readTile(json: Json, path: string, parent: TileInfo | undefined): TileInfo {
+  const refine = json.refine === 'ADD' || json.refine === 'REPLACE' ? json.refine : undefined;
+  const contents = [json.content, ...(Array.isArray(json.contents) ? json.contents : [])]
+    .filter(isObject)
+    .map((content) => (typeof content.uri === 'string' ? content.uri : content.url))
+    .filter((uri): uri is string => typeof uri === 'string')
+    .map((uri) => ({ uri, kind: contentKind(uri) }));
+  const implicit = isObject(json.implicitTiling) ? json.implicitTiling : undefined;
+  const subtrees = implicit && isObject(implicit.subtrees) ? implicit.subtrees.uri : undefined;
+  return {
+    path,
+    parent: parent?.path,
+    children: [],
+    depth: parent ? parent.depth + 1 : 0,
+    geometricError: num(json.geometricError),
+    refine: refine ?? parent?.refine,
+    inherited: refine === undefined && parent?.refine !== undefined,
+    contents,
+    volume: volumeOf(json.boundingVolume),
+    transform: numbers(json.transform, 16),
+    requestVolume: isObject(json.viewerRequestVolume),
+    implicit: implicit && {
+      scheme:
+        typeof implicit.subdivisionScheme === 'string' ? implicit.subdivisionScheme : undefined,
+      subtreeLevels: num(implicit.subtreeLevels),
+      availableLevels: num(implicit.availableLevels),
+      subtrees: typeof subtrees === 'string' ? subtrees : undefined,
+    },
+  };
+}
+
+function volumeOf(value: unknown): TileVolume | undefined {
+  if (!isObject(value)) return undefined;
+  const box = numbers(value.box, 12);
+  if (box) return { kind: 'box', values: box };
+  const region = numbers(value.region, 6);
+  if (region) return { kind: 'region', values: region };
+  const sphere = numbers(value.sphere, 4);
+  if (sphere) return { kind: 'sphere', values: sphere };
+  return undefined;
+}
+
+export const tileKey = (path: string): EntryKey => `tile:${path}`;
+export const tilePath = (key: EntryKey): string | undefined =>
+  key.startsWith('tile:') ? key.slice(5) : undefined;
+
+/** What a tile is called in the tree: its content, or `Tile 0/2` without any. */
+export function tileLabel(tile: TileInfo, strings: TilesetStrings): string {
+  const first = tile.contents[0];
+  if (!first) return `${strings.tile} ${tile.path}`;
+  let uri = first.uri;
+  try {
+    uri = decodeURIComponent(uri);
+  } catch {
+    // Shown as written.
+  }
+  return tile.contents.length > 1 ? `${uri} +${tile.contents.length - 1}` : uri;
+}
+
+/** The tree: the tileset itself, then its tiles from the root down. */
+export function tilesetOutline(
+  model: TilesetModel,
+  fileName: string,
+  strings: TilesetStrings,
+): OutlineEntry[] {
+  const entry = (tile: TileInfo): OutlineEntry => ({
+    key: tileKey(tile.path),
+    label: tileLabel(tile, strings),
+    description: tile.contents.length > 0 ? tile.path : undefined,
+    icon: 'tile',
+    children:
+      tile.children.length > 0
+        ? () => tile.children.map((path) => entry(model.tiles.get(path)!))
+        : undefined,
+  });
+  const root = model.root;
+  return [{ key: 'model', label: fileName, icon: 'model' }, ...(root ? [entry(root)] : [])];
+}
+
+/** The tiles above `key`, from the root down, to open in the tree. */
+export function tileAncestors(model: TilesetModel, key: EntryKey): EntryKey[] {
+  const above: EntryKey[] = [];
+  for (let tile = model.tiles.get(tilePath(key) ?? ''); tile?.parent !== undefined;) {
+    above.unshift(tileKey(tile.parent));
+    tile = model.tiles.get(tile.parent);
+  }
+  return above;
+}
+
+export interface TilesetContext {
+  model: TilesetModel;
+  fileName: string;
+  fileSize: number;
+  strings: TilesetStrings;
+  fileSizeLabel: string;
+  format: Formatter;
+  live?: TilesLive;
+}
+
+/** What the inspector shows for the tileset or one of its tiles. */
+export function inspectTileset(context: TilesetContext, key: EntryKey): Inspection | undefined {
+  if (key === 'model') return inspectModel(context);
+  const tile = context.model.tiles.get(tilePath(key) ?? '');
+  return tile && inspectTile(context, tile);
+}
+
+function inspectModel(context: TilesetContext): Inspection {
+  const { model, strings, format } = context;
+  const { labels } = strings;
+  const counts = model.counts();
+  const rows = (pairs: [string, string | undefined][]): Row[] =>
+    pairs.flatMap(([label, text]) => (text === undefined ? [] : [{ label, text }]));
+  const sections: Section[] = [
+    {
+      title: strings.sections.tileset,
+      rows: rows([
+        [context.fileSizeLabel, format.bytes(context.fileSize)],
+        [labels.version, model.version],
+        [labels.tilesetVersion, model.tilesetVersion],
+        [labels.generator, model.generator],
+        [
+          labels.geometricError,
+          model.geometricError === undefined ? undefined : format.value(model.geometricError),
+        ],
+        [labels.extensionsUsed, model.extensionsUsed.join(', ') || undefined],
+        [labels.extensionsRequired, model.extensionsRequired.join(', ') || undefined],
+      ]),
+    },
+    {
+      title: strings.sections.tiles,
+      rows: rows([
+        [labels.tiles, format.count(counts.tiles)],
+        [labels.depth, format.count(model.depth + (counts.tiles > 0 ? 1 : 0))],
+        [labels.withContent, format.count(counts.withContent)],
+        [labels.externalTilesets, counts.external ? format.count(counts.external) : undefined],
+        [labels.implicitRoots, counts.implicit ? format.count(counts.implicit) : undefined],
+      ]),
+    },
+  ];
+  const stats = context.live?.stats();
+  if (stats) {
+    sections.push({
+      title: strings.sections.live,
+      rows: rows([
+        [labels.loaded, format.count(stats.loaded)],
+        [labels.drawnTiles, format.count(stats.drawn)],
+        [labels.downloading, stats.downloading ? format.count(stats.downloading) : undefined],
+        [labels.failed, stats.failed ? format.count(stats.failed) : undefined],
+        [labels.memory, format.bytes(stats.bytes)],
+      ]),
+    });
+  }
+  return { title: context.fileName, kind: strings.tileset, sections };
+}
+
+function inspectTile(context: TilesetContext, tile: TileInfo): Inspection {
+  const { strings, format } = context;
+  const { labels } = strings;
+  const sections: Section[] = [];
+  const tileRows: Row[] = [{ label: labels.path, text: tile.path, mono: true }];
+  if (tile.geometricError !== undefined) {
+    tileRows.push({
+      label: labels.geometricError,
+      text: format.value(tile.geometricError),
+      mono: true,
+    });
+  }
+  if (tile.refine) {
+    tileRows.push({
+      label: labels.refine,
+      text: tile.refine,
+      mono: true,
+      note: tile.inherited ? labels.inherited : undefined,
+    });
+  }
+  if (tile.children.length > 0) {
+    tileRows.push({ label: labels.children, text: format.count(tile.children.length) });
+  }
+  if (tile.requestVolume) tileRows.push({ label: labels.requestVolume, text: labels.yes });
+  sections.push({ title: strings.sections.tile, rows: tileRows });
+
+  if (tile.contents.length > 0) {
+    sections.push({
+      title: strings.sections.content,
+      rows: tile.contents.flatMap((content) => [
+        { label: '', text: content.uri, mono: true, wide: true },
+        { label: labels.volumeType, text: strings.contents[content.kind] },
+      ]),
+    });
+  }
+
+  if (tile.volume) sections.push(volumeSection(tile.volume, tile.transform, context));
+
+  if (tile.implicit) {
+    const { scheme, subtreeLevels, availableLevels, subtrees } = tile.implicit;
+    const rows: Row[] = [];
+    if (scheme) rows.push({ label: labels.scheme, text: scheme, mono: true });
+    if (availableLevels !== undefined)
+      rows.push({ label: labels.availableLevels, text: format.count(availableLevels) });
+    if (subtreeLevels !== undefined)
+      rows.push({ label: labels.subtreeLevels, text: format.count(subtreeLevels) });
+    if (subtrees) rows.push({ label: labels.subtrees, text: subtrees, mono: true });
+    sections.push({ title: strings.sections.implicit, rows });
+  }
+
+  const live = context.live?.tile(tile.path);
+  if (live) {
+    const rows: Row[] = [
+      { label: labels.state, text: strings.states[live.state] },
+      { label: labels.drawn, text: live.drawn ? labels.yes : labels.no },
+    ];
+    if (live.error !== undefined && Number.isFinite(live.error)) {
+      rows.push({
+        label: labels.screenError,
+        text: fill(strings.pixels, format.value(live.error)),
+        mono: true,
+      });
+    }
+    sections.push({ title: strings.sections.live, rows });
+  }
+  return { title: tileLabel(tile, strings), kind: `${strings.tile} ${tile.path}`, sections };
+}
+
+function volumeSection(
+  volume: TileVolume,
+  transform: number[] | undefined,
+  context: TilesetContext,
+): Section {
+  const { strings, format } = context;
+  const { labels } = strings;
+  const rows: Row[] = [{ label: labels.volumeType, text: strings.volumes[volume.kind] }];
+  const v = volume.values;
+  if (volume.kind === 'box') {
+    rows.push({ label: labels.center, text: format.vector(v.slice(0, 3)), mono: true });
+    const half = [0, 3, 6].map((i) => Math.hypot(v[3 + i], v[4 + i], v[5 + i]));
+    rows.push({ label: labels.halfAxes, text: format.dimensions(half), mono: true });
+  } else if (volume.kind === 'sphere') {
+    rows.push({ label: labels.center, text: format.vector(v.slice(0, 3)), mono: true });
+    rows.push({ label: labels.radius, text: format.metres(v[3]), mono: true });
+  } else {
+    const degrees = (radians: number) => format.degrees(radians);
+    rows.push(
+      { label: labels.west, text: degrees(v[0]), mono: true },
+      { label: labels.south, text: degrees(v[1]), mono: true },
+      { label: labels.east, text: degrees(v[2]), mono: true },
+      { label: labels.north, text: degrees(v[3]), mono: true },
+      { label: labels.minHeight, text: format.metres(v[4]), mono: true },
+      { label: labels.maxHeight, text: format.metres(v[5]), mono: true },
+    );
+  }
+  if (transform) {
+    rows.push({ label: labels.transform, json: JSON.stringify(transform) });
+  }
+  return { title: strings.sections.volume, rows };
+}

@@ -342,6 +342,7 @@ export interface ViewerStrings {
   selectionSize: string;
   measure: MeasureStrings;
   structure: StructureStrings;
+  tileset: TilesetStrings;
   validation: ValidationStrings;
   size: SizeStrings;
   report: ReportStrings;
@@ -349,6 +350,82 @@ export interface ViewerStrings {
   animation: AnimationStrings;
   view: ViewStrings;
   shading: ShadingStrings;
+}
+
+/** What a tile's content is, by its file. */
+export type TileContentKind =
+  'b3dm' | 'i3dm' | 'pnts' | 'cmpt' | 'glb' | 'gltf' | 'tileset' | 'other';
+
+/** Where a tile is in the renderer: its content loading, loaded or failed, or none asked for. */
+export type TileState = 'unloaded' | 'queued' | 'loading' | 'parsing' | 'loaded' | 'failed';
+
+/** Words for a 3D Tiles tileset's tree and inspector (D-046). */
+export interface TilesetStrings {
+  /** The tree, as screen readers name it. */
+  tree: string;
+  /** What the top entry is. */
+  tileset: string;
+  /** What a tile is, and a tile without content's label: `Tile 0/2`. */
+  tile: string;
+  sections: {
+    tileset: string;
+    tiles: string;
+    tile: string;
+    content: string;
+    volume: string;
+    implicit: string;
+    /** What the renderer has of it now. */
+    live: string;
+  };
+  labels: {
+    version: string;
+    generator: string;
+    tilesetVersion: string;
+    geometricError: string;
+    extensionsUsed: string;
+    extensionsRequired: string;
+    tiles: string;
+    depth: string;
+    withContent: string;
+    externalTilesets: string;
+    implicitRoots: string;
+    path: string;
+    refine: string;
+    /** After a refinement the tile takes from above it. */
+    inherited: string;
+    children: string;
+    volumeType: string;
+    center: string;
+    halfAxes: string;
+    radius: string;
+    west: string;
+    south: string;
+    east: string;
+    north: string;
+    minHeight: string;
+    maxHeight: string;
+    transform: string;
+    requestVolume: string;
+    scheme: string;
+    subtreeLevels: string;
+    availableLevels: string;
+    subtrees: string;
+    state: string;
+    drawn: string;
+    screenError: string;
+    loaded: string;
+    drawnTiles: string;
+    downloading: string;
+    failed: string;
+    memory: string;
+    yes: string;
+    no: string;
+  };
+  volumes: Record<'box' | 'region' | 'sphere', string>;
+  contents: Record<TileContentKind, string>;
+  states: Record<TileState, string>;
+  /** Screen-space error, in pixels: `{0} px`. */
+  pixels: string;
 }
 
 /** Measuring the distance between two points clicked on the model. */

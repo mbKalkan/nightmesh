@@ -49,6 +49,8 @@ export const icons = {
   panelRight: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10 2.5v11"/>'),
   // Structure tree entries.
   scene: svg('<path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.5l6 3 6-3"/><path d="M2 11l6 3 6-3"/>'),
+  // A 3D Tiles tile: a square cut in four, as tiles are refined.
+  tile: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M8 2.5v11M2.5 8h11"/>'),
   node: svg('<circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v3.5M8 11v3.5M1.5 8H5M11 8h3.5"/>'),
   mesh: svg('<path d="M8 2 14 13H2z"/><path d="M5 7.5h6M8 13 5 7.5M8 13l3-5.5"/>'),
   material: svg('<circle cx="8" cy="8" r="5.75"/><path d="M5 6.75A3.25 3.25 0 0 1 8 4.5"/>'),

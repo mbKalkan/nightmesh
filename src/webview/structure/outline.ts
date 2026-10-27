@@ -24,7 +24,8 @@ export interface OutlineEntry {
   label: string;
   /** Dimmed text after the label, as VS Code's trees show it. */
   description?: string;
-  icon: EntryIcon;
+  /** A glTF entry's kind, or a 3D Tiles tile. */
+  icon: EntryIcon | 'tile';
   /** Groups show how many things they hold. */
   count?: number;
   children?: () => OutlineEntry[];

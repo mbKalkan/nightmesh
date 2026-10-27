@@ -26,6 +26,7 @@ import { Gizmo } from './gizmo';
 import { MenuButton, type MenuItem } from './menu';
 import { Formatter, fill, withoutNoise } from './structure/format';
 import { StructureView } from './structure/structureView';
+import { TilesetView } from './structure/tilesetView';
 import {
   changeColors,
   helperColors,
@@ -73,6 +74,10 @@ const shell = new Shell(
 let opened: OpenMessage | undefined;
 let strings: ViewerStrings | undefined;
 let structure: StructureView | undefined;
+/** A tileset's panels, in place of `structure` (D-046). */
+let tilesetView: TilesetView | undefined;
+/** The inspector shows what the renderer has of the tiles, a few times a second at most. */
+let tilesRefresh: ReturnType<typeof setTimeout> | undefined;
 let animationBar: AnimationBar | undefined;
 /** Formats lengths in the user's language, once it is known. */
 let metres = new Formatter('en');
@@ -489,7 +494,8 @@ function open(message: OpenMessage): void {
     const text = strings!.export;
     return [
       ...(shownView ? [{ label: text.screenshot, run: () => void saveScreenshot() }] : []),
-      { label: text.report, run: saveReport },
+      // A tileset has no report of its own yet.
+      ...(structure ? [{ label: text.report, run: saveReport }] : []),
     ];
   });
   shadingOptions ??= new MenuButton(
@@ -505,6 +511,16 @@ function open(message: OpenMessage): void {
       speed: (speed) => void view?.then((target) => target?.setSpeed(speed)),
     });
     shell.addBelowViewport(animationBar.element);
+  }
+  if (message.format === 'tileset') {
+    tilesetView ??= new TilesetView(shell, strings, message.locale, {
+      selected: (key) => {
+        selectedKey = key;
+        void view?.then((target) => target?.select(key));
+      },
+      activated: () => void view?.then((target) => target?.frameSelection()),
+    });
+    return;
   }
   structure ??= new StructureView(shell, strings, message.locale, message.format, {
     selected: (key) => {
@@ -751,11 +767,12 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     canvas,
     context,
     {
-      picked: (node, frame) => {
-        // The structure shows what was picked, and tells the view to highlight it.
-        const key = node === undefined ? 'model' : `node:${node}`;
-        structure?.select(key);
-        const said = structure?.describe(key);
+      picked: (picked, frame) => {
+        // The panels show what was picked, and tell the view to highlight it.
+        const key = picked ?? 'model';
+        const panels = tilesetView ?? structure;
+        panels?.select(key);
+        const said = panels?.describe(selectedKey);
         if (said) shell.announce(said);
         if (frame) created.frameSelection();
       },
@@ -763,8 +780,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
         animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
       measured: (size, selection) =>
         shell.setSize(size && withoutNoise(size), selection, (value) => metres.metres(value)),
-      menu: (node, x, y) => {
-        menuKey = node === undefined ? 'model' : `node:${node}`;
+      menu: (key, x, y) => {
+        menuKey = key ?? 'model';
         markMenuTarget(undefined);
         // VS Code opens its menu for a context menu event no one has handled.
         viewContextMenu = new MouseEvent('contextmenu', {
@@ -779,6 +796,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       moved: (camera) => cameraMoved(camera),
       ruled: (measurement) => showMeasurement(measurement),
       lengthText: (value) => metres.metres(value),
+      tilesChanged: () => refreshTiles(),
       environment: (environment) => vscode.postMessage({ type: 'environment', environment }),
     },
     opened?.environment,
@@ -890,8 +908,9 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
   latestLoad = message.loadId;
   arrival = undefined;
   const text = strings!;
-  // The panels show a glTF model's structure, which a tileset doesn't have.
-  shell.setPanelsAvailable(false);
+  // The tiles show at once, as a model's structure does; the view draws them as they come.
+  tilesetView?.setTileset(message, opened.fileName);
+  shell.setPanelsAvailable(true);
   view ??= createView(text);
   try {
     const target = await view;
@@ -912,6 +931,8 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
       showTileProblem(fill(text.tileDamaged, name));
     });
     target.showTiles(tiles, message.reload && hasModel);
+    target.select(selectedKey);
+    tilesetView?.setLive(target.tilesLive());
     // Shading modes replace materials, which tiles that come and go would leave behind.
     shell.shadingButton.hidden = true;
     hasModel = true;
@@ -925,6 +946,13 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
   } finally {
     if (message.loadId === latestLoad) shell.stopLoading();
   }
+}
+
+function refreshTiles(): void {
+  tilesRefresh ??= setTimeout(() => {
+    tilesRefresh = undefined;
+    tilesetView?.refresh();
+  }, 250);
 }
 
 function requestTile(path: string): Promise<Uint8Array> {
