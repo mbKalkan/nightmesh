@@ -1,0 +1,98 @@
+{
+  "asset": {
+    "version": "1.1",
+    "generator": "Nightmesh fixture generator"
+  },
+  "geometricError": 100,
+  "root": {
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        25,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        25
+      ]
+    },
+    "geometricError": 20,
+    "refine": "ADD",
+    "content": {
+      "uri": "district.b3dm"
+    },
+    "children": [
+      {
+        "boundingVolume": {
+          "box": [
+            0,
+            0,
+            25,
+            50,
+            0,
+            0,
+            0,
+            50,
+            0,
+            0,
+            0,
+            25
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "missing.b3dm"
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            0,
+            0,
+            25,
+            50,
+            0,
+            0,
+            0,
+            50,
+            0,
+            0,
+            0,
+            25
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "damaged.b3dm"
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            0,
+            0,
+            25,
+            50,
+            0,
+            0,
+            0,
+            50,
+            0,
+            0,
+            0,
+            25
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "../../outside.b3dm"
+        }
+      }
+    ]
+  }
+}

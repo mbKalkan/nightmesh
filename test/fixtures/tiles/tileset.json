@@ -1,0 +1,138 @@
+{
+  "asset": {
+    "version": "1.0",
+    "generator": "Nightmesh fixture generator"
+  },
+  "geometricError": 200,
+  "root": {
+    "transform": [
+      -0.48448,
+      0.874802,
+      0,
+      0,
+      -0.574017,
+      -0.3179,
+      0.754616,
+      0,
+      0.66014,
+      0.365596,
+      0.656167,
+      0,
+      4216541.975965,
+      2335189.800481,
+      4163110.428698,
+      1
+    ],
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        25,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        25
+      ]
+    },
+    "geometricError": 20,
+    "refine": "REPLACE",
+    "content": {
+      "uri": "district.b3dm"
+    },
+    "children": [
+      {
+        "boundingVolume": {
+          "box": [
+            -25,
+            -25,
+            9,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            9
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "south-west.b3dm"
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            -25,
+            25,
+            15,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            15
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "north-west.b3dm"
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            25,
+            -25,
+            6,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            6
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "south-east.b3dm"
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            25,
+            25,
+            25,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            25
+          ]
+        },
+        "geometricError": 0,
+        "content": {
+          "uri": "east/tileset.json"
+        }
+      }
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 import {
   Box3,
   Color,
+  Matrix4,
   Mesh,
   NeutralToneMapping,
   OrthographicCamera,
@@ -22,6 +23,7 @@ import {
   type Object3D,
   type Texture,
 } from 'three';
+import type { TilesRenderer } from '3d-tiles-renderer/three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -135,6 +137,12 @@ export class ModelView {
   private snapTimer: ReturnType<typeof setTimeout> | undefined;
   private model: Object3D | undefined;
   private index: SelectionIndex | undefined;
+  /** The tileset shown in place of a glTF model, whose group is then the model. */
+  private tiles: TilesRenderer | undefined;
+  /** The camera the tileset picks its tiles for: the one drawn with. */
+  private tilesCamera: PerspectiveCamera | OrthographicCamera | undefined;
+  /** Bounds of the whole tileset, as its tiles' bounding volumes say, once its root is read. */
+  private readonly tilesBox = new Box3();
   /** The structure entry selected, whose objects are highlighted. */
   private selected = 'model';
   /** Bounds of the whole model, which the clipping planes keep in view. */
@@ -187,9 +195,7 @@ export class ModelView {
     // Vertex data left memory once it was on the GPU, so a lost context can't redraw the model:
     // drop it, and draw again once the model comes back.
     canvas.addEventListener('webglcontextlost', () => {
-      this.shading.detach();
-      if (this.model) this.scene.remove(this.model);
-      this.model = undefined;
+      this.removeModel();
       this.index = undefined;
       this.highlight.clear();
       for (const kind of CHANGE_KINDS) this.changeBoxes[kind].clear();
@@ -386,13 +392,7 @@ export class ModelView {
   show(gltf: GLTF, keepCamera: boolean): void {
     const model = gltf.scene;
     prepareForUpload(model);
-    const previous = this.model;
-    // Its own materials back first, to be disposed with it.
-    this.shading.detach();
-    if (previous) {
-      this.scene.remove(previous);
-      disposeObject(previous);
-    }
+    this.removeModel();
     this.model = model;
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
@@ -429,6 +429,69 @@ export class ModelView {
     this.showChanges();
     this.viewpoint.updateClipping();
     this.render();
+  }
+
+  /**
+   * Shows a tileset in place of the model before (D-046), framed once its root is read; tiles
+   * come and go as the camera moves. `keepCamera` keeps the view the user had.
+   */
+  showTiles(tiles: TilesRenderer, keepCamera: boolean): void {
+    this.removeModel();
+    this.tiles = tiles;
+    this.model = tiles.group;
+    this.index = undefined;
+    this.scene.add(tiles.group);
+    this.ruler.clear();
+    this.cameras = [];
+    this.cameraIndex = -1;
+    this.variantNames = [];
+    this.variantIndex = undefined;
+    this.ownMaterials.clear();
+    this.tilesBox.makeEmpty();
+    const redraw = () => this.requestRender();
+    tiles.addEventListener('needs-render', redraw);
+    tiles.addEventListener('needs-update', redraw);
+    tiles.addEventListener('load-model', ({ scene }) => {
+      prepareForUpload(scene);
+      redraw();
+    });
+    tiles.addEventListener('load-root-tileset', () => {
+      // The box in the tileset's own frame: one along the globe's axes would be far larger.
+      tiles.group.updateMatrixWorld(true);
+      const frame = new Matrix4();
+      if (tiles.getOrientedBoundingBox(this.tilesBox, frame)) {
+        this.tilesBox.applyMatrix4(frame.premultiply(tiles.group.matrixWorld));
+      } else {
+        this.tilesBox.makeEmpty();
+      }
+      this.modelBox().getBoundingSphere(this.modelSphere);
+      this.helpers.fit(this.modelBox());
+      this.updateBounds();
+      if (!keepCamera || !this.framed) this.viewpoint.frame(this.modelBox());
+      this.framed = true;
+      this.viewpoint.updateClipping();
+      redraw();
+    });
+    this.select(this.selected);
+    this.render();
+  }
+
+  /** Takes the model shown out of the scene and frees what it holds. */
+  private removeModel(): void {
+    const previous = this.model;
+    // Its own materials back first, to be disposed with it.
+    this.shading.detach();
+    if (this.tiles) {
+      if (this.tilesCamera) this.tiles.deleteCamera(this.tilesCamera);
+      this.tiles.dispose();
+      this.scene.remove(this.tiles.group);
+    } else if (previous) {
+      this.scene.remove(previous);
+      disposeObject(previous);
+    }
+    this.tiles = undefined;
+    this.tilesCamera = undefined;
+    this.model = undefined;
   }
 
   /**
@@ -679,8 +742,8 @@ export class ModelView {
     this.highlight.dispose();
     for (const kind of CHANGE_KINDS) this.changeBoxes[kind].dispose();
     this.helpers.dispose();
+    this.removeModel();
     this.shading.dispose();
-    if (this.model) disposeObject(this.model);
     this.renderer.dispose();
   }
 
@@ -694,12 +757,16 @@ export class ModelView {
       objects.length === 1 && this.selected.startsWith('node:') ? ownSize(objects[0]) : undefined;
     if (!size && objects.length > 0) size = worldSize(boundsOf(objects));
     const selection = size !== undefined;
-    if (!size && this.model) size = worldSize(visibleBox(this.model));
+    if (!size && this.model) size = worldSize(this.tiles ? this.tilesBox : visibleBox(this.model));
     this.events.measured(size, selection);
   }
 
   private modelBox(): Box3 {
-    const box = this.model ? visibleBox(this.model) : new Box3();
+    const box = this.tiles
+      ? this.tilesBox.clone()
+      : this.model
+        ? visibleBox(this.model)
+        : new Box3();
     if (box.isEmpty()) box.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
     return box;
   }
@@ -818,6 +885,7 @@ export class ModelView {
     const measurement = this.measuring
       ? this.ruler.update(camera, (metres) => this.events.lengthText(metres))
       : undefined;
+    if (this.tiles) this.updateTiles(this.tiles, camera);
     this.renderer.render(this.scene, camera);
     this.shading.drawWireframe(this.renderer, this.scene, camera);
     if (!camera.quaternion.equals(this.turnedTo)) {
@@ -841,6 +909,18 @@ export class ModelView {
       this.ruledAs = ruled;
       this.events.ruled(measurement);
     }
+  }
+
+  /** Picks the tiles to draw for where the camera is now, and asks for the ones missing. */
+  private updateTiles(tiles: TilesRenderer, camera: PerspectiveCamera | OrthographicCamera): void {
+    if (this.tilesCamera !== camera) {
+      if (this.tilesCamera) tiles.deleteCamera(this.tilesCamera);
+      tiles.setCamera(camera);
+      this.tilesCamera = camera;
+    }
+    tiles.setResolutionFromRenderer(camera, this.renderer);
+    camera.updateMatrixWorld();
+    tiles.update();
   }
 
   /** Where the camera is and what it sees. */

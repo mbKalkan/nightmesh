@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateBytes } from 'gltf-validator';
@@ -27,6 +27,12 @@ const VALID = [
 ];
 
 // Small files come back as views into Node's shared buffer pool; the validator needs their own bytes.
+/** The files in a folder and its subfolders, by their paths in it with `/` between names. */
+const files = (folder: string) =>
+  readdirSync(folder, { recursive: true, encoding: 'utf8' })
+    .map((name) => name.replace(/\\/g, '/'))
+    .filter((name) => statSync(join(folder, name)).isFile());
+
 const read = (name: string) => new Uint8Array(readFileSync(join(FIXTURES, name)));
 
 const validate = (name: string) =>
@@ -46,9 +52,9 @@ describe('test fixtures', () => {
   afterAll(() => rmSync(fresh, { recursive: true, force: true }));
 
   it('match what the generator writes, byte for byte', () => {
-    const generated = readdirSync(fresh).filter((name) => !name.startsWith('generated'));
-    const committed = readdirSync(FIXTURES).filter(
-      (name) => name !== 'private' && name !== 'generated',
+    const generated = files(fresh).filter((name) => !name.startsWith('generated/'));
+    const committed = files(FIXTURES).filter(
+      (name) => !name.startsWith('private/') && !name.startsWith('generated/'),
     );
     expect(committed.sort()).toEqual(generated.sort());
     for (const name of generated) {

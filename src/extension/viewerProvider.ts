@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path';
 import * as vscode from 'vscode';
-import { formatForPath, isMeshFormat } from '../shared/formats';
+import { formatForPath, isGltfFormat, isMeshFormat } from '../shared/formats';
 import type {
   HostToWebviewMessage,
   ModelFormat,
@@ -19,6 +19,7 @@ import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
 import { resolveResourceUri } from './model/resources';
 import { fileSource, memorySource, type ByteSource } from './model/sources';
+import { readTile } from './model/tiles';
 import { validationMessage } from './model/validation';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
@@ -29,6 +30,8 @@ const PREFERENCES = 'nightmesh.preferences';
 
 export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   static readonly viewType = 'nightmesh.viewer';
+  /** 3D Tiles tilesets, which are JSON files: opened with Nightmesh only when the user says so. */
+  static readonly tilesetViewType = 'nightmesh.tileset';
 
   /** The viewer in front, which commands act on. */
   private active: vscode.WebviewPanel | undefined;
@@ -56,11 +59,14 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         provider.askToExport('screenshot'),
       ),
       vscode.commands.registerCommand('nightmesh.saveReport', () => provider.askToExport('report')),
-      vscode.window.registerCustomEditorProvider(ViewerProvider.viewType, provider, {
-        // Keeps the WebGL context and camera when the tab is hidden, so switching back is instant.
-        webviewOptions: { retainContextWhenHidden: true },
-        supportsMultipleEditorsPerDocument: true,
-      }),
+      ...[ViewerProvider.viewType, ViewerProvider.tilesetViewType].map((viewType) =>
+        vscode.window.registerCustomEditorProvider(viewType, provider, {
+          // Keeps the WebGL context and camera when the tab is hidden, so switching back is
+          // instant.
+          webviewOptions: { retainContextWhenHidden: true },
+          supportsMultipleEditorsPerDocument: true,
+        }),
+      ),
       vscode.commands.registerCommand('nightmesh.copyReference', (menu?: unknown) =>
         provider.copyReference(false, menu),
       ),
@@ -131,7 +137,11 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     let drawRequest: (() => void) | undefined;
     const validator = workerValidator(join(this.extensionUri.fsPath, 'dist', 'validator.js'));
     const meshParser = workerMeshParser(join(this.extensionUri.fsPath, 'dist', 'mesh.js'));
-    const gltf = !isMeshFormat(format);
+    const gltf = isGltfFormat(format);
+    // A tileset's tiles are asked for by their path in the folder the viewer may read.
+    const root = readableRoot(uri);
+    const tilesetPath = posix.relative(root, uri.path);
+    const tileOpener = resourceOpener(uri, root);
     const load = async (reload: boolean) => {
       const id = ++loadId;
       // A load still waiting gives way to this one: it ends, and closes its file.
@@ -157,6 +167,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           fileName,
           largeBytes: largeApproved ? Infinity : undefined,
           parseMesh: meshParser.parse,
+          tilesetPath,
         });
         for await (const message of messages) {
           if (!current()) break;
@@ -215,6 +226,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           });
           void load(false);
           this.diffs.ready(member);
+        } else if (message.type === 'tile') {
+          void readTile(message.path, tileOpener, loadTexts(vscode.l10n.t)).then((tile) => {
+            if (!disposed) void post({ type: 'tile', id: message.id, ...tile });
+          });
         } else if (message.type === 'camera') {
           this.diffs.camera(member, message.camera);
         } else if (message.type === 'summary') {
@@ -282,7 +297,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   private track(panel: vscode.WebviewPanel, format: ModelFormat): void {
     if (panel.active) {
       this.active = panel;
-      void vscode.commands.executeCommand('setContext', 'nightmesh.gltf', !isMeshFormat(format));
+      void vscode.commands.executeCommand('setContext', 'nightmesh.gltf', isGltfFormat(format));
     } else if (this.active === panel) {
       this.active = undefined;
     }
@@ -399,9 +414,13 @@ async function readVersion(
 }
 
 /** Resources may come from the model's workspace folder, or its own folder outside one. */
-function resourceOpener(uri: vscode.Uri): ResourceOpener {
-  const modelFolder = posix.dirname(uri.path);
-  const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.path ?? modelFolder;
+function readableRoot(uri: vscode.Uri): string {
+  return vscode.workspace.getWorkspaceFolder(uri)?.uri.path ?? posix.dirname(uri.path);
+}
+
+/** Opens what `uri` refers to, relative to `modelFolder`: by default the model's own. */
+function resourceOpener(uri: vscode.Uri, modelFolder = posix.dirname(uri.path)): ResourceOpener {
+  const root = readableRoot(uri);
   if (uri.scheme === 'file') {
     return fileResourceOpener(modelFolder, root, (path) => uri.with({ path }).fsPath);
   }

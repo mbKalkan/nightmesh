@@ -160,6 +160,21 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
+  async 'leaves JSON files to the text editor, and opens a tileset when asked'() {
+    const uri = vscode.Uri.file(path.join(FIXTURES, 'tiles', 'tileset.json'));
+    await vscode.commands.executeCommand('vscode.open', uri);
+    await waitFor(() =>
+      vscode.window.activeTextEditor?.document.uri.path.endsWith('/tileset.json'),
+    );
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'nightmesh.tileset');
+    const input = await waitFor(() => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.input instanceof vscode.TabInputCustom ? tab.input : undefined;
+    });
+    assert.equal(input.viewType, 'nightmesh.tileset');
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  },
+
   async 'reads an OBJ model in a worker thread, with its material library, and checks it'() {
     await openInEditor('cube.obj');
     const saved = await vscode.env.clipboard.readText();

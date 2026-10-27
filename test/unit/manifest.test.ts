@@ -9,7 +9,11 @@ const manifest = readJson('package.json') as {
   engines: { vscode: string };
   extensionKind: string[];
   contributes: {
-    customEditors: { selector: { filenamePattern: string }[] }[];
+    customEditors: {
+      viewType: string;
+      priority: string;
+      selector: { filenamePattern: string }[];
+    }[];
     languages: { id: string; extensions: string[] }[];
   };
   keywords: string[];
@@ -43,7 +47,16 @@ describe('extension manifest', () => {
 
   it('declares the same file types as languages, so the Marketplace lists it for them', () => {
     const extensions = manifest.contributes.languages.flatMap((language) => language.extensions);
-    expect(extensions.sort()).toEqual([...SUPPORTED_EXTENSIONS].sort());
+    // Tilesets are JSON, which VS Code knows already.
+    expect(extensions.sort()).toEqual(SUPPORTED_EXTENSIONS.filter((ext) => ext !== '.json').sort());
+  });
+
+  it('opens JSON files as tilesets only when asked to', () => {
+    const tileset = manifest.contributes.customEditors.find(
+      (editor) => editor.viewType === 'nightmesh.tileset',
+    );
+    expect(tileset?.priority).toBe('option');
+    expect(tileset?.selector).toEqual([{ filenamePattern: '*.json' }]);
   });
 
   it('keeps .gltf files JSON for the text editor', () => {

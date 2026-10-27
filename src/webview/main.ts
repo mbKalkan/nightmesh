@@ -1,5 +1,5 @@
 import './styles/viewer.css';
-import { isMeshFormat } from '../shared/formats';
+import { isGltfFormat, isMeshFormat } from '../shared/formats';
 import type {
   CameraState,
   DiffSide,
@@ -14,6 +14,8 @@ import type {
   ShadingStrings,
   StandardView,
   StructureMessage,
+  TileMessage,
+  TilesetMessage,
   ViewerStrings,
   ViewStrings,
 } from '../shared/protocol';
@@ -99,6 +101,14 @@ let selectingFromPeer = false;
 let viewContextMenu: Event | undefined;
 /** The row or link the context menu was opened on, outlined while the menu shows. */
 let menuTarget: Element | undefined;
+/** Tiles asked of the host and not yet answered, by request. */
+const tileRequests = new Map<
+  number,
+  { resolve: (data: Uint8Array) => void; reject: (error: Error) => void }
+>();
+let lastTileRequest = 0;
+/** What couldn't be had of the tileset shown, in sentences for the user. */
+const tileProblems = new Set<string>();
 
 // Cut and Paste do nothing in a read-only viewer; Copy stays for the values in the inspector.
 document.body.dataset.vscodeContext = JSON.stringify({ preventDefaultContextMenuItems: true });
@@ -136,6 +146,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'model':
       receiveModel(message);
       break;
+    case 'tileset':
+      void receiveTileset(message);
+      break;
+    case 'tile':
+      answerTile(message);
+      break;
     case 'part':
       receivePart(message.loadId, message.key, ownBuffer(message.data));
       break;
@@ -153,7 +169,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       break;
     case 'showJson':
       // OBJ, STL and PLY have no glTF JSON of their own.
-      if (!opened || isMeshFormat(opened.format)) break;
+      if (!opened || !isGltfFormat(opened.format)) break;
       if (message.atPointer && menuPointer !== undefined)
         vscode.postMessage({ type: 'json', pointer: menuPointer });
       else showJson(message.atPointer ? (menuKey ?? selectedKey) : selectedKey);
@@ -456,7 +472,7 @@ function open(message: OpenMessage): void {
     // Show glTF JSON is in the context menu of glTF models only.
     document.body.dataset.vscodeContext = JSON.stringify({
       preventDefaultContextMenuItems: true,
-      nightmeshGltf: !isMeshFormat(message.format),
+      nightmeshGltf: isGltfFormat(message.format),
     });
     preferences = message.preferences ?? {};
     shell.setLayout({ ...DEFAULT_LAYOUT, ...preferences.layout });
@@ -856,6 +872,73 @@ async function build(current: Arrival): Promise<void> {
       arrival = undefined;
     }
   }
+}
+
+/** The host's answer is the problem with a tile, which the notices already list. */
+class TileProblem extends Error {}
+
+/** Shows a tileset (D-046): the 3D view asks for its tiles as it needs them. */
+async function receiveTileset(message: TilesetMessage): Promise<void> {
+  if (message.loadId < latestLoad || !opened) return;
+  latestLoad = message.loadId;
+  arrival = undefined;
+  const text = strings!;
+  // The panels show a glTF model's structure, which a tileset doesn't have.
+  shell.setPanelsAvailable(false);
+  view ??= createView(text);
+  try {
+    const target = await view;
+    if (!target) {
+      shell.setState('failed');
+      return;
+    }
+    // Which decoders tiles need is known only once they arrive: both are ready from the start.
+    const decoders = await target.decoders(['KHR_draco_mesh_compression', 'KHR_texture_basisu']);
+    const { createTiles } = await import('./scene/tiles');
+    if (message.loadId !== latestLoad) return;
+    tileProblems.clear();
+    const tiles = createTiles(message.url, message.json, requestTile, decoders);
+    tiles.addEventListener('load-error', ({ tile, url, error }) => {
+      if (error instanceof TileProblem) return;
+      const { pathname } = new URL(String(url ?? tile?.content?.uri), 'nightmesh-tiles://tileset');
+      const name = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
+      showTileProblem(fill(text.tileDamaged, name));
+    });
+    target.showTiles(tiles, message.reload && hasModel);
+    // Shading modes replace materials, which tiles that come and go would leave behind.
+    shell.shadingButton.hidden = true;
+    hasModel = true;
+    shell.hideError();
+    shell.setState('shown');
+    shell.setNotices(text.partialTitle, []);
+  } catch (error) {
+    if (message.loadId !== latestLoad) return;
+    console.warn(error);
+    if (!(message.reload && hasModel)) shell.showError(text.errorTitle, text.errorRender);
+  } finally {
+    if (message.loadId === latestLoad) shell.stopLoading();
+  }
+}
+
+function requestTile(path: string): Promise<Uint8Array> {
+  const id = ++lastTileRequest;
+  vscode.postMessage({ type: 'tile', id, path });
+  return new Promise((resolve, reject) => tileRequests.set(id, { resolve, reject }));
+}
+
+function answerTile(message: TileMessage): void {
+  const request = tileRequests.get(message.id);
+  if (!request) return;
+  tileRequests.delete(message.id);
+  if ('data' in message) return request.resolve(message.data);
+  showTileProblem(message.problem);
+  request.reject(new TileProblem(message.problem));
+}
+
+function showTileProblem(problem: string): void {
+  if (tileProblems.has(problem)) return;
+  tileProblems.add(problem);
+  shell.setNotices(strings!.partialTitle, [...tileProblems]);
 }
 
 function fail(message: FailedMessage): void {
