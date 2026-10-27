@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the tileset's workspace folder, and the notice above the view says which ones couldn't
   be had.
 
+### Changed
+
+- **Models open faster**: the 3D view made its lighting anew for every file, which takes most of
+  a second of GPU work on some machines. It is now made once and kept, so every viewer after the
+  first starts drawing about 0.6 s sooner (measured on Windows: 740 ms to 75–105 ms).
+
 ## [0.4.0] - 2026-10-26
 
 Compare two versions of a model side by side, measure distances on it, and OBJ smoothing groups.

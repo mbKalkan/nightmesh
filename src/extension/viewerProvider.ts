@@ -9,6 +9,7 @@ import type {
 } from '../shared/protocol';
 import { composeReference } from '../shared/reference';
 import { DiffPairs, type DiffMember } from './diffPairs';
+import { EnvironmentStore } from './environmentStore';
 import { watchFile } from './fileWatcher';
 import { gitSibling, readGitBlob } from './gitBlob';
 import { JsonDocuments } from './jsonDocuments';
@@ -45,11 +46,18 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     /** Where the viewers' preferences are kept, for every window and session. */
     private readonly globalState: vscode.Memento,
     private readonly jsonDocuments: JsonDocuments,
+    /** The lighting environment for the 3D view, made once and kept. */
+    private readonly environment: EnvironmentStore,
   ) {}
 
   static register(context: vscode.ExtensionContext): vscode.Disposable {
     const json = JsonDocuments.register();
-    const provider = new ViewerProvider(context.extensionUri, context.globalState, json.documents);
+    const provider = new ViewerProvider(
+      context.extensionUri,
+      context.globalState,
+      json.documents,
+      new EnvironmentStore(context.globalStorageUri.fsPath),
+    );
     return vscode.Disposable.from(
       json.disposable,
       vscode.commands.registerCommand('nightmesh.showJson', (menu?: unknown) =>
@@ -215,16 +223,22 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     const subscriptions = [
       panel.webview.onDidReceiveMessage((message: WebviewToHostMessage) => {
         if (message.type === 'ready') {
-          void post({
-            type: 'open',
-            fileName,
-            format,
-            locale: vscode.env.language,
-            strings: viewerStrings(vscode.l10n.t),
-            preferences: this.globalState.get<Preferences>(PREFERENCES) ?? {},
+          void this.environment.get().then(async (environment) => {
+            if (disposed) return;
+            await post({
+              type: 'open',
+              fileName,
+              format,
+              locale: vscode.env.language,
+              strings: viewerStrings(vscode.l10n.t),
+              preferences: this.globalState.get<Preferences>(PREFERENCES) ?? {},
+              environment,
+            });
+            void load(false);
+            this.diffs.ready(member);
           });
-          void load(false);
-          this.diffs.ready(member);
+        } else if (message.type === 'environment') {
+          void this.environment.keep(message.environment);
         } else if (message.type === 'tile') {
           void readTile(message.path, tileOpener, loadTexts(vscode.l10n.t)).then((tile) => {
             if (!disposed) void post({ type: 'tile', id: message.id, ...tile });
