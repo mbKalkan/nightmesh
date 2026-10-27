@@ -353,7 +353,7 @@
   "the point positions are given from": "konumların verildiği nokta",
   "Feature properties": "Feature özellikleri",
   "The file isn't a pnts tile, or it is damaged.": "Dosya bir pnts karosu değil ya da bozuk.",
-  "This tile's points are compressed with Draco, which Nightmesh doesn't read in pnts tiles yet.": "Bu karonun noktaları Draco ile sıkıştırılmış; Nightmesh pnts karolarında bunu henüz okumuyor.",
+  "This tile's points are compressed with Draco and couldn't be decoded: {0}.": "Bu karonun noktaları Draco ile sıkıştırılmış ve çözülemedi: {0}.",
   "Table extensions": "Tablo eklentileri",
   "Feature table data": "Feature tablosu verisi",
   "The file isn't an i3dm tile, or it is damaged.": "Dosya bir i3dm karosu değil ya da bozuk.",

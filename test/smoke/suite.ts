@@ -206,6 +206,28 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
+  async "decodes a pnts tile's Draco points in the worker thread"() {
+    await openInEditor('tiles/draco.pnts');
+    const saved = await vscode.env.clipboard.readText();
+    try {
+      let copied = '';
+      // The points' size shows once they are decoded and drawn.
+      for (
+        const start = Date.now();
+        !copied.includes('Dimensions') && Date.now() - start < 30_000;
+      ) {
+        await vscode.env.clipboard.writeText('');
+        await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        copied = await vscode.env.clipboard.readText();
+      }
+      assert.match(copied, /draco\.pnts:\nFile\n- Format: Point Cloud \(pnts\)\n/);
+      assert.match(copied, /\n- Dimensions: /);
+    } finally {
+      await vscode.env.clipboard.writeText(saved);
+    }
+  },
+
   async 'copies a reference to the model, with what the inspector says'() {
     await openInEditor('scene.glb');
     const saved = await vscode.env.clipboard.readText();

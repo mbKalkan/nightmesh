@@ -1,9 +1,11 @@
-// The thread that reads OBJ, STL and PLY files: a large one takes seconds, which would hold up
-// every extension in the extension host. The extension sends the file in pieces as asked.
+// The thread that reads OBJ, STL, PLY and pnts files: a large one takes seconds, which would hold
+// up every extension in the extension host. The extension sends the file in pieces as asked.
+// pnts tiles' Draco points are decoded here, with the decoder built into this bundle alone.
 import { parentPort } from 'node:worker_threads';
 import type { MeshReader } from './model/mesh/geometry';
 import { MeshFormatError } from './model/mesh/geometry';
 import { checkMesh, trianglesOf } from './model/mesh/check';
+import { decodePoints } from './model/mesh/draco';
 import { createReader, meshBuffers } from './model/mesh/parse';
 import type { MeshRequest, MeshResponse } from './workerMesh';
 
@@ -13,16 +15,16 @@ let reader: MeshReader | undefined;
 const send = (message: MeshResponse, transfer: ArrayBuffer[] = []) =>
   port.postMessage(message, transfer);
 
-port.on('message', (message: MeshRequest) => {
+port.on('message', async (message: MeshRequest) => {
   try {
     if (message.type === 'start') {
-      reader = createReader(message.format, message.size);
+      reader = createReader(message.format, message.size, decodePoints);
       send({ type: 'next' });
     } else if (message.type === 'chunk') {
       reader!.push(message.data);
       send({ type: 'next' });
     } else {
-      const mesh = reader!.finish();
+      const mesh = await reader!.finish();
       reader = undefined;
       // The check comes after the mesh, from a copy of its triangles, so the model shows first.
       const triangles = trianglesOf(mesh).map(({ positions, indices }) => ({

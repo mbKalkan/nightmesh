@@ -35,8 +35,9 @@ const LARGE = process.argv.includes('--large');
 const GENERATOR = 'Nightmesh fixture generator';
 
 await MeshoptEncoder.ready;
+const dracoEncoder = await draco3d.createEncoderModule();
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
-  'draco3d.encoder': await draco3d.createEncoderModule(),
+  'draco3d.encoder': dracoEncoder,
   'draco3d.decoder': await draco3d.createDecoderModule(),
   'meshopt.encoder': MeshoptEncoder,
 });
@@ -1502,8 +1503,9 @@ function cmpt(...tiles) {
 
 /**
  * Point Cloud tiles: a dome of colored points around `RTC_CENTER` with an intensity for each in
- * the batch table; and the same dome quantized, with see-through colors and normals packed in
- * two bytes, as compact writers store them.
+ * the batch table; the same dome quantized, with see-through colors and normals packed in two
+ * bytes, as compact writers store them; and the dome with its positions and colors compressed
+ * with Draco, its normals beside them, as Cesium's partly compressed sample is.
  */
 function pointClouds() {
   const rings = 24;
@@ -1569,6 +1571,41 @@ function pointClouds() {
         NORMAL_OCT16P: { byteOffset: compact.offsets[2] },
       },
       featureBinary: compact.bytes,
+    }),
+  );
+
+  const cloud = new dracoEncoder.PointCloud();
+  const builder = new dracoEncoder.PointCloudBuilder();
+  const ids = {
+    POSITION: builder.AddFloatAttribute(cloud, dracoEncoder.POSITION, points.length, 3, positions),
+    RGB: builder.AddUInt8Attribute(cloud, dracoEncoder.COLOR, points.length, 3, rgb),
+  };
+  const encoder = new dracoEncoder.Encoder();
+  encoder.SetAttributeQuantization(dracoEncoder.POSITION, 14);
+  // Sequential: the points keep their order, which the normals in the body follow.
+  encoder.SetSpeedOptions(10, 10);
+  const encoded = new dracoEncoder.DracoInt8Array();
+  const length = encoder.EncodePointCloudToDracoBuffer(cloud, false, encoded);
+  const draco = new Int8Array(length).map((_, i) => encoded.GetValue(i));
+  [encoded, encoder, builder, cloud].forEach((object) => dracoEncoder.destroy(object));
+  const partly = packed(draco, oct);
+  write(
+    'tiles/draco.pnts',
+    tileFile('pnts', {
+      featureTable: {
+        POINTS_LENGTH: points.length,
+        POSITION: { byteOffset: 0 },
+        RGB: { byteOffset: 0 },
+        NORMAL_OCT16P: { byteOffset: partly.offsets[1] },
+        extensions: {
+          '3DTILES_draco_point_compression': {
+            properties: ids,
+            byteOffset: partly.offsets[0],
+            byteLength: length,
+          },
+        },
+      },
+      featureBinary: partly.bytes,
     }),
   );
 }

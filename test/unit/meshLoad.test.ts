@@ -2,6 +2,8 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
+import { decodePoints } from '../../src/extension/model/mesh/draco';
+import { threadParser } from '../../src/extension/model/mesh/parse';
 import { fileSource, memorySource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
 import { formatForPath } from '../../src/shared/formats';
@@ -12,7 +14,10 @@ const english: Translate = (message, ...args) =>
   message.replace(/\{(\d+)\}/g, (_, index: string) => String(args[Number(index)]));
 const texts = loadTexts(english);
 
-/** Loads a fixture as the extension host does, with the fixtures folder as the workspace. */
+/**
+ * Loads a fixture as the extension host does, with the fixtures folder as the workspace, reading
+ * with the decoders the reading thread has.
+ */
 async function loadAll(name: string, largeBytes?: number): Promise<HostToWebviewMessage[]> {
   const source = await fileSource(join(FIXTURES, name));
   const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
@@ -27,6 +32,7 @@ async function loadAll(name: string, largeBytes?: number): Promise<HostToWebview
       format: formatForPath(name),
       fileName: name,
       largeBytes,
+      parseMesh: threadParser(decodePoints),
     };
     for await (const message of loadMessages(source, opener, options)) messages.push(message);
   } finally {
@@ -202,6 +208,12 @@ describe('loading OBJ, STL and PLY', () => {
     expect(primitive.mode).toBe(0);
     expect(Object.keys(primitive.attributes).sort()).toEqual(['COLOR_0', 'POSITION']);
     expect(modelOf(messages).notices).toEqual([]);
+
+    // Positions and colors from Draco, normals from the body.
+    const draco = await loadAll('tiles/draco.pnts');
+    const [decoded] = structureOf(draco).gltf.meshes[0].primitives;
+    expect(Object.keys(decoded.attributes).sort()).toEqual(['COLOR_0', 'NORMAL', 'POSITION']);
+    expect(modelOf(draco).notices).toEqual([]);
 
     const json = JSON.stringify({
       POINTS_LENGTH: 1,

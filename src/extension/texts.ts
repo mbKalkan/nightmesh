@@ -485,9 +485,8 @@ export function loadTexts(t: Translate): LoadTexts {
               ? t("The file isn't a pnts tile, or it is damaged.")
               : t("The file isn't a PLY model, or it is damaged."),
     noGeometry: t('This file has no faces, lines or points to draw.'),
-    compressedPoints: t(
-      "This tile's points are compressed with Draco, which Nightmesh doesn't read in pnts tiles yet.",
-    ),
+    compressedPoints: (reason) =>
+      t("This tile's points are compressed with Draco and couldn't be decoded: {0}.", reason),
     badFaces: (count) =>
       t('Faces left out because they are incomplete or name vertices the file lacks: {0}', count),
     freeForm: (count) => t("Free-form curves and surfaces aren't drawn: {0}", count),

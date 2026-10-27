@@ -38,14 +38,6 @@ const validator = {
   outfile: 'dist/validator.js',
 };
 
-/** OBJ, STL and PLY files are read in a worker thread of the extension host too. */
-/** @type {import('esbuild').BuildOptions} */
-const mesh = {
-  ...extension,
-  entryPoints: ['src/extension/meshWorker.ts'],
-  outfile: 'dist/mesh.js',
-};
-
 /** Changes made to embedded text files on the way in, by file name. */
 const PATCHES = { 'basis_transcoder.js': embindWithoutEval };
 
@@ -72,6 +64,18 @@ const inlineFiles = {
       loader: 'binary',
     }));
   },
+};
+
+/**
+ * OBJ, STL, PLY and pnts files are read in a worker thread of the extension host too, with the
+ * Draco decoder embedded for pnts tiles that compress their points.
+ */
+/** @type {import('esbuild').BuildOptions} */
+const mesh = {
+  ...extension,
+  entryPoints: ['src/extension/meshWorker.ts'],
+  outfile: 'dist/mesh.js',
+  plugins: [inlineFiles],
 };
 
 /** @type {import('esbuild').BuildOptions} */
