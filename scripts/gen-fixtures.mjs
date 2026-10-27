@@ -1303,6 +1303,7 @@ function tileFile(
   magic,
   { featureTable = { BATCH_LENGTH: 0 }, featureBinary, batchTable, batchBinary },
   tail = new Uint8Array(),
+  { header: headerBytes = 28, gltfFormat } = {},
 ) {
   const pad = (bytes, at, fill) => {
     const padded = Buffer.alloc(((at + bytes.length + 7) & ~7) - at, fill);
@@ -1310,7 +1311,7 @@ function tileFile(
     return padded;
   };
   const sections = [];
-  let at = 28;
+  let at = headerBytes;
   for (const [data, fill] of [
     [Buffer.from(JSON.stringify(featureTable)), 0x20],
     [featureBinary && Buffer.from(featureBinary), 0],
@@ -1321,8 +1322,10 @@ function tileFile(
     sections.push(section);
     at += section.length;
   }
-  const header = Buffer.alloc(28);
+  const header = Buffer.alloc(headerBytes);
   header.write(magic, 0, 'ascii');
+  // i3dm's header ends with its glTF's format: 1 embedded, 0 a URI.
+  if (gltfFormat !== undefined) header.writeUInt32LE(gltfFormat, 28);
   header.writeUInt32LE(1, 4);
   header.writeUInt32LE(at + tail.length, 8);
   sections.forEach((section, index) => header.writeUInt32LE(section.length, 12 + 4 * index));
@@ -1347,6 +1350,113 @@ function packed(...arrays) {
     bytes.set(new Uint8Array(array.buffer, array.byteOffset, array.byteLength), offsets[index]),
   );
   return { bytes, offsets };
+}
+
+/** An Instanced 3D Model tile: the tile's tables after its 32-byte header, then the glTF. */
+function i3dm(tables, gltf, { embedded = true } = {}) {
+  return tileFile('i3dm', tables, gltf, { header: 32, gltfFormat: embedded ? 1 : 0 });
+}
+
+/**
+ * Instanced tiles: posts on the globe, nine in a grid, each facing east, north and up where it
+ * stands, as forests and street furniture are written; and four in a tile's own frame with
+ * quantized positions, packed orientations and sizes of their own; and one that names its glTF.
+ */
+async function instancedTiles() {
+  const doc = newDocument();
+  const material = doc.createMaterial('Post').setBaseColorFactor([0.85, 0.55, 0.25, 1]);
+  const geometry = boxGeometry(1);
+  const positions = geometry.positions.map((value, i) => (i % 3 === 1 ? value * 3 + 1.5 : value));
+  const post = doc
+    .createNode('Post')
+    .setMesh(
+      doc.createMesh('Post').addPrimitive(meshPrimitive(doc, { ...geometry, positions }, material)),
+    );
+  scene(doc, 'Post', post);
+  const glb = await io.writeBinary(doc);
+
+  // East, north and up at the place, by columns, and the place itself.
+  const frame = eastNorthUp(41.0082, 28.9784);
+  const place = frame.slice(12, 15);
+  const toEarth = ([e, n, u]) =>
+    [0, 1, 2].map((axis) => frame[axis] * e + frame[4 + axis] * n + frame[8 + axis] * u);
+  const grid = [-10, 0, 10].flatMap((east) => [-10, 0, 10].map((north) => [east, north, 0]));
+  const globe = packed(
+    new Float32Array(grid.flatMap(toEarth)),
+    new Float32Array(grid.map((_, i) => 1 + (i % 3) * 0.5)),
+  );
+  write(
+    'tiles/instanced.i3dm',
+    i3dm(
+      {
+        featureTable: {
+          INSTANCES_LENGTH: grid.length,
+          RTC_CENTER: place,
+          EAST_NORTH_UP: true,
+          POSITION: { byteOffset: globe.offsets[0] },
+          SCALE: { byteOffset: globe.offsets[1] },
+        },
+        featureBinary: globe.bytes,
+        batchTable: { name: grid.map((_, i) => `Post ${i + 1}`) },
+      },
+      glb,
+    ),
+  );
+
+  // Four corners of a 20 m square, each turned a quarter more about up, twice as wide as deep.
+  const corners = [
+    [-10, -10],
+    [10, -10],
+    [10, 10],
+    [-10, 10],
+  ];
+  const quantize = (value) => Math.round(((value + 10) / 20) * 65535);
+  // A unit vector packed as a point on an octahedron unfolded into a square, 16 bits each.
+  const oct = ([x, y, z]) => {
+    const sum = Math.abs(x) + Math.abs(y) + Math.abs(z);
+    let [u, v] = [x / sum, y / sum];
+    if (z < 0)
+      [u, v] = [(1 - Math.abs(v)) * Math.sign(u || 1), (1 - Math.abs(u)) * Math.sign(v || 1)];
+    return [u, v].map((value) => Math.round(((value + 1) / 2) * 65535));
+  };
+  const turns = corners.map((_, i) => (i * Math.PI) / 2);
+  const local = packed(
+    new Uint16Array(corners.flatMap(([x, y]) => [quantize(x), quantize(y), 0])),
+    // The basis maps the tile's Y to NORMAL_UP and its Z, where the glTF's up lands, to right × up:
+    // up across the ground keeps the posts standing.
+    new Uint16Array(turns.flatMap((turn) => oct([-Math.sin(turn), Math.cos(turn), 0]))),
+    new Uint16Array(turns.flatMap((turn) => oct([Math.cos(turn), Math.sin(turn), 0]))),
+    new Float32Array(turns.flatMap(() => [2, 1, 1])),
+  );
+  write(
+    'tiles/oriented.i3dm',
+    i3dm(
+      {
+        featureTable: {
+          INSTANCES_LENGTH: corners.length,
+          QUANTIZED_VOLUME_OFFSET: [-10, -10, 0],
+          QUANTIZED_VOLUME_SCALE: [20, 20, 20],
+          POSITION_QUANTIZED: { byteOffset: local.offsets[0] },
+          NORMAL_UP_OCT32P: { byteOffset: local.offsets[1] },
+          NORMAL_RIGHT_OCT32P: { byteOffset: local.offsets[2] },
+          SCALE_NON_UNIFORM: { byteOffset: local.offsets[3] },
+        },
+        featureBinary: local.bytes,
+      },
+      glb,
+    ),
+  );
+  write(
+    'tiles/external.i3dm',
+    i3dm(
+      {
+        featureTable: { INSTANCES_LENGTH: 1, POSITION: { byteOffset: 0 } },
+        featureBinary: new Float32Array(3),
+      },
+      Buffer.from('../scene.glb'),
+      { embedded: false },
+    ),
+  );
 }
 
 /**
@@ -1603,6 +1713,7 @@ async function writeTilesets() {
   write('tiles/damaged.b3dm', Buffer.from('b3dm, but nothing else of one'));
   write('tiles/batched.b3dm', await batchedTile());
   pointClouds();
+  await instancedTiles();
   write(
     'tiles/problems.json',
     json({

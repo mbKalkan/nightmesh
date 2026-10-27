@@ -127,6 +127,15 @@
         ]
       },
       {
+        "id": "i3dm",
+        "aliases": [
+          "Instanced 3D Model"
+        ],
+        "extensions": [
+          ".i3dm"
+        ]
+      },
+      {
         "id": "pnts",
         "aliases": [
           "3D Tiles Point Cloud"
@@ -158,6 +167,9 @@
           },
           {
             "filenamePattern": "*.b3dm"
+          },
+          {
+            "filenamePattern": "*.i3dm"
           },
           {
             "filenamePattern": "*.pnts"

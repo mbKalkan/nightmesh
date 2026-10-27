@@ -265,3 +265,32 @@ for (const [fixture, theme] of [
     expect(viewer.problems).toEqual([]);
   });
 }
+
+for (const [fixture, theme] of [
+  ['instanced.i3dm', 'dark'],
+  ['oriented.i3dm', 'light'],
+] as [string, ThemeName][]) {
+  test(`draws ${fixture} once for each instance, upright, ${theme} theme`, async ({ page }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open(`tiles/${fixture}`);
+    await viewer.post(await viewer.validation(`tiles/${fixture}`));
+
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    await expect(page.locator('.nm-error')).toBeHidden();
+    await expect(page.locator('[data-action="json"]')).toBeVisible();
+    const tile = page
+      .locator('.nm-section', {
+        has: page.locator('.nm-section-title', { hasText: 'Instanced 3D Model (i3dm)' }),
+      })
+      .locator('dt, dd');
+    await expect(tile).toContainText(['Version', '1', 'Header', '32 B', 'Instances']);
+    // Every instance counts in the size, and the posts stand: 3 m tall, twice that when scaled.
+    const size = fixture === 'instanced.i3dm' ? '22 m × 6 m × 21.5 m' : '22 m × 3 m × 22 m';
+    await expect(page.locator('.nm-measure')).toHaveAttribute(
+      'aria-label',
+      `Size of the model: width (X), height (Y) and depth (Z): ${size}`,
+    );
+    await page.screenshot({ path: `${SCREENS}/i3dm-${fixture.replace('.', '-')}-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}

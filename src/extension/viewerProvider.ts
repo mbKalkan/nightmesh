@@ -15,7 +15,9 @@ import { gitSibling, readGitBlob } from './gitBlob';
 import { JsonDocuments } from './jsonDocuments';
 import { lfsObjectId } from './gitObject';
 import { sniff } from './model/container';
-import { gltfSource, isB3dm } from './model/tileFile';
+import { isI3dm } from './model/i3dm';
+import { isB3dm } from './model/tileFile';
+import { gltfSource } from './model/tileGltf';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
@@ -410,7 +412,9 @@ async function openSource(uri: vscode.Uri, format: ModelFormat): Promise<ByteSou
           ? looksLike(format, data.subarray(0, 64 * 1024), data.length) !== 'yes'
           : format === 'b3dm'
             ? !isB3dm(data)
-            : sniff(data) === 'unknown'),
+            : format === 'i3dm'
+              ? !isI3dm(data)
+              : sniff(data) === 'unknown'),
     ),
   );
 }

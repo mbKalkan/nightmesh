@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tile's header and tables, its point count, the data its feature table gives, `RTC_CENTER` and
   the batch table's properties. Points compressed with Draco aren't read yet: the tile says so
   and shows what it says about itself.
+- **i3dm tiles open on their own**: a `.i3dm` file's model is drawn once for each instance, where
+  the tile puts it, turned and sized as it says (`NORMAL_UP` and `NORMAL_RIGHT`, plain or packed,
+  or east, north and up where it stands), with quantized positions read within their volume.
+  Instances placed on the globe are shown around their middle, upright where they stand. The
+  panels show the tile's GLB as the file has it, with the glTF Validator, JSON and measuring;
+  sizes count every instance. The model's details add the tile's header, tables, instance count
+  and the data its feature table gives. A tile whose model is in a file of its own names that
+  file to open instead.
 
 ### Changed
 

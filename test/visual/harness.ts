@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
-import { gltfSource } from '../../src/extension/model/tileFile';
+import { gltfSource } from '../../src/extension/model/tileGltf';
 import { readTile } from '../../src/extension/model/tiles';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';

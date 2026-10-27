@@ -1,6 +1,6 @@
 // A Batched 3D Model (b3dm) tile from 3D Tiles: a header, a feature table and a batch table, and
 // after them a GLB, which is shown as any other GLB is.
-import type { ModelFormat, TileFacts } from '../../shared/protocol';
+import type { TileFacts } from '../../shared/protocol';
 import { withoutByteOrderMark } from './container';
 import { sliceSource, type ByteSource } from './sources';
 
@@ -21,14 +21,6 @@ const MAX_TABLE_JSON = 64 * 1024 * 1024;
 
 export function isB3dm(head: Uint8Array): boolean {
   return new TextDecoder().decode(head.subarray(0, 4)) === 'b3dm';
-}
-
-/** The glTF in a file: a b3dm tile's GLB, or the file itself. Rejects a tile it can't read. */
-export async function gltfSource(source: ByteSource, format: ModelFormat): Promise<ByteSource> {
-  if (format !== 'b3dm') return source;
-  const tile = await readB3dm(source);
-  if ('failure' in tile) throw new Error(`The b3dm tile can't be read: ${tile.failure}`);
-  return tile.glb;
 }
 
 /** Reads a b3dm tile's header and tables, and finds the GLB after them. */

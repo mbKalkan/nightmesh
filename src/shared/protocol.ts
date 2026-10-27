@@ -3,7 +3,7 @@
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
 export type MeshFormat = 'obj' | 'stl' | 'ply' | 'pnts';
 
-export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'tileset';
+export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'i3dm' | 'tileset';
 
 /** What a 3D Tiles tile file says in its header and its feature and batch tables. */
 export interface TileTables {
@@ -23,11 +23,17 @@ export interface TileTables {
 }
 
 /**
- * What a Batched 3D Model (b3dm) tile says around the GLB it holds, for the inspector: the panels
- * show the GLB as they show any other.
+ * What a Batched (b3dm) or Instanced (i3dm) 3D Model tile says around the GLB it holds, for the
+ * inspector: the panels show the GLB as they show any other.
  */
 export interface TileFacts extends TileTables {
-  format: 'b3dm';
+  format: 'b3dm' | 'i3dm';
+  /** An i3dm tile's instances. */
+  instances?: number;
+  /** What an i3dm tile's feature table gives: `POSITION`, `NORMAL_UP`, `EAST_NORTH_UP`… */
+  semantics?: string[];
+  /** The glTF file an i3dm tile names, when it doesn't hold its glTF itself. */
+  gltfUri?: string;
 }
 
 /** What a Point Cloud (pnts) tile says about itself; its glTF was made from its points. */
@@ -220,8 +226,11 @@ export interface TileFileStrings {
   extensions: string;
   /** The pnts format's name. */
   pointCloud: string;
-  /** What a pnts tile's feature table gives: `POSITION`, `RGB`… */
+  /** What a pnts or i3dm tile's feature table gives: `POSITION`, `RGB`… */
   semantics: string;
+  /** The i3dm format's name. */
+  instanced: string;
+  instances: string;
 }
 
 /** Words for the Changes tab and the tree's marks, while two versions of a model are compared. */
@@ -668,7 +677,7 @@ export interface StructureMessage {
   chunks?: { json: number; bin?: number };
   /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
   source?: SourceFacts;
-  /** What a b3dm tile says around the GLB it holds; `fileSize` is the tile's. */
+  /** What a b3dm or i3dm tile says around the GLB it holds; `fileSize` is the tile's. */
   tile?: TileFacts;
 }
 

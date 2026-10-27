@@ -20,6 +20,7 @@ import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
 import { memorySource, type ByteSource } from './sources';
+import { instancedGltf, readI3dm } from './i3dm';
 import { readB3dm } from './tileFile';
 import { tilesetMessage } from './tiles';
 
@@ -55,9 +56,11 @@ export interface LoadTexts {
   missingMaterials(names: string): string;
   /** A texture in a format browsers can't show. */
   imageFormat(name: string): string;
-  /** A .b3dm file that isn't one. */
-  notTile: string;
-  tileVersion(version: string): string;
+  /** A .b3dm or .i3dm file that isn't one. */
+  notTile(format: 'b3dm' | 'i3dm'): string;
+  tileVersion(format: 'b3dm' | 'i3dm', version: string): string;
+  /** An i3dm tile whose glTF is a file of its own, which it names. */
+  externalGltf(uri: string): string;
   /** A JSON file opened as a tileset that isn't one. */
   notTileset: string;
   tilesetVersion(version: string): string;
@@ -110,8 +113,8 @@ export async function* loadMessages(
       yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' });
     } else if (options.format && isMeshFormat(options.format)) {
       yield* meshMessages(source, options.format, resources, options);
-    } else if (options.format === 'b3dm') {
-      yield* b3dmMessages(source, resources, options);
+    } else if (options.format === 'b3dm' || options.format === 'i3dm') {
+      yield* tileMessages(source, options.format, resources, options);
     } else {
       yield* gltfMessages(source, resources, options);
     }
@@ -126,9 +129,10 @@ const failure = (
   details: string[] = [],
 ): HostToWebviewMessage => ({ type: 'failed', loadId, reload, message, details });
 
-/** A b3dm tile: the GLB in it, with what the tile says around it. */
-async function* b3dmMessages(
+/** A b3dm or i3dm tile: the GLB in it, with what the tile says around it. */
+async function* tileMessages(
   source: ByteSource,
+  format: 'b3dm' | 'i3dm',
   resources: Resources,
   options: LoadOptions,
 ): AsyncGenerator<HostToWebviewMessage> {
@@ -137,22 +141,34 @@ async function* b3dmMessages(
   const kind = sniff(head);
   if (kind === 'empty') return yield failure(options, texts.empty);
   if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
-  const tile = await readB3dm(source);
+  const tile = format === 'b3dm' ? await readB3dm(source) : await readI3dm(source);
   if ('failure' in tile) {
     return yield failure(
       options,
-      tile.failure === 'version' ? texts.tileVersion(String(tile.version)) : texts.notTile,
+      tile.failure === 'version'
+        ? texts.tileVersion(format, String(tile.version))
+        : texts.notTile(format),
     );
   }
-  yield* gltfMessages(tile.glb, resources, options, { fileSize: source.size, tile: tile.facts });
+  if ('uri' in tile) return yield failure(options, texts.externalGltf(tile.uri));
+  yield* gltfMessages(tile.glb, resources, options, {
+    fileSize: source.size,
+    tile: tile.facts,
+    instances: (tile as { instances?: Float64Array }).instances,
+  });
 }
 
 async function* gltfMessages(
   source: ByteSource,
   resources: Resources,
   options: LoadOptions,
-  /** The file the glTF is in, when it is in more than the glTF: a b3dm tile. */
-  file: { fileSize: number; tile?: TileFacts } = { fileSize: source.size },
+  /**
+   * The file the glTF is in, when it is in more than the glTF: a b3dm or i3dm tile, and an i3dm
+   * tile's instances, each a 4×4 matrix.
+   */
+  { instances, ...file }: { fileSize: number; tile?: TileFacts; instances?: Float64Array } = {
+    fileSize: source.size,
+  },
 ): AsyncGenerator<HostToWebviewMessage> {
   const { loadId, reload, texts } = options;
   const head = await source.read(0, Math.min(64, source.size));
@@ -211,6 +227,16 @@ async function* gltfMessages(
           : undefined,
     ),
   );
+  // An i3dm tile's glTF is drawn once for each of its instances; the panels keep the file's.
+  const instanced = instances && instancedGltf(json, instances);
+  if (instanced) {
+    json = instanced.json;
+    buffers.push({
+      source: arraySource(instanced.buffer),
+      offset: 0,
+      available: instanced.buffer.length,
+    });
+  }
   yield* drawMessages(json, buffers, resources, options, truncated ? [texts.truncated] : []);
 }
 
