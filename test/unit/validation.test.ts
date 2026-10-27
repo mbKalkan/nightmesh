@@ -5,6 +5,7 @@ import * as esbuild from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { fileSource, type ByteSource } from '../../src/extension/model/sources';
+import { gltfSource } from '../../src/extension/model/tileFile';
 import {
   MAX_VALIDATION_BYTES,
   validationMessage,
@@ -125,6 +126,22 @@ describe('validationMessage', () => {
       code: 'GLB_UNEXPECTED_END_OF_CHUNK_DATA',
       offset: expect.any(Number),
     });
+  });
+
+  it('validates the GLB inside a b3dm tile, as the viewer does', async () => {
+    const source = await fileSource(join(FIXTURES, 'tiles/batched.b3dm'));
+    try {
+      const message = await validationMessage(
+        await gltfSource(source, 'b3dm'),
+        async () => 'missing',
+        runValidator,
+        7,
+        loadTexts(english),
+      );
+      expect(message).toMatchObject({ state: 'done', report: { counts: { error: 0 } } });
+    } finally {
+      await source.close();
+    }
   });
 
   it('leaves out a model too large to hold', async () => {

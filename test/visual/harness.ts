@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
+import { gltfSource } from '../../src/extension/model/tileFile';
 import { readTile } from '../../src/extension/model/tiles';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';
@@ -212,7 +213,7 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       const source = await fileSource(join(FIXTURES, fixture));
       try {
         return await validationMessage(
-          source,
+          await gltfSource(source, formatForPath(fixture) ?? 'glb'),
           fixtureOpener(),
           runValidator,
           loadId,

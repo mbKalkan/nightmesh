@@ -116,6 +116,15 @@
         "extensions": [
           ".ply"
         ]
+      },
+      {
+        "id": "b3dm",
+        "aliases": [
+          "Batched 3D Model"
+        ],
+        "extensions": [
+          ".b3dm"
+        ]
       }
     ],
     "customEditors": [
@@ -137,6 +146,9 @@
           },
           {
             "filenamePattern": "*.ply"
+          },
+          {
+            "filenamePattern": "*.b3dm"
           }
         ],
         "priority": "default"

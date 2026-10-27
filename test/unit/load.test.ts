@@ -5,21 +5,21 @@ import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
-import type { HostToWebviewMessage } from '../../src/shared/protocol';
+import type { HostToWebviewMessage, ModelFormat } from '../../src/shared/protocol';
 
 const FIXTURES = resolve('test/fixtures');
 const english: Translate = (message, ...args) =>
   message.replace(/\{(\d+)\}/g, (_, index: string) => String(args[Number(index)]));
 
 /** Loads a fixture as the extension host does, with the fixtures folder as the workspace. */
-async function loadAll(name: string): Promise<HostToWebviewMessage[]> {
+async function loadAll(name: string, format?: ModelFormat): Promise<HostToWebviewMessage[]> {
   const source = await fileSource(join(FIXTURES, name));
   const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
     join(FIXTURES, path.slice('/fixtures'.length)),
   );
   const messages: HostToWebviewMessage[] = [];
   try {
-    const options = { loadId: 1, reload: false, texts: loadTexts(english) };
+    const options = { loadId: 1, reload: false, texts: loadTexts(english), format };
     for await (const message of loadMessages(source, opener, options)) messages.push(message);
   } finally {
     await source.close();
@@ -62,6 +62,31 @@ describe('loadMessages', () => {
         bin: bytes.readUInt32LE(20 + bytes.readUInt32LE(12)),
       },
     });
+  });
+
+  it("shows a b3dm tile's GLB as a GLB, with what the tile says around it", async () => {
+    const bytes = readFileSync(join(FIXTURES, 'tiles/batched.b3dm'));
+    const messages = await loadAll('tiles/batched.b3dm', 'b3dm');
+    const [structure] = messages;
+    const glb = 28 + [12, 16, 20, 24].reduce((sum, at) => sum + bytes.readUInt32LE(at), 0);
+    expect(structure).toMatchObject({
+      type: 'structure',
+      fileSize: bytes.length,
+      chunks: { json: bytes.readUInt32LE(glb + 12) },
+      tile: { format: 'b3dm', batchLength: 3 },
+    });
+    expect(structure.type === 'structure' && JSON.parse(structure.json).nodes).toHaveLength(3);
+    expect(messages.map((message) => message.type)).toContain('model');
+
+    const failed = async (name: string) => {
+      const [message] = await loadAll(name, 'b3dm');
+      return message.type === 'failed' ? message.message : message.type;
+    };
+    expect(await failed('tiles/damaged.b3dm')).toBe(
+      "The file isn't a b3dm tile, or it is damaged.",
+    );
+    expect(await failed('scene.glb')).toBe("The file isn't a b3dm tile, or it is damaged.");
+    expect(await failed('lfs-pointer.glb')).toMatch(/Git LFS pointer/);
   });
 
   it('sends the structure of models it cannot draw', async () => {

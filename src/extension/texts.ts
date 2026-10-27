@@ -162,6 +162,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
         instancing: t('Instancing'),
         textures: t('Textures'),
         unused: t('Unused data'),
+        tile: t('Tile header and tables'),
         other: t('Headers and padding'),
       },
       compression: t('Compression'),
@@ -369,6 +370,20 @@ function structureStrings(t: Translate): StructureStrings {
       under: t('under {0}', '{0}'),
       validation: t('Validation'),
     },
+    tile: {
+      section: t('Batched 3D Model (b3dm)'),
+      version: t('Version'),
+      header: t('Header'),
+      legacy: t('from before 3D Tiles 1.0'),
+      featureTable: t('Feature table'),
+      batchTable: t('Batch table'),
+      table: t('{0} JSON, {1} binary', '{0}', '{1}'),
+      features: t('Features'),
+      center: t('Center (RTC_CENTER)'),
+      centerNote: t('positions are relative to it; the view leaves it out'),
+      properties: t('Feature properties'),
+      extensions: t('Batch table extensions'),
+    },
     source: {
       format: t('Format'),
       encoding: t('Encoding'),
@@ -468,6 +483,9 @@ export function loadTexts(t: Translate): LoadTexts {
     missingMaterials: (names) => t("Materials the material libraries don't define: {0}", names),
     imageFormat: (name) =>
       t("{0} isn't shown: textures are shown from PNG, JPEG, WebP, GIF and BMP files.", name),
+    notTile: t("The file isn't a b3dm tile, or it is damaged."),
+    tileVersion: (version) =>
+      t('This tile is b3dm version {0}. Nightmesh opens version 1 tiles.', version),
     notTileset: t("This JSON file isn't a 3D Tiles tileset."),
     tilesetVersion: (version) =>
       t('This tileset is 3D Tiles {0}. Nightmesh opens 3D Tiles 1.0 and 1.1 tilesets.', version),

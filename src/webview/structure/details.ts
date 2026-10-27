@@ -6,6 +6,7 @@ import type {
   SourceFacts,
   StructureKind,
   StructureStrings,
+  TileFacts,
 } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import {
@@ -66,6 +67,8 @@ export interface FileFacts {
   size: number;
   container: ModelFormat;
   chunks?: { json: number; bin?: number };
+  /** What a b3dm tile says around the GLB it holds. */
+  tile?: TileFacts;
 }
 
 export interface InspectContext {
@@ -216,7 +219,7 @@ function inspectModel(context: InspectContext): Inspection {
   }
 
   const fileRows: Row[] = [
-    { label: labels.container, text: file.container === 'glb' ? 'GLB' : 'glTF JSON' },
+    { label: labels.container, text: CONTAINERS[file.container] ?? 'glTF JSON' },
     { label: labels.fileSize, text: format.bytes(file.size), mono: true },
   ];
   if (file.chunks) {
@@ -233,6 +236,7 @@ function inspectModel(context: InspectContext): Inspection {
     sections: [
       { title: strings.kinds.model, rows: assetRows },
       { title: strings.sections.file, rows: fileRows },
+      ...(file.tile ? [tileSection(context, file.tile)] : []),
       contentsSection(context),
       {
         title: strings.sections.extensions,
@@ -247,6 +251,57 @@ function inspectModel(context: InspectContext): Inspection {
       ...extrasSection(context, asset),
     ].filter((section) => section.rows.length > 0),
   };
+}
+
+const CONTAINERS: Partial<Record<ModelFormat, string>> = { glb: 'GLB', b3dm: 'b3dm' };
+
+/** What a b3dm tile says around the GLB it holds: the GLB's own rows are the file's. */
+function tileSection(context: InspectContext, tile: TileFacts): Section {
+  const { format } = context;
+  const words = context.strings.tile;
+  const table = ({ json, binary }: TileFacts['batchTable']) =>
+    fill(words.table, format.bytes(json), format.bytes(binary));
+  const rows: Row[] = [
+    { label: words.version, text: String(tile.version), mono: true },
+    {
+      label: words.header,
+      text: format.bytes(tile.header),
+      mono: true,
+      note: tile.header < 28 ? words.legacy : undefined,
+    },
+    { label: words.featureTable, text: table(tile.featureTable), mono: true },
+    { label: words.batchTable, text: table(tile.batchTable), mono: true },
+    { label: words.features, text: format.count(tile.batchLength), mono: true },
+  ];
+  if (tile.rtcCenter) {
+    rows.push({
+      label: words.center,
+      // Earth-centered coordinates run to millions of metres: millimetres, not six digits.
+      text: `[${tile.rtcCenter.map((value) => String(Number(value.toFixed(3)))).join(', ')}]`,
+      mono: true,
+      note: words.centerNote,
+    });
+  }
+  const listed = tile.properties.slice(0, LIST_LIMIT);
+  rows.push(
+    ...listed.map(({ name, type }, index) => ({
+      label: index === 0 ? words.properties : '',
+      text: name,
+      mono: true,
+      note: type,
+    })),
+  );
+  if (tile.properties.length > listed.length) {
+    rows.push(moreRow(context, tile.properties.length - listed.length));
+  }
+  rows.push(
+    ...tile.extensions.map((name, index) => ({
+      label: index === 0 ? words.extensions : '',
+      text: name,
+      mono: true,
+    })),
+  );
+  return { title: words.section, rows };
 }
 
 /** The extensions a model uses, and whether it needs them to be drawn. */

@@ -7,6 +7,7 @@ import type {
   ImageInfo,
   MeshFormat,
   ModelFormat,
+  TileFacts,
 } from '../../shared/protocol';
 import { MAX_JSON_BYTES, readGlbLayout, sniff, withoutByteOrderMark } from './container';
 import { animationMotion } from './animationMotion';
@@ -19,6 +20,7 @@ import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
 import { memorySource, type ByteSource } from './sources';
+import { readB3dm } from './tileFile';
 import { tilesetMessage } from './tiles';
 
 /** Why a resource the model refers to isn't there. */
@@ -51,6 +53,9 @@ export interface LoadTexts {
   missingMaterials(names: string): string;
   /** A texture in a format browsers can't show. */
   imageFormat(name: string): string;
+  /** A .b3dm file that isn't one. */
+  notTile: string;
+  tileVersion(version: string): string;
   /** A JSON file opened as a tileset that isn't one. */
   notTileset: string;
   tilesetVersion(version: string): string;
@@ -103,6 +108,8 @@ export async function* loadMessages(
       yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' });
     } else if (options.format && isMeshFormat(options.format)) {
       yield* meshMessages(source, options.format, resources, options);
+    } else if (options.format === 'b3dm') {
+      yield* b3dmMessages(source, resources, options);
     } else {
       yield* gltfMessages(source, resources, options);
     }
@@ -117,10 +124,33 @@ const failure = (
   details: string[] = [],
 ): HostToWebviewMessage => ({ type: 'failed', loadId, reload, message, details });
 
+/** A b3dm tile: the GLB in it, with what the tile says around it. */
+async function* b3dmMessages(
+  source: ByteSource,
+  resources: Resources,
+  options: LoadOptions,
+): AsyncGenerator<HostToWebviewMessage> {
+  const { texts } = options;
+  const head = await source.read(0, Math.min(64, source.size));
+  const kind = sniff(head);
+  if (kind === 'empty') return yield failure(options, texts.empty);
+  if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
+  const tile = await readB3dm(source);
+  if ('failure' in tile) {
+    return yield failure(
+      options,
+      tile.failure === 'version' ? texts.tileVersion(String(tile.version)) : texts.notTile,
+    );
+  }
+  yield* gltfMessages(tile.glb, resources, options, { fileSize: source.size, tile: tile.facts });
+}
+
 async function* gltfMessages(
   source: ByteSource,
   resources: Resources,
   options: LoadOptions,
+  /** The file the glTF is in, when it is in more than the glTF: a b3dm tile. */
+  file: { fileSize: number; tile?: TileFacts } = { fileSize: source.size },
 ): AsyncGenerator<HostToWebviewMessage> {
   const { loadId, reload, texts } = options;
   const head = await source.read(0, Math.min(64, source.size));
@@ -166,7 +196,7 @@ async function* gltfMessages(
     return yield failure(options, texts.version(json.asset.version));
   }
   // The structure shows right away, and stays when the model can't be drawn.
-  yield { type: 'structure', loadId, reload, json: text, fileSize: source.size, chunks };
+  yield { type: 'structure', loadId, reload, json: text, chunks, ...file };
   const missing = (json.extensionsRequired ?? []).filter((name) => !DRAWN_EXTENSIONS.has(name));
   if (missing.length > 0) return yield failure(options, texts.extensions(missing.join(', ')));
 

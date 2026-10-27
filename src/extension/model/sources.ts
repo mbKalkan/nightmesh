@@ -26,6 +26,20 @@ export function memorySource(bytes: Uint8Array): ByteSource {
   return source;
 }
 
+/** Some of the bytes of `source`, as a source of their own; `source` stays open, the caller's. */
+export function sliceSource(source: ByteSource, offset: number, length: number): ByteSource {
+  checkRange(source, offset, length);
+  const slice: ByteSource = {
+    size: length,
+    read: async (at, count) => {
+      checkRange(slice, at, count);
+      return source.read(offset + at, count);
+    },
+    close: async () => {},
+  };
+  return slice;
+}
+
 /** Reads a local file in place, so a large model is never held in memory as a whole. */
 export async function fileSource(path: string): Promise<ByteSource> {
   const handle = await open(path, 'r');

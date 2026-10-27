@@ -1295,19 +1295,71 @@ async function writeGltf(name, doc, edit = () => {}) {
 }
 
 /**
- * A Batched 3D Model tile: a header, an empty feature table and the GLB. Its sections start at
- * multiples of 8 bytes, as the 3D Tiles specification asks.
+ * A Batched 3D Model tile: a header, a feature table (empty by default), a batch table and the
+ * GLB. Its sections start at multiples of 8 bytes, as the 3D Tiles specification asks: JSON is
+ * padded with spaces, binary with zeros.
  */
-function b3dm(glbBytes) {
-  const featureTable = Buffer.from(JSON.stringify({ BATCH_LENGTH: 0 }));
-  const padded = Buffer.alloc(((28 + featureTable.length + 7) & ~7) - 28, 0x20);
-  featureTable.copy(padded);
+function b3dm(glbBytes, { featureTable = { BATCH_LENGTH: 0 }, batchTable, batchBinary } = {}) {
+  const pad = (bytes, at, fill) => {
+    const padded = Buffer.alloc(((at + bytes.length + 7) & ~7) - at, fill);
+    bytes.copy(padded);
+    return padded;
+  };
+  const featureJson = pad(Buffer.from(JSON.stringify(featureTable)), 28, 0x20);
+  let at = 28 + featureJson.length;
+  const batchJson = batchTable
+    ? pad(Buffer.from(JSON.stringify(batchTable)), at, 0x20)
+    : Buffer.alloc(0);
+  at += batchJson.length;
+  const batchBody = batchBinary ? pad(Buffer.from(batchBinary), at, 0) : Buffer.alloc(0);
   const header = Buffer.alloc(28);
   header.write('b3dm', 0, 'ascii');
   header.writeUInt32LE(1, 4);
-  header.writeUInt32LE(28 + padded.length + glbBytes.length, 8);
-  header.writeUInt32LE(padded.length, 12);
-  return Buffer.concat([header, padded, Buffer.from(glbBytes)]);
+  header.writeUInt32LE(at + batchBody.length + glbBytes.length, 8);
+  header.writeUInt32LE(featureJson.length, 12);
+  header.writeUInt32LE(batchJson.length, 20);
+  header.writeUInt32LE(batchBody.length, 24);
+  return Buffer.concat([header, featureJson, batchJson, batchBody, Buffer.from(glbBytes)]);
+}
+
+/**
+ * A b3dm tile as 3D Tiles 1.0 writers make them: buildings told apart by `_BATCHID`, a batch
+ * table with their properties in JSON and in its binary body, and positions relative to
+ * `RTC_CENTER`, a place on the globe.
+ */
+async function batchedTile() {
+  const doc = newDocument();
+  const material = doc.createMaterial('Buildings').setBaseColorFactor([0.7, 0.7, 0.75, 1]);
+  const buildings = [
+    ['Library', [-12, 0], [10, 8, 14]],
+    ['Market', [4, 6], [12, 5, 10]],
+    ['Tower', [8, -10], [8, 30, 8]],
+  ];
+  const nodes = buildings.map(([name, [x, z], [width, height, depth]], index) => {
+    const geometry = boxGeometry(1);
+    const positions = geometry.positions.map(
+      (value, i) => [value * width + x, value * height + height / 2, value * depth + z][i % 3],
+    );
+    const primitive = meshPrimitive(doc, { ...geometry, positions }, material).setAttribute(
+      '_BATCHID',
+      accessor(doc, 'SCALAR', new Uint16Array(positions.length / 3).fill(index)),
+    );
+    return doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(primitive));
+  });
+  scene(doc, 'Batched', ...nodes);
+  const heights = new Float32Array(buildings.map(([, , [, height]]) => height));
+  return b3dm(await io.writeBinary(doc), {
+    featureTable: {
+      BATCH_LENGTH: buildings.length,
+      RTC_CENTER: eastNorthUp(41.0082, 28.9784).slice(12, 15),
+    },
+    batchTable: {
+      name: buildings.map(([name]) => name),
+      year: [1923, 1987, 2011],
+      height: { byteOffset: 0, componentType: 'FLOAT', type: 'SCALAR' },
+    },
+    batchBinary: new Uint8Array(heights.buffer),
+  });
 }
 
 /** A tile's glTF: boxes standing on the ground, each `[name, [x, z], [width, height, depth]]`. */
@@ -1449,6 +1501,7 @@ async function writeTilesets() {
     }),
   );
   write('tiles/damaged.b3dm', Buffer.from('b3dm, but nothing else of one'));
+  write('tiles/batched.b3dm', await batchedTile());
   write(
     'tiles/problems.json',
     json({
