@@ -384,7 +384,9 @@ function structureStrings(t: Translate): StructureStrings {
       properties: t('Feature properties'),
       extensions: t('Table extensions'),
       pointCloud: t('Point Cloud (pnts)'),
-      semantics: t('Point data'),
+      semantics: t('Feature table data'),
+      instanced: t('Instanced 3D Model (i3dm)'),
+      instances: t('Instances'),
     },
     source: {
       format: t('Format'),
@@ -490,9 +492,19 @@ export function loadTexts(t: Translate): LoadTexts {
     missingMaterials: (names) => t("Materials the material libraries don't define: {0}", names),
     imageFormat: (name) =>
       t("{0} isn't shown: textures are shown from PNG, JPEG, WebP, GIF and BMP files.", name),
-    notTile: t("The file isn't a b3dm tile, or it is damaged."),
-    tileVersion: (version) =>
-      t('This tile is b3dm version {0}. Nightmesh opens version 1 tiles.', version),
+    notTile: (format) =>
+      format === 'b3dm'
+        ? t("The file isn't a b3dm tile, or it is damaged.")
+        : t("The file isn't an i3dm tile, or it is damaged."),
+    tileVersion: (format, version) =>
+      format === 'b3dm'
+        ? t('This tile is b3dm version {0}. Nightmesh opens version 1 tiles.', version)
+        : t('This tile is i3dm version {0}. Nightmesh opens version 1 tiles.', version),
+    externalGltf: (uri) =>
+      t(
+        "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.",
+        uri,
+      ),
     notTileset: t("This JSON file isn't a 3D Tiles tileset."),
     tilesetVersion: (version) =>
       t('This tileset is 3D Tiles {0}. Nightmesh opens 3D Tiles 1.0 and 1.1 tilesets.', version),

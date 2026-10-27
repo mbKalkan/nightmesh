@@ -5,7 +5,7 @@ import * as esbuild from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { fileSource, type ByteSource } from '../../src/extension/model/sources';
-import { gltfSource } from '../../src/extension/model/tileFile';
+import { gltfSource } from '../../src/extension/model/tileGltf';
 import {
   MAX_VALIDATION_BYTES,
   validationMessage,
@@ -128,21 +128,26 @@ describe('validationMessage', () => {
     });
   });
 
-  it('validates the GLB inside a b3dm tile, as the viewer does', async () => {
-    const source = await fileSource(join(FIXTURES, 'tiles/batched.b3dm'));
-    try {
-      const message = await validationMessage(
-        await gltfSource(source, 'b3dm'),
-        async () => 'missing',
-        runValidator,
-        7,
-        loadTexts(english),
-      );
-      expect(message).toMatchObject({ state: 'done', report: { counts: { error: 0 } } });
-    } finally {
-      await source.close();
-    }
-  });
+  for (const [name, format] of [
+    ['batched.b3dm', 'b3dm'],
+    ['instanced.i3dm', 'i3dm'],
+  ] as const) {
+    it(`validates the GLB inside a ${format} tile, as the viewer does`, async () => {
+      const source = await fileSource(join(FIXTURES, 'tiles', name));
+      try {
+        const message = await validationMessage(
+          await gltfSource(source, format),
+          async () => 'missing',
+          runValidator,
+          7,
+          loadTexts(english),
+        );
+        expect(message).toMatchObject({ state: 'done', report: { counts: { error: 0 } } });
+      } finally {
+        await source.close();
+      }
+    });
+  }
 
   it('leaves out a model too large to hold', async () => {
     const huge: ByteSource = {

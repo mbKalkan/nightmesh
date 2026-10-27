@@ -355,5 +355,8 @@
   "The file isn't a pnts tile, or it is damaged.": "Dosya bir pnts karosu değil ya da bozuk.",
   "This tile's points are compressed with Draco, which Nightmesh doesn't read in pnts tiles yet.": "Bu karonun noktaları Draco ile sıkıştırılmış; Nightmesh pnts karolarında bunu henüz okumuyor.",
   "Table extensions": "Tablo eklentileri",
-  "Point data": "Nokta verisi"
+  "Feature table data": "Feature tablosu verisi",
+  "The file isn't an i3dm tile, or it is damaged.": "Dosya bir i3dm karosu değil ya da bozuk.",
+  "This tile is i3dm version {0}. Nightmesh opens version 1 tiles.": "Bu karo i3dm sürüm {0}. Nightmesh sürüm 1 karoları açar.",
+  "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.": "Bu karonun modeli başka bir dosyada ({0}); Nightmesh bunu henüz izlemiyor. Modeli görmek için o dosyayı açın."
 }

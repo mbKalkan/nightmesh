@@ -89,6 +89,31 @@ describe('loadMessages', () => {
     expect(await failed('lfs-pointer.glb')).toMatch(/Git LFS pointer/);
   });
 
+  it("draws an i3dm tile's GLB once for each instance, and shows the GLB as the file has it", async () => {
+    const messages = await loadAll('tiles/instanced.i3dm', 'i3dm');
+    const structure = messages.find((message) => message.type === 'structure');
+    const model = messages.find((message) => message.type === 'model');
+    if (structure?.type !== 'structure' || model?.type !== 'model') throw new Error('not drawn');
+    expect(structure.tile).toMatchObject({ format: 'i3dm', instances: 9 });
+    expect(JSON.parse(structure.json).extensionsUsed ?? []).not.toContain(
+      'EXT_mesh_gpu_instancing',
+    );
+    expect(model.extensions).toContain('EXT_mesh_gpu_instancing');
+    // The panels measure every instance: posts 10 m apart, the widest and tallest twice as big.
+    const instances = messages.find((message) => message.type === 'instances');
+    expect(instances).toMatchObject({ nodes: [{ node: 0 }] });
+    if (instances?.type !== 'instances') throw new Error('no instances');
+    const [{ min, max }] = instances.nodes;
+    expect(max[0] - min[0]).toBeCloseTo(22, 3);
+    expect(max[1] - min[1]).toBeCloseTo(6, 3);
+
+    const [external] = await loadAll('tiles/external.i3dm', 'i3dm');
+    expect(external).toMatchObject({
+      type: 'failed',
+      message: expect.stringContaining('../scene.glb'),
+    });
+  });
+
   it('sends the structure of models it cannot draw', async () => {
     expect((await loadAll('unsupported-extension.glb')).map((message) => message.type)).toEqual([
       'structure',

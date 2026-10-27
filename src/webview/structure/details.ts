@@ -254,11 +254,26 @@ function inspectModel(context: InspectContext): Inspection {
   };
 }
 
-const CONTAINERS: Partial<Record<ModelFormat, string>> = { glb: 'GLB', b3dm: 'b3dm' };
+const CONTAINERS: Partial<Record<ModelFormat, string>> = { glb: 'GLB', b3dm: 'b3dm', i3dm: 'i3dm' };
 
-/** What a b3dm tile says around the GLB it holds: the GLB's own rows are the file's. */
+/** What a b3dm or i3dm tile says around the GLB it holds: the GLB's own rows are the file's. */
 function tileSection(context: InspectContext, tile: TileFacts): Section {
-  return { title: context.strings.tile.section, rows: tileRows(context, tile) };
+  const { strings, format } = context;
+  const instanced = tile.format === 'i3dm';
+  const between: Row[] = instanced
+    ? [
+        { label: strings.tile.instances, text: format.count(tile.instances ?? 0), mono: true },
+        ...(tile.semantics ?? []).map((name, index) => ({
+          label: index === 0 ? strings.tile.semantics : '',
+          text: name,
+          mono: true,
+        })),
+      ]
+    : [];
+  return {
+    title: instanced ? strings.tile.instanced : strings.tile.section,
+    rows: tileRows(context, tile, between),
+  };
 }
 
 /** A tile's header and tables; `between` goes after the tables' sizes. */
