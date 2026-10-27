@@ -3,7 +3,7 @@
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
 export type MeshFormat = 'obj' | 'stl' | 'ply';
 
-export type ModelFormat = 'glb' | 'gltf' | MeshFormat;
+export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'tileset';
 
 /**
  * What an OBJ, STL or PLY file says about itself, for the inspector: the glTF the panels show for
@@ -328,6 +328,8 @@ export interface ViewerStrings {
   errorRender: string;
   /** Title of the notice listing what couldn't be loaded. */
   partialTitle: string;
+  /** A tile that came but couldn't be drawn; `{0}` is its file name. */
+  tileDamaged: string;
   close: string;
   /** The toolbar button that frames the selection, with its shortcut. */
   frame: string;
@@ -617,6 +619,25 @@ export interface PartsMessage {
   data: Uint8Array;
 }
 
+/**
+ * A 3D Tiles tileset to draw (D-046), in place of `structure` and `model`: the webview walks its
+ * tiles and asks for each one it needs with a `tile` request.
+ */
+export interface TilesetMessage {
+  type: 'tileset';
+  loadId: number;
+  reload: boolean;
+  /** The tileset's path for `tile` requests; references in it resolve against this. */
+  url: string;
+  json: string;
+  fileSize: number;
+}
+
+/** The bytes of a tile the webview asked for, or why it can't have them, in a sentence. */
+export type TileMessage = { type: 'tile'; id: number } & (
+  { data: Uint8Array } | { problem: string }
+);
+
 /** The model can't be shown at all. */
 export interface FailedMessage {
   type: 'failed';
@@ -704,6 +725,8 @@ export type HostToWebviewMessage =
   | InstancesMessage
   | MeshCheckMessage
   | ModelMessage
+  | TilesetMessage
+  | TileMessage
   | LargeMessage
   | PartMessage
   | PartsMessage
@@ -737,6 +760,8 @@ export interface CopyReferenceMessage {
 
 export type WebviewToHostMessage =
   | { type: 'ready' }
+  /** A tile of the tileset shown, by a path made from `TilesetMessage.url` and its references. */
+  | { type: 'tile'; id: number; path: string }
   /** The GPU context came back; the model has to be sent again to be drawn. */
   | { type: 'reload' }
   /** The user asked to draw a large model after all. */

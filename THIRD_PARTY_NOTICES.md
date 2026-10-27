@@ -9,6 +9,7 @@ This extension bundles the following open-source components.
 | Draco decoder (WebAssembly build shipped with three.js, unmodified) | Apache-2.0 | https://github.com/google/draco |
 | Basis Universal transcoder (WebAssembly build shipped with three.js; see the note below) | Apache-2.0 | https://github.com/BinomialLLC/basis_universal |
 | zstddec, with the Zstandard decoder (shipped with three.js, unmodified) | MIT, BSD-3-Clause | https://github.com/donmccurdy/zstddec |
+| 3DTilesRendererJS (npm package `3d-tiles-renderer`: the three.js tiles renderer and its plugins, unmodified) | Apache-2.0 | https://github.com/NASA-AMMOS/3DTilesRendererJS |
 | Khronos glTF Validator (npm package `gltf-validator`, compiled from Dart, unmodified) | Apache-2.0; its bundled Dart libraries BSD-3-Clause, MIT, zlib | https://github.com/KhronosGroup/glTF-Validator |
 
 ## Models in the screenshots
@@ -133,6 +134,12 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## 3DTilesRendererJS
+
+Copyright 2020 California Institute of Technology.
+
+Licensed under the Apache License, Version 2.0, reproduced at the end of this file.
 
 ## Draco
 

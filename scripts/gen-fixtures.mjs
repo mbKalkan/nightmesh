@@ -1294,6 +1294,181 @@ async function writeGltf(name, doc, edit = () => {}) {
   return json;
 }
 
+/**
+ * A Batched 3D Model tile: a header, an empty feature table and the GLB. Its sections start at
+ * multiples of 8 bytes, as the 3D Tiles specification asks.
+ */
+function b3dm(glbBytes) {
+  const featureTable = Buffer.from(JSON.stringify({ BATCH_LENGTH: 0 }));
+  const padded = Buffer.alloc(((28 + featureTable.length + 7) & ~7) - 28, 0x20);
+  featureTable.copy(padded);
+  const header = Buffer.alloc(28);
+  header.write('b3dm', 0, 'ascii');
+  header.writeUInt32LE(1, 4);
+  header.writeUInt32LE(28 + padded.length + glbBytes.length, 8);
+  header.writeUInt32LE(padded.length, 12);
+  return Buffer.concat([header, padded, Buffer.from(glbBytes)]);
+}
+
+/** A tile's glTF: boxes standing on the ground, each `[name, [x, z], [width, height, depth]]`. */
+async function blocks(name, color, boxes) {
+  const doc = newDocument();
+  const material = doc.createMaterial(name).setBaseColorFactor([...color, 1]);
+  const box = mesh(doc, 'Box', boxGeometry(1), material);
+  const nodes = boxes.map(([label, [x, z], [width, height, depth]]) =>
+    doc
+      .createNode(label)
+      .setMesh(box)
+      .setTranslation([x, height / 2, z])
+      .setScale([width, height, depth]),
+  );
+  scene(doc, name, ...nodes);
+  return io.writeBinary(doc);
+}
+
+/**
+ * The 4x4 matrix, by columns, from a frame with east as +X, north as +Y and up as +Z at a place
+ * on the WGS84 ellipsoid to Earth-centered coordinates, as tilesets placed on the globe have.
+ */
+function eastNorthUp(latitude, longitude) {
+  const [phi, lambda] = [latitude, longitude].map((degrees) => (degrees * Math.PI) / 180);
+  const a = 6378137;
+  const e2 = 6.69437999014e-3;
+  const n = a / Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+  const position = [
+    n * Math.cos(phi) * Math.cos(lambda),
+    n * Math.cos(phi) * Math.sin(lambda),
+    n * (1 - e2) * Math.sin(phi),
+  ];
+  const east = [-Math.sin(lambda), Math.cos(lambda), 0];
+  const north = [
+    -Math.sin(phi) * Math.cos(lambda),
+    -Math.sin(phi) * Math.sin(lambda),
+    Math.cos(phi),
+  ];
+  const up = [Math.cos(phi) * Math.cos(lambda), Math.cos(phi) * Math.sin(lambda), Math.sin(phi)];
+  return [...east, 0, ...north, 0, ...up, 0, ...position, 1].map((value) =>
+    Number(value.toFixed(6)),
+  );
+}
+
+/** A box bounding volume around `[x, y]` in a tile's frame, `size` wide and `height` tall. */
+const boxVolume = ([x, y], size, height) => ({
+  box: [x, y, height / 2, size / 2, 0, 0, 0, size / 2, 0, 0, 0, height / 2],
+});
+
+const json = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+
+/**
+ * 3D Tiles: a district on the globe whose root draws it coarsely and whose four quarters draw it
+ * in detail, one of them as a tileset of its own in a subfolder; and a tileset whose tiles can't
+ * all be had.
+ */
+async function writeTilesets() {
+  mkdirSync(join(OUT, 'tiles', 'east'), { recursive: true });
+  const grey = [0.55, 0.55, 0.55];
+  write(
+    'tiles/district.b3dm',
+    b3dm(
+      await blocks('District', grey, [
+        ['Ground', [0, 0], [100, 0.5, 100]],
+        ...[-25, 25].flatMap((x) =>
+          [-25, 25].map((z) => [`Block ${x} ${z}`, [x, z], [30, 12, 30]]),
+        ),
+      ]),
+    ),
+  );
+  // Quarters by their centers in the tile frame (east, north); glTF's -Z is north.
+  const quarters = [
+    ['south-west', [-25, -25], [0.85, 0.45, 0.3], 18],
+    ['north-west', [-25, 25], [0.3, 0.6, 0.85], 30],
+    ['south-east', [25, -25], [0.45, 0.75, 0.35], 12],
+  ];
+  for (const [name, [east, north], color, height] of quarters) {
+    write(
+      `tiles/${name}.b3dm`,
+      b3dm(
+        await blocks(name, color, [
+          [`${name} ground`, [east, -north], [50, 0.5, 50]],
+          [`${name} tower`, [east, -north], [20, height, 20]],
+          [`${name} annex`, [east + 12, -north + 12], [8, height / 3, 8]],
+        ]),
+      ),
+    );
+  }
+  write(
+    'tiles/east/tower.b3dm',
+    b3dm(
+      await blocks(
+        'north-east',
+        [0.8, 0.7, 0.3],
+        [
+          ['north-east ground', [25, -25], [50, 0.5, 50]],
+          ['north-east tower', [25, -25], [16, 48, 16]],
+        ],
+      ),
+    ),
+  );
+  write(
+    'tiles/east/tileset.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      geometricError: 0,
+      root: {
+        boundingVolume: boxVolume([25, 25], 50, 50),
+        geometricError: 0,
+        content: { uri: 'tower.b3dm' },
+      },
+    }),
+  );
+  write(
+    'tiles/tileset.json',
+    json({
+      asset: { version: '1.0', generator: GENERATOR },
+      geometricError: 200,
+      root: {
+        // Istanbul, at sea level.
+        transform: eastNorthUp(41.0082, 28.9784),
+        boundingVolume: boxVolume([0, 0], 100, 50),
+        geometricError: 20,
+        refine: 'REPLACE',
+        content: { uri: 'district.b3dm' },
+        children: [
+          ...quarters.map(([name, center, , height]) => ({
+            boundingVolume: boxVolume(center, 50, height),
+            geometricError: 0,
+            content: { uri: `${name}.b3dm` },
+          })),
+          {
+            boundingVolume: boxVolume([25, 25], 50, 50),
+            geometricError: 0,
+            content: { uri: 'east/tileset.json' },
+          },
+        ],
+      },
+    }),
+  );
+  write('tiles/damaged.b3dm', Buffer.from('b3dm, but nothing else of one'));
+  write(
+    'tiles/problems.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      geometricError: 100,
+      root: {
+        boundingVolume: boxVolume([0, 0], 100, 50),
+        geometricError: 20,
+        refine: 'ADD',
+        content: { uri: 'district.b3dm' },
+        children: ['missing.b3dm', 'damaged.b3dm', '../../outside.b3dm'].map((uri) => ({
+          boundingVolume: boxVolume([0, 0], 100, 50),
+          geometricError: 0,
+          content: { uri },
+        })),
+      },
+    }),
+  );
+}
+
 /** The triangle as .gltf JSON with its one buffer pointing at `uri`. */
 async function triangleWithBuffer(uri) {
   const { json, resources } = await io.writeJSON(triangle(), {
@@ -1471,6 +1646,8 @@ write('object-file.obj', objectFile());
 write('not-a-model.stl', Buffer.from('This is not an STL model.\n'));
 write('truncated.stl', bracketStl.subarray(0, 84 + 50 * 10 + 20));
 write('not-a-model.ply', text(['ply', 'format unknown 1.0', 'end_header']));
+
+await writeTilesets();
 
 if (LARGE) {
   mkdirSync(join(OUT, 'generated'), { recursive: true });

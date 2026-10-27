@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
+import { readTile } from '../../src/extension/model/tiles';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';
 import { loadTexts, viewerStrings, type Translate } from '../../src/extension/texts';
@@ -19,6 +20,9 @@ interface Theme {
 }
 
 const ORIGIN = 'http://webview.test';
+
+/** A tile as the host reads it, with its bytes in base64 to cross into the page. */
+type TileAnswer = { data: string } | { problem: string };
 const FIXTURES = resolve('test/fixtures');
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -90,13 +94,27 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
         document.body.classList.add(...classes);
         document.body.dataset.vscodeThemeKind = kind;
       };
+      // Tiles are read as the host reads them, as the webview asks for them.
+      const answerTile = async (id: number, path: string) => {
+        const read = (window as unknown as { __readTile(path: string): Promise<TileAnswer> })
+          .__readTile;
+        const answer = await read(path);
+        const data =
+          'data' in answer
+            ? { type: 'tile', id, data: Uint8Array.from(atob(answer.data), (c) => c.charCodeAt(0)) }
+            : { type: 'tile', id, problem: answer.problem };
+        window.dispatchEvent(new MessageEvent('message', { data }));
+      };
       Object.assign(window, {
         __sent: sent,
         __applyTheme: applyTheme,
         acquireVsCodeApi: () => {
           let state: unknown;
           return {
-            postMessage: (message: unknown) => sent.push(message),
+            postMessage: (message: { type: string; id?: number; path?: string }) => {
+              sent.push(message);
+              if (message.type === 'tile') void answerTile(message.id!, message.path!);
+            },
             getState: () => state,
             setState: (value: unknown) => void (state = value),
           };
@@ -118,6 +136,10 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
     { theme: themes[theme] as Theme, withoutWebGL: options.withoutWebGL ?? false },
   );
 
+  await page.exposeFunction('__readTile', async (path: string): Promise<TileAnswer> => {
+    const tile = await readTile(path, fixtureOpener(), loadTexts(english));
+    return 'data' in tile ? { data: Buffer.from(tile.data).toString('base64') } : tile;
+  });
   await page.goto(`${ORIGIN}/index.html`);
   await page.waitForFunction(() =>
     (window as unknown as { __sent: { type: string }[] }).__sent.some((m) => m.type === 'ready'),
@@ -175,6 +197,7 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
           format: formatForPath(fixture),
           fileName: fixture,
           largeBytes,
+          tilesetPath: fixture,
         };
         for await (const message of loadMessages(source, fixtureOpener(), options)) {
           messages.push(message);

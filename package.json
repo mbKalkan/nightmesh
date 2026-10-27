@@ -140,6 +140,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "nightmesh.tileset",
+        "displayName": "%customEditor.tilesetDisplayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.json"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "commands": [
@@ -185,7 +195,7 @@
         },
         {
           "command": "nightmesh.saveScreenshot",
-          "when": "activeCustomEditorId == nightmesh.viewer"
+          "when": "activeCustomEditorId =~ /^nightmesh\\.(viewer|tileset)$/"
         },
         {
           "command": "nightmesh.saveReport",
@@ -262,6 +272,7 @@
     "vitest": "^5.0.4"
   },
   "dependencies": {
+    "3d-tiles-renderer": "^0.5.3",
     "gltf-validator": "^2.0.0-dev.3.10",
     "three": "^0.186.1"
   }

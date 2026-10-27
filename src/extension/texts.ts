@@ -29,6 +29,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
     ),
     errorRender: t('Something went wrong while drawing this model.'),
     partialTitle: t("Part of this model couldn't be loaded"),
+    tileDamaged: t("{0} isn't a tile Nightmesh can draw, or it is damaged.", '{0}'),
     close: t('Close'),
     frame: t('Frame Selection (F)'),
     showJson: t('Show glTF JSON'),
@@ -390,5 +391,13 @@ export function loadTexts(t: Translate): LoadTexts {
     missingMaterials: (names) => t("Materials the material libraries don't define: {0}", names),
     imageFormat: (name) =>
       t("{0} isn't shown: textures are shown from PNG, JPEG, WebP, GIF and BMP files.", name),
+    notTileset: t("This JSON file isn't a 3D Tiles tileset."),
+    tilesetVersion: (version) =>
+      t('This tileset is 3D Tiles {0}. Nightmesh opens 3D Tiles 1.0 and 1.1 tilesets.', version),
+    tileLfs: (name) =>
+      t(
+        "{0} is a Git LFS pointer: the tile hasn't been downloaded. Run git lfs pull to get it.",
+        name,
+      ),
   };
 }

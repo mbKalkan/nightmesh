@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **3D Tiles tilesets** open in Nightmesh: right-click a `tileset.json` (or any tileset's JSON)
+  and pick **Open With › Nightmesh 3D Tiles**. The tiles the camera needs load as it moves, the
+  nearer ones in more detail, and those out of view leave memory. External tilesets, implicit
+  tiling (binary subtrees) and Batched, Instanced, Point Cloud, Composite and glTF tiles are
+  drawn, with Draco, meshopt and KTX2 compression. A tileset placed on the globe is shown at the
+  origin with up as +Y, seen from the south. Tiles are read from disk by the extension, only
+  inside the tileset's workspace folder, and the notice above the view says which ones couldn't
+  be had.
+
 ## [0.4.0] - 2026-10-26
 
 Compare two versions of a model side by side, measure distances on it, and OBJ smoothing groups.

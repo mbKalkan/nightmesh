@@ -273,5 +273,9 @@
   "Measure Distance (M)": "Mesafe Ölç (M)",
   "Click a point on the model": "Modelde bir noktaya tıklayın",
   "Click a second point": "İkinci bir noktaya tıklayın",
-  "Distance": "Mesafe"
+  "Distance": "Mesafe",
+  "This JSON file isn't a 3D Tiles tileset.": "Bu JSON dosyası bir 3D Tiles tileset'i değil.",
+  "This tileset is 3D Tiles {0}. Nightmesh opens 3D Tiles 1.0 and 1.1 tilesets.": "Bu tileset 3D Tiles {0}. Nightmesh 3D Tiles 1.0 ve 1.1 tileset'lerini açar.",
+  "{0} is a Git LFS pointer: the tile hasn't been downloaded. Run git lfs pull to get it.": "{0} bir Git LFS işaretçisi: karo bu makineye indirilmemiş. İndirmek için git lfs pull çalıştırın.",
+  "{0} isn't a tile Nightmesh can draw, or it is damaged.": "{0} Nightmesh'in çizebileceği bir karo değil ya da bozuk."
 }

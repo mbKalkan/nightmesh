@@ -2,6 +2,7 @@
   "displayName": "Nightmesh — 3D Model Viewer for glTF, GLB, OBJ, STL & PLY",
   "description": "View, inspect, compare and measure glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your dark theme. Fast, offline and read-only.",
   "customEditor.displayName": "Nightmesh",
+  "customEditor.tilesetDisplayName": "Nightmesh 3D Tiles",
   "category": "Nightmesh",
   "command.copyReference": "Copy Reference",
   "command.copyReferenceWithDetails": "Copy Reference with Details",

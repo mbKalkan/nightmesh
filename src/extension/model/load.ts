@@ -19,6 +19,7 @@ import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
 import { memorySource, type ByteSource } from './sources';
+import { tilesetMessage } from './tiles';
 
 /** Why a resource the model refers to isn't there. */
 export type ResourceProblem =
@@ -50,6 +51,11 @@ export interface LoadTexts {
   missingMaterials(names: string): string;
   /** A texture in a format browsers can't show. */
   imageFormat(name: string): string;
+  /** A JSON file opened as a tileset that isn't one. */
+  notTileset: string;
+  tilesetVersion(version: string): string;
+  /** A tile that is a Git LFS pointer, not yet downloaded. */
+  tileLfs(name: string): string;
 }
 
 export interface LoadOptions {
@@ -67,6 +73,8 @@ export interface LoadOptions {
   largeBytes?: number;
   /** Reads OBJ, STL and PLY files; by default in the calling thread. */
   parseMesh?: MeshParser;
+  /** A tileset's path relative to the folder the viewer may read, with `/` between names. */
+  tilesetPath?: string;
 }
 
 /**
@@ -91,7 +99,9 @@ export async function* loadMessages(
 ): AsyncGenerator<HostToWebviewMessage> {
   const resources = new Resources(openResource, options.texts);
   try {
-    if (options.format && isMeshFormat(options.format)) {
+    if (options.format === 'tileset') {
+      yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' });
+    } else if (options.format && isMeshFormat(options.format)) {
       yield* meshMessages(source, options.format, resources, options);
     } else {
       yield* gltfMessages(source, resources, options);
