@@ -20,7 +20,9 @@ import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
 import { resourceName } from './resources';
 import { memorySource, type ByteSource } from './sources';
-import { instancedGltf, readI3dm } from './i3dm';
+import { readCmpt } from './cmpt';
+import { instancedGltf, readI3dm, rtcPlacement, translation, viewFrame } from './i3dm';
+import { mergeGltfs, type MergePart } from './merge';
 import { readB3dm } from './tileFile';
 import { tilesetMessage } from './tiles';
 
@@ -56,9 +58,11 @@ export interface LoadTexts {
   missingMaterials(names: string): string;
   /** A texture in a format browsers can't show. */
   imageFormat(name: string): string;
-  /** A .b3dm or .i3dm file that isn't one. */
-  notTile(format: 'b3dm' | 'i3dm'): string;
-  tileVersion(format: 'b3dm' | 'i3dm', version: string): string;
+  /** A .b3dm, .i3dm or .cmpt file that isn't one. */
+  notTile(format: 'b3dm' | 'i3dm' | 'cmpt'): string;
+  tileVersion(format: 'b3dm' | 'i3dm' | 'cmpt', version: string): string;
+  /** Tiles in a composite that aren't drawn: their kinds and places, `pnts 2, i3dm 3/1`. */
+  composite(tiles: string): string;
   /** An i3dm tile whose glTF is a file of its own, which it names. */
   externalGltf(uri: string): string;
   /** A JSON file opened as a tileset that isn't one. */
@@ -115,6 +119,8 @@ export async function* loadMessages(
       yield* meshMessages(source, options.format, resources, options);
     } else if (options.format === 'b3dm' || options.format === 'i3dm') {
       yield* tileMessages(source, options.format, resources, options);
+    } else if (options.format === 'cmpt') {
+      yield* cmptMessages(source, resources, options);
     } else {
       yield* gltfMessages(source, resources, options);
     }
@@ -154,8 +160,146 @@ async function* tileMessages(
   yield* gltfMessages(tile.glb, resources, options, {
     fileSize: source.size,
     tile: tile.facts,
-    instances: (tile as { instances?: Float64Array }).instances,
+    // A b3dm model on the globe is placed there, as an instance, to stand upright in the view.
+    instances: instancesOf(tile) ?? rtcPlacement(tile.facts.rtcCenter),
   });
+}
+
+/** A composite tile: the models of the b3dm and i3dm tiles in it, as one, where each puts them. */
+async function* cmptMessages(
+  source: ByteSource,
+  resources: Resources,
+  options: LoadOptions,
+): AsyncGenerator<HostToWebviewMessage> {
+  const { loadId, reload, texts } = options;
+  const head = await source.read(0, Math.min(64, source.size));
+  const kind = sniff(head);
+  if (kind === 'empty') return yield failure(options, texts.empty);
+  if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
+  const cmpt = await readCmpt(source);
+  if ('failure' in cmpt) {
+    return yield failure(
+      options,
+      cmpt.failure === 'version'
+        ? texts.tileVersion('cmpt', String(cmpt.version))
+        : texts.notTile('cmpt'),
+    );
+  }
+
+  const read: { name: string; gltf: GltfRead; instances: Float64Array }[] = [];
+  const skipped: string[] = [];
+  for (const inner of cmpt.tiles) {
+    const name = `${inner.format} ${inner.path}`;
+    const tile =
+      inner.format === 'b3dm'
+        ? await readB3dm(inner.source)
+        : inner.format === 'i3dm'
+          ? await readI3dm(inner.source)
+          : undefined;
+    const gltf = tile && 'glb' in tile ? await readGltf(tile.glb, texts) : undefined;
+    if (!tile || !('glb' in tile) || !gltf || 'failure' in gltf) {
+      skipped.push(name);
+      continue;
+    }
+    const instances = instancesOf(tile) ?? translation(tile.facts.rtcCenter ?? [0, 0, 0]);
+    read.push({ name, gltf, instances });
+  }
+  if (read.length === 0) return yield failure(options, texts.composite(skipped.join(', ')));
+
+  // Every tile in the composite is shown in one frame: that of all their instances together.
+  const all = new Float64Array(read.reduce((sum, part) => sum + part.instances.length, 0));
+  read.reduce((at, part) => (all.set(part.instances, at), at + part.instances.length), 0);
+  const frame = viewFrame(all);
+  const parts: MergePart[] = [];
+  for (const { name, gltf, instances } of read) {
+    const buffers = await gltfBuffers(gltf, resources);
+    const instanced = instancedGltf(gltf.json, instances, frame);
+    if (instanced) buffers.push(memoryData(instanced.buffer));
+    parts.push({ name, json: instanced?.json ?? gltf.json, buffers });
+  }
+  const merged = mergeGltfs(parts);
+  yield {
+    type: 'structure',
+    loadId,
+    reload,
+    json: JSON.stringify(merged.json),
+    fileSize: source.size,
+    tile: cmpt.facts,
+  };
+  const missing = (merged.json.extensionsRequired ?? []).filter(
+    (name) => !DRAWN_EXTENSIONS.has(name),
+  );
+  if (missing.length > 0) return yield failure(options, texts.extensions(missing.join(', ')));
+  const notices = read.some(({ gltf }) => gltf.truncated) ? [texts.truncated] : [];
+  if (skipped.length > 0) notices.push(texts.composite(skipped.join(', ')));
+  yield* drawMessages(merged.json, merged.buffers, resources, options, notices);
+}
+
+/** A glTF model's JSON, as text and read, and where its binary chunk is when it is a GLB. */
+interface GltfRead {
+  text: string;
+  json: Gltf;
+  chunks?: { json: number; bin?: number };
+  bin?: ResourceData;
+  truncated: boolean;
+}
+
+/** Reads a glTF or GLB file's JSON, or says why it can't be shown, in a sentence for the user. */
+async function readGltf(
+  source: ByteSource,
+  texts: LoadTexts,
+): Promise<GltfRead | { failure: string }> {
+  const head = await source.read(0, Math.min(64, source.size));
+  const kind = sniff(head);
+  if (kind === 'empty') return { failure: texts.empty };
+  if (kind === 'lfsPointer') return { failure: texts.lfsPointer };
+  if (kind === 'unknown') return { failure: texts.damaged };
+
+  const read: Omit<GltfRead, 'json'> = { text: '', truncated: false };
+  if (kind === 'glb') {
+    const layout = await readGlbLayout(source);
+    if ('failure' in layout) {
+      return {
+        failure:
+          layout.failure === 'version' ? texts.version(String(layout.version)) : texts.damaged,
+      };
+    }
+    read.text = new TextDecoder().decode(await source.read(layout.json.offset, layout.json.length));
+    read.chunks = { json: layout.json.length, bin: layout.bin?.length };
+    if (layout.bin) {
+      read.bin = { source, offset: layout.bin.offset, available: layout.bin.available };
+    }
+    read.truncated = layout.truncated;
+  } else {
+    if (source.size > MAX_JSON_BYTES) return { failure: texts.damaged };
+    read.text = new TextDecoder().decode(await source.read(0, source.size));
+  }
+
+  read.text = withoutByteOrderMark(read.text);
+  let json: Gltf;
+  try {
+    json = JSON.parse(read.text) as Gltf;
+  } catch {
+    return { failure: texts.damaged };
+  }
+  if (!json || typeof json !== 'object' || typeof json.asset?.version !== 'string') {
+    return { failure: texts.damaged };
+  }
+  if (!json.asset.version.startsWith('2.')) return { failure: texts.version(json.asset.version) };
+  return { ...read, json };
+}
+
+/** Where each of a model's buffers' bytes are: its binary chunk, or the files it names. */
+function gltfBuffers(gltf: GltfRead, resources: Resources): Promise<(ResourceData | undefined)[]> {
+  return Promise.all(
+    (gltf.json.buffers ?? []).map((buffer, index) =>
+      buffer.uri !== undefined
+        ? resources.data(buffer.uri)
+        : index === 0 && gltf.bin
+          ? gltf.bin
+          : undefined,
+    ),
+  );
 }
 
 async function* gltfMessages(
@@ -163,82 +307,41 @@ async function* gltfMessages(
   resources: Resources,
   options: LoadOptions,
   /**
-   * The file the glTF is in, when it is in more than the glTF: a b3dm or i3dm tile, and an i3dm
-   * tile's instances, each a 4×4 matrix.
+   * The file the glTF is in, when it is in more than the glTF: a b3dm or i3dm tile, and the
+   * instances its model is drawn at, each a 4×4 matrix.
    */
   { instances, ...file }: { fileSize: number; tile?: TileFacts; instances?: Float64Array } = {
     fileSize: source.size,
   },
 ): AsyncGenerator<HostToWebviewMessage> {
   const { loadId, reload, texts } = options;
-  const head = await source.read(0, Math.min(64, source.size));
-  const kind = sniff(head);
-  if (kind === 'empty') return yield failure(options, texts.empty);
-  if (kind === 'lfsPointer') return yield failure(options, texts.lfsPointer);
-  if (kind === 'unknown') return yield failure(options, texts.damaged);
-
-  let text: string;
-  let bin: ResourceData | undefined;
-  let chunks: { json: number; bin?: number } | undefined;
-  let truncated = false;
-  if (kind === 'glb') {
-    const layout = await readGlbLayout(source);
-    if ('failure' in layout) {
-      return yield failure(
-        options,
-        layout.failure === 'version' ? texts.version(String(layout.version)) : texts.damaged,
-      );
-    }
-    text = new TextDecoder().decode(await source.read(layout.json.offset, layout.json.length));
-    chunks = { json: layout.json.length, bin: layout.bin?.length };
-    if (layout.bin) {
-      bin = { source, offset: layout.bin.offset, available: layout.bin.available };
-    }
-    truncated = layout.truncated;
-  } else {
-    if (source.size > MAX_JSON_BYTES) return yield failure(options, texts.damaged);
-    text = new TextDecoder().decode(await source.read(0, source.size));
-  }
-
-  text = withoutByteOrderMark(text);
-  let json: Gltf;
-  try {
-    json = JSON.parse(text) as Gltf;
-  } catch {
-    return yield failure(options, texts.damaged);
-  }
-  if (!json || typeof json !== 'object' || typeof json.asset?.version !== 'string') {
-    return yield failure(options, texts.damaged);
-  }
-  if (!json.asset.version.startsWith('2.')) {
-    return yield failure(options, texts.version(json.asset.version));
-  }
+  const gltf = await readGltf(source, texts);
+  if ('failure' in gltf) return yield failure(options, gltf.failure);
   // The structure shows right away, and stays when the model can't be drawn.
-  yield { type: 'structure', loadId, reload, json: text, chunks, ...file };
-  const missing = (json.extensionsRequired ?? []).filter((name) => !DRAWN_EXTENSIONS.has(name));
+  yield { type: 'structure', loadId, reload, json: gltf.text, chunks: gltf.chunks, ...file };
+  const missing = (gltf.json.extensionsRequired ?? []).filter(
+    (name) => !DRAWN_EXTENSIONS.has(name),
+  );
   if (missing.length > 0) return yield failure(options, texts.extensions(missing.join(', ')));
 
-  const buffers = await Promise.all(
-    (json.buffers ?? []).map((buffer, index) =>
-      buffer.uri !== undefined
-        ? resources.data(buffer.uri)
-        : index === 0 && kind === 'glb'
-          ? bin
-          : undefined,
-    ),
-  );
-  // An i3dm tile's glTF is drawn once for each of its instances; the panels keep the file's.
-  const instanced = instances && instancedGltf(json, instances);
-  if (instanced) {
-    json = instanced.json;
-    buffers.push({
-      source: arraySource(instanced.buffer),
-      offset: 0,
-      available: instanced.buffer.length,
-    });
-  }
-  yield* drawMessages(json, buffers, resources, options, truncated ? [texts.truncated] : []);
+  const buffers = await gltfBuffers(gltf, resources);
+  // A tile's glTF is drawn once for each of its instances; the panels keep the file's.
+  const instanced = instances && instancedGltf(gltf.json, instances);
+  if (instanced) buffers.push(memoryData(instanced.buffer));
+  const notices = gltf.truncated ? [texts.truncated] : [];
+  yield* drawMessages(instanced?.json ?? gltf.json, buffers, resources, options, notices);
 }
+
+/** An i3dm tile's instances; a b3dm tile has none. */
+const instancesOf = (tile: object): Float64Array | undefined =>
+  (tile as { instances?: Float64Array }).instances;
+
+/** Bytes made on the way, as a buffer's data. */
+const memoryData = (bytes: Uint8Array): ResourceData => ({
+  source: arraySource(bytes),
+  offset: 0,
+  available: bytes.length,
+});
 
 /**
  * OBJ, STL and PLY: read into geometry (in a worker thread in the extension), made into glTF,

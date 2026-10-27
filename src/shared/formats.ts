@@ -8,6 +8,7 @@ const FORMATS: Readonly<Record<string, ModelFormat>> = {
   '.ply': 'ply',
   '.b3dm': 'b3dm',
   '.i3dm': 'i3dm',
+  '.cmpt': 'cmpt',
   '.pnts': 'pnts',
   // Only the tileset editor takes JSON files, and only when the user opens one with it.
   '.json': 'tileset',
@@ -43,6 +44,7 @@ export const FORMAT_NAMES: Readonly<Record<ModelFormat, string>> = {
   ply: 'PLY',
   b3dm: 'b3dm',
   i3dm: 'i3dm',
+  cmpt: 'cmpt',
   pnts: 'pnts',
   tileset: '3D Tiles',
 };

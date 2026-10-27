@@ -136,6 +136,15 @@
         ]
       },
       {
+        "id": "cmpt",
+        "aliases": [
+          "3D Tiles Composite"
+        ],
+        "extensions": [
+          ".cmpt"
+        ]
+      },
+      {
         "id": "pnts",
         "aliases": [
           "3D Tiles Point Cloud"
@@ -170,6 +179,9 @@
           },
           {
             "filenamePattern": "*.i3dm"
+          },
+          {
+            "filenamePattern": "*.cmpt"
           },
           {
             "filenamePattern": "*.pnts"

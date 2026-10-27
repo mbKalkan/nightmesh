@@ -43,12 +43,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sizes count every instance. The model's details add the tile's header, tables, instance count
   and the data its feature table gives. A tile whose model is in a file of its own names that
   file to open instead.
+- **cmpt tiles open on their own**: a composite's b3dm and i3dm tiles, those in composites inside
+  it too, are drawn together as one model, each where it says, under a node of its own in the
+  scene tree. The model's details list the tiles the composite holds; the notice above the view
+  names those not drawn (point clouds, models in files of their own).
+- **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
+  model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 
 ### Changed
 
 - **Models open faster**: the 3D view made its lighting anew for every file, which takes most of
   a second of GPU work on some machines. It is now made once and kept, so every viewer after the
   first starts drawing about 0.6 s sooner (measured on Windows: 740 ms to 75–105 ms).
+
+### Fixed
+
+- **Size of turned GPU instances**: a model whose instances (EXT_mesh_gpu_instancing) are turned,
+  under a node that is turned too, measured larger than drawn in the corner of the view and was
+  framed too far away. Each instance is now measured where it is.
 
 ## [0.4.0] - 2026-10-26
 

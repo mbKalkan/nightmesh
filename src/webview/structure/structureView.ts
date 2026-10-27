@@ -12,7 +12,7 @@ import type {
   ValidationMessage,
   ViewerStrings,
 } from '../../shared/protocol';
-import { isMeshFormat } from '../../shared/formats';
+import { isGltfFormat } from '../../shared/formats';
 import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
 import { compare, COLLECTIONS, type ChangeKind, type Comparison } from './compare';
@@ -88,7 +88,7 @@ export class StructureView {
   private usage: ModelUsage | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
-  /** glTF and GLB: the formats with JSON of their own, which is validated and sized. */
+  /** glTF, GLB and the tiles that hold one: the formats with JSON of their own, validated and sized. */
   private readonly gltf: boolean;
 
   constructor(
@@ -99,7 +99,7 @@ export class StructureView {
     modelFormat: ModelFormat,
     private readonly events: StructureEvents,
   ) {
-    this.gltf = !isMeshFormat(modelFormat);
+    this.gltf = isGltfFormat(modelFormat);
     this.format = new Formatter(locale);
     this.tree = new StructureTree(
       strings.structure.structure,
@@ -341,7 +341,7 @@ export class StructureView {
       fileName: file.name,
       fileSize: file.size,
       chunks: file.chunks,
-      tile: file.tile,
+      tile: file.tile?.format === 'cmpt' ? undefined : file.tile,
       images,
       imageBytes: this.imageBytes,
     });
@@ -465,7 +465,7 @@ export class StructureView {
             fileName: file.name,
             fileSize: file.size,
             chunks: file.chunks,
-            tile: file.tile,
+            tile: file.tile?.format === 'cmpt' ? undefined : file.tile,
             images,
             imageBytes: this.imageBytes,
           })

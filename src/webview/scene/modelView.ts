@@ -42,7 +42,14 @@ import { Helpers, type HelperColors } from './helpers';
 import { Picker, type PickRegion, type SurfacePoint } from './picking';
 import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
-import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
+import {
+  Highlight,
+  SelectionIndex,
+  addDrawn,
+  boundsOf,
+  framingBounds,
+  localBox,
+} from './selection';
 import { Shading } from './shading';
 import { pathOf, tileAt, tileBox, tileState, type RendererTile } from './tileTree';
 import type { TilesLive } from '../structure/tileset';
@@ -1164,24 +1171,7 @@ function disposeMaterial(material: Material): void {
  */
 function visibleBox(root: Object3D): Box3 {
   const box = new Box3();
-  const part = new Box3();
   root.updateWorldMatrix(true, true);
-  root.traverseVisible((object) => {
-    const drawn = object as Object3D & {
-      geometry?: BufferGeometry;
-      boundingBox?: Box3 | null;
-      computeBoundingBox?: () => void;
-    };
-    if (!drawn.geometry) return;
-    // Instanced and skinned meshes measure themselves, with their instances and pose.
-    if (drawn.boundingBox !== undefined) {
-      if (drawn.boundingBox === null) drawn.computeBoundingBox!();
-      part.copy(drawn.boundingBox!);
-    } else {
-      if (!drawn.geometry.boundingBox) drawn.geometry.computeBoundingBox();
-      part.copy(drawn.geometry.boundingBox!);
-    }
-    box.union(part.applyMatrix4(object.matrixWorld));
-  });
+  root.traverseVisible((object) => addDrawn(box, object));
   return box;
 }

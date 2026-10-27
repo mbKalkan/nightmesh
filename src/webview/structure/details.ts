@@ -6,6 +6,7 @@ import type {
   SourceFacts,
   StructureKind,
   StructureStrings,
+  CmptFacts,
   TileFacts,
   TileTables,
 } from '../../shared/protocol';
@@ -68,8 +69,8 @@ export interface FileFacts {
   size: number;
   container: ModelFormat;
   chunks?: { json: number; bin?: number };
-  /** What a b3dm tile says around the GLB it holds. */
-  tile?: TileFacts;
+  /** What a b3dm or i3dm tile says around the GLB it holds, or what a cmpt tile holds. */
+  tile?: TileFacts | CmptFacts;
 }
 
 export interface InspectContext {
@@ -237,7 +238,13 @@ function inspectModel(context: InspectContext): Inspection {
     sections: [
       { title: strings.kinds.model, rows: assetRows },
       { title: strings.sections.file, rows: fileRows },
-      ...(file.tile ? [tileSection(context, file.tile)] : []),
+      ...(file.tile
+        ? [
+            file.tile.format === 'cmpt'
+              ? compositeSection(context, file.tile)
+              : tileSection(context, file.tile),
+          ]
+        : []),
       contentsSection(context),
       {
         title: strings.sections.extensions,
@@ -254,7 +261,33 @@ function inspectModel(context: InspectContext): Inspection {
   };
 }
 
-const CONTAINERS: Partial<Record<ModelFormat, string>> = { glb: 'GLB', b3dm: 'b3dm', i3dm: 'i3dm' };
+const CONTAINERS: Partial<Record<ModelFormat, string>> = {
+  cmpt: 'cmpt',
+  glb: 'GLB',
+  b3dm: 'b3dm',
+  i3dm: 'i3dm',
+};
+
+/** What a composite holds: its tiles, by where they are among the others. */
+function compositeSection(context: InspectContext, cmpt: CmptFacts): Section {
+  const { strings, format } = context;
+  const words = strings.tile;
+  const listed = cmpt.tiles.slice(0, LIST_LIMIT);
+  const rows: Row[] = [
+    { label: words.version, text: String(cmpt.version), mono: true },
+    { label: words.header, text: format.bytes(cmpt.header), mono: true },
+    ...listed.map((tile, index) => ({
+      label: index === 0 ? words.tiles : '',
+      text: `${tile.path}  ${tile.format}`,
+      mono: true,
+      note: format.bytes(tile.bytes),
+    })),
+  ];
+  if (cmpt.tiles.length > listed.length) {
+    rows.push(moreRow(context, cmpt.tiles.length - listed.length));
+  }
+  return { title: words.composite, rows };
+}
 
 /** What a b3dm or i3dm tile says around the GLB it holds: the GLB's own rows are the file's. */
 function tileSection(context: InspectContext, tile: TileFacts): Section {

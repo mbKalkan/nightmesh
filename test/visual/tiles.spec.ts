@@ -223,6 +223,11 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
       'height',
     ]);
     await expect(page.locator('.nm-section dd', { hasText: 'b3dm' }).first()).toBeVisible();
+    // Its model is along the Earth's axes at RTC_CENTER; placed there, the buildings stand.
+    await expect(page.locator('.nm-measure')).toHaveAttribute(
+      'aria-label',
+      'Size of the model: width (X), height (Y) and depth (Z): 29 m × 30 m × 25 m',
+    );
     await page.screenshot({ path: `${SCREENS}/b3dm-${theme}.png` });
 
     await page.locator('.nm-panel-tab', { hasText: 'Size' }).click();
@@ -291,6 +296,40 @@ for (const [fixture, theme] of [
       `Size of the model: width (X), height (Y) and depth (Z): ${size}`,
     );
     await page.screenshot({ path: `${SCREENS}/i3dm-${fixture.replace('.', '-')}-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}
+
+for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`draws the b3dm and i3dm tiles of a composite together, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open('tiles/composite.cmpt');
+
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    await expect(page.locator('.nm-error')).toBeHidden();
+    // The pnts tile inside isn't drawn, and the notice says so.
+    await expect(page.locator('.nm-notice')).toContainText('pnts 3/1');
+    // A model made of several: no glTF of the file's own to validate or show.
+    await expect(page.locator('.nm-panel-right [role="tab"]')).toHaveText([
+      'Inspector',
+      'Statistics',
+    ]);
+    await expect(page.locator('[data-action="json"]')).toBeHidden();
+    await expect(page.locator('.nm-tree-label')).toContainText(['b3dm 1', 'i3dm 2']);
+    const composite = page
+      .locator('.nm-section', {
+        has: page.locator('.nm-section-title', { hasText: 'Composite (cmpt)' }),
+      })
+      .locator('dt, dd');
+    await expect(composite).toContainText(['Version', '1', 'Header', '16 B', 'Tiles']);
+    // The buildings, and the posts 40 m east of them: one ground, both standing.
+    await expect(page.locator('.nm-measure')).toHaveAttribute(
+      'aria-label',
+      'Size of the model: width (X), height (Y) and depth (Z): 67.5 m × 30 m × 25 m',
+    );
+    await page.screenshot({ path: `${SCREENS}/cmpt-${theme}.png` });
     expect(viewer.problems).toEqual([]);
   });
 }
