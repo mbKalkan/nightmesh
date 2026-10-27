@@ -295,7 +295,13 @@ export class StructureView {
       model,
       strings: this.strings.structure,
       format: this.format,
-      file: { name: fileName, size: message.fileSize, container: format, chunks: message.chunks },
+      file: {
+        name: fileName,
+        size: message.fileSize,
+        container: format,
+        chunks: message.chunks,
+        tile: message.tile,
+      },
       // A changed file keeps its last report until it is validated again, and its check.
       validation: keep ? this.context?.validation : undefined,
       source: message.source,
@@ -335,6 +341,7 @@ export class StructureView {
       fileName: file.name,
       fileSize: file.size,
       chunks: file.chunks,
+      tile: file.tile,
       images,
       imageBytes: this.imageBytes,
     });
@@ -458,6 +465,7 @@ export class StructureView {
             fileName: file.name,
             fileSize: file.size,
             chunks: file.chunks,
+            tile: file.tile,
             images,
             imageBytes: this.imageBytes,
           })

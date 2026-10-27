@@ -340,5 +340,17 @@
   "from above": "üstten",
   "glTF": "glTF",
   "glTF binary (GLB)": "glTF ikili (GLB)",
-  "{0} px": "{0} px"
+  "{0} px": "{0} px",
+  "The file isn't a b3dm tile, or it is damaged.": "Dosya bir b3dm karosu değil ya da bozuk.",
+  "This tile is b3dm version {0}. Nightmesh opens version 1 tiles.": "Bu karo b3dm sürüm {0}. Nightmesh sürüm 1 karoları açar.",
+  "Tile header and tables": "Karo başlığı ve tabloları",
+  "from before 3D Tiles 1.0": "3D Tiles 1.0 öncesinden",
+  "Feature table": "Feature tablosu",
+  "Batch table": "Batch tablosu",
+  "{0} JSON, {1} binary": "{0} JSON, {1} ikili",
+  "Features": "Feature sayısı",
+  "Center (RTC_CENTER)": "Merkez (RTC_CENTER)",
+  "positions are relative to it; the view leaves it out": "konumlar buna göre; görünüm onu uygulamaz",
+  "Feature properties": "Feature özellikleri",
+  "Batch table extensions": "Batch tablosu eklentileri"
 }

@@ -6,6 +6,7 @@ const FORMATS: Readonly<Record<string, ModelFormat>> = {
   '.obj': 'obj',
   '.stl': 'stl',
   '.ply': 'ply',
+  '.b3dm': 'b3dm',
   // Only the tileset editor takes JSON files, and only when the user opens one with it.
   '.json': 'tileset',
 };
@@ -26,9 +27,9 @@ export function isMeshFormat(format: ModelFormat): format is MeshFormat {
   return format === 'obj' || format === 'stl' || format === 'ply';
 }
 
-/** glTF and GLB, which have glTF JSON of their own to show and validate. */
+/** glTF, GLB and b3dm (a GLB inside), which have glTF JSON of their own to show and validate. */
 export function isGltfFormat(format: ModelFormat): boolean {
-  return format === 'glb' || format === 'gltf';
+  return format === 'glb' || format === 'gltf' || format === 'b3dm';
 }
 
 /** What the formats are called where a sentence names them. */
@@ -38,5 +39,6 @@ export const FORMAT_NAMES: Readonly<Record<ModelFormat, string>> = {
   obj: 'OBJ',
   stl: 'STL',
   ply: 'PLY',
+  b3dm: 'b3dm',
   tileset: '3D Tiles',
 };

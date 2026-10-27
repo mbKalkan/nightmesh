@@ -3,7 +3,28 @@
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
 export type MeshFormat = 'obj' | 'stl' | 'ply';
 
-export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'tileset';
+export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'tileset';
+
+/**
+ * What a Batched 3D Model (b3dm) tile says around the GLB it holds, for the inspector: the panels
+ * show the GLB as they show any other.
+ */
+export interface TileFacts {
+  format: 'b3dm';
+  version: number;
+  /** The header's bytes: 28, or 20 or 24 in the layouts of files older than 3D Tiles 1.0. */
+  header: number;
+  featureTable: { json: number; binary: number };
+  batchTable: { json: number; binary: number };
+  /** How many features the GLB's batch IDs count. */
+  batchLength: number;
+  /** The point the model's positions are relative to, in the tileset's frame. */
+  rtcCenter?: [number, number, number];
+  /** The batch table's properties, each with what it holds: `JSON` or `FLOAT VEC3`. */
+  properties: { name: string; type: string }[];
+  /** The batch table's extensions, such as `3DTILES_batch_table_hierarchy`. */
+  extensions: string[];
+}
 
 /**
  * What an OBJ, STL or PLY file says about itself, for the inspector: the glTF the panels show for
@@ -163,7 +184,28 @@ export interface StructureStrings {
   };
   /** What an OBJ, STL or PLY file says about itself. */
   source: SourceStrings;
+  tile: TileFileStrings;
   compare: CompareStrings;
+}
+
+/** Words for what a b3dm tile says around the GLB it holds, in the inspector. */
+export interface TileFileStrings {
+  /** The section's title: the format's name. */
+  section: string;
+  version: string;
+  header: string;
+  /** After a header from before 3D Tiles 1.0. */
+  legacy: string;
+  featureTable: string;
+  batchTable: string;
+  /** A table's sizes: `{0}` JSON and `{1}` binary. */
+  table: string;
+  features: string;
+  center: string;
+  /** Why the view doesn't move the model to its center. */
+  centerNote: string;
+  properties: string;
+  extensions: string;
 }
 
 /** Words for the Changes tab and the tree's marks, while two versions of a model are compared. */
@@ -511,6 +553,7 @@ export type SizeCategory =
   | 'instancing'
   | 'textures'
   | 'unused'
+  | 'tile'
   | 'other';
 
 /** What a suggestion in the size tab is about. */
@@ -609,6 +652,8 @@ export interface StructureMessage {
   chunks?: { json: number; bin?: number };
   /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
   source?: SourceFacts;
+  /** What a b3dm tile says around the GLB it holds; `fileSize` is the tile's. */
+  tile?: TileFacts;
 }
 
 /** How much of an OBJ, STL or PLY file has been read, before there is a model to send. */

@@ -1,11 +1,12 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
-import type { ImageInfo } from '../../src/shared/protocol';
+import { formatForPath } from '../../src/shared/formats';
+import type { ImageInfo, TileFacts } from '../../src/shared/protocol';
 import { GltfModel } from '../../src/webview/structure/gltf';
 import { sizeAnalysis, type SizeAnalysis } from '../../src/webview/structure/sizes';
 import { ModelUsage } from '../../src/webview/structure/usage';
@@ -22,12 +23,18 @@ async function analyse(name: string): Promise<SizeAnalysis> {
   );
   let json = '{}';
   let chunks;
+  let tile: TileFacts | undefined;
   let images;
   let bytes;
   try {
-    const options = { loadId: 1, reload: false, texts: loadTexts(english) };
+    const options = {
+      loadId: 1,
+      reload: false,
+      texts: loadTexts(english),
+      format: formatForPath(name),
+    };
     for await (const message of loadMessages(source, opener, options)) {
-      if (message.type === 'structure') ({ json, chunks } = message);
+      if (message.type === 'structure') ({ json, chunks, tile } = message);
       if (message.type === 'images') ({ images, bytes } = message);
     }
   } finally {
@@ -38,6 +45,7 @@ async function analyse(name: string): Promise<SizeAnalysis> {
     fileName: name,
     fileSize: statSync(join(FIXTURES, name)).size,
     chunks,
+    tile,
     images,
     imageBytes: bytes,
   });
@@ -68,6 +76,18 @@ describe('sizeAnalysis', () => {
   it('counts only what a GLB cut short still holds', async () => {
     const analysis = await analyse('truncated.glb');
     expect(analysis.total).toBe(statSync(join(FIXTURES, 'truncated.glb')).size);
+    expect(Math.abs(sum(analysis) - analysis.total)).toBeLessThanOrEqual(
+      analysis.categories.length,
+    );
+  });
+
+  it("accounts for a b3dm tile's header and tables apart from its GLB", async () => {
+    const analysis = await analyse('tiles/batched.b3dm');
+    const bytes = readFileSync(join(FIXTURES, 'tiles/batched.b3dm'));
+    expect(analysis.total).toBe(bytes.length);
+    // The header, the feature table's JSON, the batch table's JSON and binary body.
+    const tables = [12, 16, 20, 24].reduce((sum, at) => sum + bytes.readUInt32LE(at), 0);
+    expect(byCategory(analysis).tile).toBe(28 + tables);
     expect(Math.abs(sum(analysis) - analysis.total)).toBeLessThanOrEqual(
       analysis.categories.length,
     );

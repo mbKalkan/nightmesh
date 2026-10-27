@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   volume is boxed in the view and measured in its corner; Enter or a double-click frames it, and
   a click on the model selects the tile drawn there. The tileset itself shows how many tiles the
   file has and how many are loaded, drawn and on their way, and the memory they take.
+- **b3dm tiles open on their own**: a `.b3dm` file opens in Nightmesh like a GLB, with the scene
+  tree, inspector, statistics, glTF Validator, size breakdown, JSON, measuring and comparing.
+  The model's details add what the tile says around its GLB: its header (also the shorter ones
+  of files from before 3D Tiles 1.0), the sizes of its feature and batch tables, how many
+  features it has, its `RTC_CENTER`, and the batch table's properties with their types. The Size
+  tab counts the tile's header and tables apart.
 
 ### Changed
 

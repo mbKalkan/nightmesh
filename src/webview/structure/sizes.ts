@@ -1,4 +1,4 @@
-import type { ImageInfo, SizeCategory, SuggestionKind } from '../../shared/protocol';
+import type { ImageInfo, SizeCategory, SuggestionKind, TileFacts } from '../../shared/protocol';
 import { fileName, isObject, num, objects, text, type GltfModel, type JsonObject } from './gltf';
 import { entryKey, type EntryKey } from './outline';
 import { drawnImage, textureMemory } from './textures';
@@ -58,6 +58,8 @@ export interface SizeInputs {
   fileSize: number;
   /** A GLB's chunk sizes; undefined for a .gltf. */
   chunks?: { json: number; bin?: number };
+  /** A b3dm tile's header and tables, before the GLB; `fileSize` is the tile's. */
+  tile?: TileFacts;
   images?: readonly (ImageInfo | null)[];
   /** Each image's own bytes, from the host. */
   imageBytes?: readonly (number | null)[];
@@ -97,6 +99,10 @@ const CHUNK_HEADER = 8;
 /** Formats that stay compressed on the GPU. */
 const GPU_COMPRESSED = new Set(['ktx2']);
 
+/** A b3dm tile's bytes before its GLB. */
+const tileBytes = ({ header, featureTable, batchTable }: TileFacts) =>
+  header + featureTable.json + featureTable.binary + batchTable.json + batchTable.binary;
+
 const CATEGORY_OF: Record<Role, SizeCategory> = {
   vertices: 'vertices',
   indices: 'indices',
@@ -128,9 +134,10 @@ export function sizeAnalysis(
   const buffers = model.items('buffers');
   const hasData = (buffer: number | undefined) =>
     buffer !== undefined && (text(buffers[buffer].uri) !== undefined || (glb && buffer === 0));
+  const tile = inputs.tile ? tileBytes(inputs.tile) : 0;
   // A GLB cut short holds less of its binary chunk than its JSON says: count what is there.
   const binary = inputs.chunks
-    ? Math.max(0, inputs.fileSize - (GLB_HEADER + 2 * CHUNK_HEADER + inputs.chunks.json))
+    ? Math.max(0, inputs.fileSize - tile - (GLB_HEADER + 2 * CHUNK_HEADER + inputs.chunks.json))
     : Infinity;
   const storedIn = (buffer: number | undefined, offset: unknown, length: unknown) => {
     if (!hasData(buffer)) return 0;
@@ -215,6 +222,7 @@ export function sizeAnalysis(
 
   const total = inputs.fileSize + external;
   add('json', inputs.chunks ? inputs.chunks.json : Math.max(0, inputs.fileSize - embedded));
+  add('tile', tile);
   const counted = [...categories.values()].reduce((a, b) => a + b, 0);
   add('other', total - counted);
 

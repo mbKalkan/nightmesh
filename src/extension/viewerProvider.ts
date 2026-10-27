@@ -15,6 +15,7 @@ import { gitSibling, readGitBlob } from './gitBlob';
 import { JsonDocuments } from './jsonDocuments';
 import { lfsObjectId } from './gitObject';
 import { sniff } from './model/container';
+import { gltfSource, isB3dm } from './model/tileFile';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
@@ -206,7 +207,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       try {
         source = await openSource(uri, format);
         const message = await validationMessage(
-          source,
+          await gltfSource(source, format),
           resourceOpener(uri),
           validator.validate,
           id,
@@ -407,7 +408,9 @@ async function openSource(uri: vscode.Uri, format: ModelFormat): Promise<ByteSou
         sniff(data) === 'lfsPointer' ||
         (isMeshFormat(format)
           ? looksLike(format, data.subarray(0, 64 * 1024), data.length) !== 'yes'
-          : sniff(data) === 'unknown'),
+          : format === 'b3dm'
+            ? !isB3dm(data)
+            : sniff(data) === 'unknown'),
     ),
   );
 }

@@ -180,3 +180,54 @@ test('says which tiles could not be had, and draws the rest', async ({ page }) =
     ]);
   await page.screenshot({ path: `${SCREENS}/tiles-problems-dark.png` });
 });
+
+for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`opens a b3dm tile as its GLB, with what the tile says around it, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open('tiles/batched.b3dm');
+    await viewer.post(await viewer.validation('tiles/batched.b3dm'));
+
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    await expect(page.locator('.nm-error')).toBeHidden();
+    // A GLB's panels and its JSON, all of them.
+    await expect(page.locator('.nm-panel-right [role="tab"]')).toHaveText([
+      'Inspector',
+      'Statistics',
+      /^Validation/,
+      'Size',
+    ]);
+    await expect(page.locator('[data-action="json"]')).toBeVisible();
+    await expect(page.locator('.nm-tree-label')).toContainText(['Library', 'Market', 'Tower']);
+
+    const tile = page
+      .locator('.nm-section', {
+        has: page.locator('.nm-section-title', { hasText: 'Batched 3D Model (b3dm)' }),
+      })
+      .locator('dt, dd');
+    await expect(tile).toContainText([
+      'Version',
+      '1',
+      'Header',
+      '28 B',
+      'Feature table',
+      'Batch table',
+      'Features',
+      '3',
+      'Center (RTC_CENTER)',
+      '[4216541.976, 2335189.8, 4163110.429]',
+      'Feature properties',
+      'name',
+      'year',
+      'height',
+    ]);
+    await expect(page.locator('.nm-section dd', { hasText: 'b3dm' }).first()).toBeVisible();
+    await page.screenshot({ path: `${SCREENS}/b3dm-${theme}.png` });
+
+    await page.locator('.nm-panel-tab', { hasText: 'Size' }).click();
+    await expect(page.locator('.nm-size')).toContainText('Tile header and tables');
+    await page.screenshot({ path: `${SCREENS}/b3dm-size-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}
