@@ -6,7 +6,7 @@ This extension bundles the following open-source components.
 |---|---|---|
 | three.js (core, GLTFLoader, DRACOLoader, KTX2Loader, OrbitControls, RoomEnvironment) | MIT | https://github.com/mrdoob/three.js |
 | meshoptimizer decoder (bundled inside three.js, unmodified) | MIT | https://github.com/zeux/meshoptimizer |
-| Draco decoder (WebAssembly build shipped with three.js, unmodified) | Apache-2.0 | https://github.com/google/draco |
+| Draco decoder (WebAssembly build shipped with three.js, unmodified; in the webview and in the extension's file-reading thread) | Apache-2.0 | https://github.com/google/draco |
 | Basis Universal transcoder (WebAssembly build shipped with three.js; see the note below) | Apache-2.0 | https://github.com/BinomialLLC/basis_universal |
 | zstddec, with the Zstandard decoder (shipped with three.js, unmodified) | MIT, BSD-3-Clause | https://github.com/donmccurdy/zstddec |
 | 3DTilesRendererJS (npm package `3d-tiles-renderer`: the three.js tiles renderer and its plugins, unmodified) | Apache-2.0 | https://github.com/NASA-AMMOS/3DTilesRendererJS |

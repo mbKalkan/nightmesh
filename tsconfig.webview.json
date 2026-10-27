@@ -4,5 +4,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["src/webview/**/*.ts", "src/shared/**/*.ts"]
+  "include": ["src/webview/**/*.ts", "src/shared/**/*.ts", "src/types/inline-files.d.ts"]
 }

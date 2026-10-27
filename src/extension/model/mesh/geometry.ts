@@ -33,8 +33,8 @@ export type MeshProblem =
   | { kind: 'faces'; count: number }
   | { kind: 'freeForm'; count: number }
   | { kind: 'truncated' }
-  /** Geometry compressed in a way not read yet: a pnts tile's Draco points. */
-  | { kind: 'compressed' };
+  /** A pnts tile's Draco points, which couldn't be decoded, and why. */
+  | { kind: 'compressed'; reason: string };
 
 /** A material the parts name: OBJ's `usemtl`, looked up in its libraries; PLY's texture. */
 export interface MeshMaterial {
@@ -58,7 +58,7 @@ export interface ParsedMesh {
 /** Reads a file piece by piece; `finish` once every piece has been pushed. */
 export interface MeshReader {
   push(chunk: Uint8Array): void;
-  finish(): ParsedMesh;
+  finish(): ParsedMesh | Promise<ParsedMesh>;
 }
 
 /** The file isn't one of its format, or can't be read as one. */

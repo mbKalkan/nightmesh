@@ -1,5 +1,6 @@
 // A Point Cloud (pnts) tile from 3D Tiles: a header, a feature table whose binary body holds each
-// point's position, color and normal, and a batch table. Read whole, as tiles are small.
+// point's position, color and normal, plain or compressed with Draco, and a batch table. Read
+// whole, as tiles are small.
 import type { PntsFacts } from '../../../shared/protocol';
 import { batchFacts, count, isObject, parseTable } from '../tileFile';
 import {
@@ -27,6 +28,24 @@ const COMPONENT_BYTES: Readonly<Record<string, number>> = {
   DOUBLE: 8,
 };
 
+/** The properties of a tile's points that Draco held, by their feature table names. */
+export interface DecodedPoints {
+  POSITION?: Float32Array;
+  NORMAL?: Float32Array;
+  RGB?: Uint8Array;
+  RGBA?: Uint8Array;
+}
+
+/**
+ * Decodes Draco's point cloud `data` (draco.ts). Handed in, so that only the thread that reads
+ * files carries the decoder.
+ */
+export type PointDecoder = (
+  data: Uint8Array,
+  properties: Readonly<Record<string, unknown>>,
+  points: number,
+) => Promise<DecodedPoints>;
+
 export function isPnts(head: Uint8Array): boolean {
   return new TextDecoder().decode(head.subarray(0, 4)) === 'pnts';
 }
@@ -35,7 +54,10 @@ export class PntsReader implements MeshReader {
   private readonly bytes: Uint8Array;
   private filled = 0;
 
-  constructor(size: number) {
+  constructor(
+    size: number,
+    private readonly decode?: PointDecoder,
+  ) {
     this.bytes = new Uint8Array(size);
   }
 
@@ -44,13 +66,16 @@ export class PntsReader implements MeshReader {
     this.filled += chunk.length;
   }
 
-  finish(): ParsedMesh {
-    return readPnts(this.bytes.subarray(0, this.filled));
+  finish(): Promise<ParsedMesh> {
+    return readPnts(this.bytes.subarray(0, this.filled), this.decode);
   }
 }
 
-/** The points of a pnts tile, with what its header and tables say. */
-export function readPnts(bytes: Uint8Array): ParsedMesh {
+/**
+ * The points of a pnts tile, with what its header and tables say; Draco's with `decode`, which
+ * left out says why they aren't drawn.
+ */
+export async function readPnts(bytes: Uint8Array, decode?: PointDecoder): Promise<ParsedMesh> {
   if (bytes.length < HEADER || !isPnts(bytes)) throw new MeshFormatError('Not a pnts tile');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint32(4, true);
@@ -88,30 +113,63 @@ export function readPnts(bytes: Uint8Array): ParsedMesh {
   if (center) facts.rtcCenter = center as [number, number, number];
 
   const mesh: ParsedMesh = { objects: [], materials: [], libraries: [], facts, problems: [] };
-  // Points compressed with Draco are left for the decoder in the webview, which doesn't take
-  // them yet: the tile shows what it says, with nothing drawn.
+  let decoded: DecodedPoints = {};
   if (featureExtensions.includes('3DTILES_draco_point_compression')) {
-    mesh.problems.push({ kind: 'compressed' });
-    return mesh;
+    try {
+      if (!decode) throw new Error('no decoder here');
+      decoded = await decompress(featureTable, body, points, decode);
+    } catch (error) {
+      // The tile shows what it says, with nothing drawn.
+      mesh.problems.push({
+        kind: 'compressed',
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return mesh;
+    }
   }
   const origin = new Origin();
-  const positions = readPositions(featureTable, body, points, origin);
+  const positions = readPositions(featureTable, body, points, origin, decoded.POSITION);
   if (!positions || points === 0) return mesh;
   const part: MeshPart = { mode: 'points', positions };
-  const colors = readColors(featureTable, body, points);
+  const colors = readColors(featureTable, body, points, decoded);
   if (colors) Object.assign(part, colors);
-  const normals = readNormals(featureTable, body, points);
+  const normals = readNormals(featureTable, body, points, decoded.NORMAL);
   if (normals) part.normals = normals;
   mesh.objects.push({ parts: [part], children: [] });
   mesh.offset = origin.offset;
   return mesh;
 }
 
+/**
+ * The properties the feature table's Draco extension holds, decoded: positions as numbers, colors
+ * as bytes, normals unpacked. Draco may have put the points in another order, the same for each.
+ */
+function decompress(
+  table: Record<string, unknown>,
+  body: Body,
+  points: number,
+  decode: PointDecoder,
+): Promise<DecodedPoints> {
+  const draco = (table.extensions as Record<string, unknown>)['3DTILES_draco_point_compression'];
+  if (!isObject(draco) || !isObject(draco.properties)) {
+    throw new Error('the extension names no properties');
+  }
+  const { byteOffset: at, byteLength: length } = draco;
+  if (
+    !(typeof at === 'number' && Number.isInteger(at) && at >= 0) ||
+    !(typeof length === 'number' && Number.isInteger(length) && length > 0) ||
+    at + length > body.bytes.length
+  ) {
+    throw new Error('its data is outside the feature table');
+  }
+  return decode(body.bytes.subarray(at, at + length), draco.properties, points);
+}
+
 /** The feature table's binary body, read where its JSON says, within bounds. */
 class Body {
   private readonly view: DataView;
 
-  constructor(private readonly bytes: Uint8Array) {
+  constructor(readonly bytes: Uint8Array) {
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
 
@@ -169,12 +227,16 @@ class Body {
   }
 }
 
-/** POSITION, or POSITION_QUANTIZED within the quantized volume; far coordinates moved near 0. */
+/**
+ * POSITION, decoded or in the body, or POSITION_QUANTIZED within the quantized volume; far
+ * coordinates moved near 0.
+ */
 function readPositions(
   table: Record<string, unknown>,
   body: Body,
   points: number,
   origin: Origin,
+  decoded: DecodedPoints['POSITION'],
 ): Float32Array | undefined {
   const positions = new Float32Array(points * 3);
   const put = (index: number, x: number, y: number, z: number) => {
@@ -183,6 +245,10 @@ function readPositions(
     positions[index * 3 + 1] = y - origin.y;
     positions[index * 3 + 2] = z - origin.z;
   };
+  if (decoded) {
+    for (let i = 0; i < points; i++) put(i, decoded[i * 3], decoded[i * 3 + 1], decoded[i * 3 + 2]);
+    return positions;
+  }
   const plain = body.locate(table.POSITION, points, 3, ['FLOAT']);
   if (plain) {
     for (let i = 0, at = plain.at; i < points; i++, at += 12) {
@@ -206,25 +272,37 @@ function readPositions(
   return positions;
 }
 
-/** RGBA, RGB, RGB565 or CONSTANT_RGBA, as linear colors; `alpha` when any is see-through. */
+/**
+ * RGBA, RGB (each decoded or in the body), RGB565 or CONSTANT_RGBA, as linear colors; `alpha`
+ * when any is see-through.
+ */
 function readColors(
   table: Record<string, unknown>,
   body: Body,
   points: number,
+  decoded: DecodedPoints,
 ): Pick<MeshPart, 'colors' | 'alpha'> | undefined {
   const colors = new Uint16Array(points * 4);
   let alpha = false;
-  const rgba = body.locate(table.RGBA, points, 4, ['UNSIGNED_BYTE']);
-  const rgb = body.locate(table.RGB, points, 3, ['UNSIGNED_BYTE']);
+  // Bytes of each point's color, one after another from `at`.
+  const bytes = (semantic: 'RGBA' | 'RGB', components: number) => {
+    const compressed = decoded[semantic];
+    if (compressed) return { source: compressed, at: 0 };
+    const place = body.locate(table[semantic], points, components, ['UNSIGNED_BYTE']);
+    return place && { source: body.bytes, at: place.at };
+  };
+  const rgba = bytes('RGBA', 4);
+  const rgb = rgba ? undefined : bytes('RGB', 3);
   const rgb565 = body.locate(table.RGB565, points, 1, ['UNSIGNED_SHORT']);
   const constant = body.global(table.CONSTANT_RGBA, 'UNSIGNED_BYTE', 4);
   if (rgba || rgb) {
     const stride = rgba ? 4 : 3;
-    for (let i = 0, at = (rgba ?? rgb)!.at; i < points; i++, at += stride) {
-      colors[i * 4] = LINEAR_BYTES[body.uint8(at)];
-      colors[i * 4 + 1] = LINEAR_BYTES[body.uint8(at + 1)];
-      colors[i * 4 + 2] = LINEAR_BYTES[body.uint8(at + 2)];
-      const a = rgba ? body.uint8(at + 3) : 255;
+    const { source, at: start } = (rgba ?? rgb)!;
+    for (let i = 0, at = start; i < points; i++, at += stride) {
+      colors[i * 4] = LINEAR_BYTES[source[at]];
+      colors[i * 4 + 1] = LINEAR_BYTES[source[at + 1]];
+      colors[i * 4 + 2] = LINEAR_BYTES[source[at + 2]];
+      const a = rgba ? source[at + 3] : 255;
       colors[i * 4 + 3] = a * 257;
       if (a < 255) alpha = true;
     }
@@ -248,12 +326,17 @@ function readColors(
   return alpha ? { colors, alpha } : { colors };
 }
 
-/** NORMAL, or NORMAL_OCT16P: two bytes, a point on an octahedron unfolded into a square. */
+/**
+ * NORMAL, decoded or in the body, or NORMAL_OCT16P: two bytes, a point on an octahedron unfolded
+ * into a square.
+ */
 function readNormals(
   table: Record<string, unknown>,
   body: Body,
   points: number,
+  decoded: DecodedPoints['NORMAL'],
 ): Float32Array | undefined {
+  if (decoded) return decoded;
   const normals = new Float32Array(points * 3);
   const plain = body.locate(table.NORMAL, points, 3, ['FLOAT']);
   if (plain) {

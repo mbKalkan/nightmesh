@@ -21,7 +21,8 @@ function read(name: string, size = 1 << 20): ParsedMesh {
   const format = name.slice(name.lastIndexOf('.') + 1) as MeshFormat;
   const reader = createReader(format, bytes.length);
   for (let at = 0; at < bytes.length; at += size) reader.push(bytes.slice(at, at + size));
-  return reader.finish();
+  // OBJ, STL and PLY readers finish at once.
+  return reader.finish() as ParsedMesh;
 }
 
 const parts = (objects: MeshObject[]): MeshPart[] =>
@@ -287,7 +288,7 @@ describe('OBJ', () => {
     ] as const) {
       const reader = createReader(format, 1000);
       reader.push(new TextEncoder().encode(`${lines.join('\n')}\n`));
-      const [part] = parts(reader.finish().objects);
+      const [part] = parts((reader.finish() as ParsedMesh).objects);
       expect(triangles(part)).toBe(4);
       // Each faces +z as the L does: a triangle over the notch would face the other way.
       for (let t = 0; t < 4; t++) {
@@ -306,7 +307,7 @@ describe('OBJ', () => {
     const reader = createReader('obj', 100);
     const marked = ['\ufeff# Marked', 'v 0 0 0', 'v 1 0 0', 'v 0 1 0', 'f 1 2 3', ''].join('\n');
     reader.push(new TextEncoder().encode(marked));
-    expect(reader.finish().facts).toMatchObject({
+    expect((reader.finish() as ParsedMesh).facts).toMatchObject({
       comments: ['Marked'],
       statements: { v: 3, f: 1 },
     });

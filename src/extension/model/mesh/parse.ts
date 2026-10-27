@@ -7,7 +7,7 @@ import { checkMesh, trianglesOf } from './check';
 import { MeshFormatError, type MeshReader, type ParsedMesh } from './geometry';
 import { ObjReader } from './obj';
 import { PlyReader, plyHeaderFacts } from './ply';
-import { PntsReader, isPnts } from './pnts';
+import { PntsReader, isPnts, type PointDecoder } from './pnts';
 import { StlReader, stlEncoding } from './stl';
 import { utf16 } from './text';
 
@@ -29,7 +29,8 @@ export type MeshEvent =
  */
 export type MeshParser = (format: MeshFormat, source: ByteSource) => AsyncIterable<MeshEvent>;
 
-export function createReader(format: MeshFormat, size: number): MeshReader {
+/** A reader for `format`; pnts tiles decode Draco's points with `decode` (draco.ts). */
+export function createReader(format: MeshFormat, size: number, decode?: PointDecoder): MeshReader {
   switch (format) {
     case 'obj':
       return new ObjReader();
@@ -38,23 +39,31 @@ export function createReader(format: MeshFormat, size: number): MeshReader {
     case 'ply':
       return new PlyReader(size);
     case 'pnts':
-      return new PntsReader(size);
+      return new PntsReader(size, decode);
   }
 }
 
+/**
+ * Reads in the calling thread, with Draco's points in pnts tiles left undrawn unless a `decode` is
+ * given: only the reading thread's bundle carries the decoder.
+ */
+export function threadParser(decode?: PointDecoder): MeshParser {
+  return async function* (format, source) {
+    const reader = createReader(format, source.size, decode);
+    for (let offset = 0; offset < source.size;) {
+      const length = Math.min(CHUNK, source.size - offset);
+      reader.push(await source.read(offset, length));
+      offset += length;
+      yield { type: 'progress', done: offset };
+    }
+    const mesh = await reader.finish();
+    yield { type: 'done', mesh };
+    yield { type: 'check', check: checkMesh(trianglesOf(mesh)) };
+  };
+}
+
 /** Reads in the calling thread. */
-export const parseInThread: MeshParser = async function* (format, source) {
-  const reader = createReader(format, source.size);
-  for (let offset = 0; offset < source.size;) {
-    const length = Math.min(CHUNK, source.size - offset);
-    reader.push(await source.read(offset, length));
-    offset += length;
-    yield { type: 'progress', done: offset };
-  }
-  const mesh = reader.finish();
-  yield { type: 'done', mesh };
-  yield { type: 'check', check: checkMesh(trianglesOf(mesh)) };
-};
+export const parseInThread = threadParser();
 
 /** Bytes from the start of a file that `looksLike` and `headerFacts` look at. */
 export const HEAD_BYTES = 64 * 1024;

@@ -31,10 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tab counts the tile's header and tables apart.
 - **pnts tiles open on their own**: a `.pnts` point cloud opens as a PLY point cloud does, in
   metres with Z up, with its colors (RGB, RGBA, RGB565 or one for the whole tile) and normals,
-  plain or packed. Quantized positions are read within their volume. The inspector shows the
-  tile's header and tables, its point count, the data its feature table gives, `RTC_CENTER` and
-  the batch table's properties. Points compressed with Draco aren't read yet: the tile says so
-  and shows what it says about itself.
+  plain or packed. Quantized positions are read within their volume, and points compressed with
+  Draco (all of them or some of their data) are decoded by the decoder that ships with the
+  extension. The inspector shows the tile's header and tables, its point count, the data its
+  feature table gives, `RTC_CENTER` and the batch table's properties.
 - **i3dm tiles open on their own**: a `.i3dm` file's model is drawn once for each instance, where
   the tile puts it, turned and sized as it says (`NORMAL_UP` and `NORMAL_RIGHT`, plain or packed,
   or east, north and up where it stands), with quantized positions read within their volume.

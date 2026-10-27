@@ -48,8 +48,8 @@ export interface LoadTexts {
   notMesh(format: MeshFormat, objectFile: boolean): string;
   /** An OBJ, STL or PLY file with nothing to draw in it. */
   noGeometry: string;
-  /** A pnts tile whose points are compressed with Draco. */
-  compressedPoints: string;
+  /** A pnts tile whose points are compressed with Draco and couldn't be decoded, and why. */
+  compressedPoints(reason: string): string;
   /** Faces, lines or points that couldn't be read or name vertices that aren't there. */
   badFaces(count: number): string;
   /** OBJ's free-form curves and surfaces, which aren't drawn. */
@@ -428,7 +428,8 @@ async function* meshModelMessages(
   const materials = await meshMaterials(mesh, resources, texts);
   const { json, buffers } = toGltf(mesh, fileName, materials.specs, materials.images);
   if (!json.meshes?.length) {
-    if (!mesh.problems.some((problem) => problem.kind === 'compressed')) {
+    const compressed = mesh.problems.find((problem) => problem.kind === 'compressed');
+    if (!compressed) {
       yield failure(options, texts.noGeometry);
       return false;
     }
@@ -441,7 +442,7 @@ async function* meshModelMessages(
       fileSize: source.size,
       source: materials.facts,
     };
-    yield failure(options, texts.compressedPoints);
+    yield failure(options, texts.compressedPoints(compressed.reason));
     return false;
   }
   yield {
