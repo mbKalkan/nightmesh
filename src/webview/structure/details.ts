@@ -7,6 +7,7 @@ import type {
   StructureKind,
   StructureStrings,
   TileFacts,
+  TileTables,
 } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import {
@@ -257,9 +258,14 @@ const CONTAINERS: Partial<Record<ModelFormat, string>> = { glb: 'GLB', b3dm: 'b3
 
 /** What a b3dm tile says around the GLB it holds: the GLB's own rows are the file's. */
 function tileSection(context: InspectContext, tile: TileFacts): Section {
+  return { title: context.strings.tile.section, rows: tileRows(context, tile) };
+}
+
+/** A tile's header and tables; `between` goes after the tables' sizes. */
+function tileRows(context: InspectContext, tile: TileTables, between: Row[] = []): Row[] {
   const { format } = context;
   const words = context.strings.tile;
-  const table = ({ json, binary }: TileFacts['batchTable']) =>
+  const table = ({ json, binary }: TileTables['batchTable']) =>
     fill(words.table, format.bytes(json), format.bytes(binary));
   const rows: Row[] = [
     { label: words.version, text: String(tile.version), mono: true },
@@ -271,8 +277,11 @@ function tileSection(context: InspectContext, tile: TileFacts): Section {
     },
     { label: words.featureTable, text: table(tile.featureTable), mono: true },
     { label: words.batchTable, text: table(tile.batchTable), mono: true },
-    { label: words.features, text: format.count(tile.batchLength), mono: true },
+    ...between,
   ];
+  if (tile.batchLength > 0) {
+    rows.push({ label: words.features, text: format.count(tile.batchLength), mono: true });
+  }
   if (tile.rtcCenter) {
     rows.push({
       label: words.center,
@@ -301,7 +310,7 @@ function tileSection(context: InspectContext, tile: TileFacts): Section {
       mono: true,
     })),
   );
-  return { title: words.section, rows };
+  return rows;
 }
 
 /** The extensions a model uses, and whether it needs them to be drawn. */
@@ -343,7 +352,8 @@ function contentsSection(context: InspectContext): Section {
   };
 }
 
-const SOURCE_FORMATS: Record<SourceFacts['format'], string> = {
+/** Format names; pnts's is in the localized strings. */
+const SOURCE_FORMATS: Record<Exclude<SourceFacts['format'], 'pnts'>, string> = {
   obj: 'Wavefront OBJ',
   stl: 'STL',
   ply: 'PLY',
@@ -362,8 +372,13 @@ const COMMENT_LIMIT = 20;
 function inspectSource(context: InspectContext, source: SourceFacts): Inspection {
   const { strings, format, file } = context;
   const words = strings.source;
-  const fileRows: Row[] = [{ label: words.format, text: SOURCE_FORMATS[source.format] }];
-  if (source.format !== 'obj') {
+  const fileRows: Row[] = [
+    {
+      label: words.format,
+      text: source.format === 'pnts' ? strings.tile.pointCloud : SOURCE_FORMATS[source.format],
+    },
+  ];
+  if (source.format === 'stl' || source.format === 'ply') {
     fileRows.push({ label: words.encoding, text: words.encodings[source.encoding] });
   }
   if (source.format === 'ply' && source.version) {
@@ -373,7 +388,18 @@ function inspectSource(context: InspectContext, source: SourceFacts): Inspection
   const sections: Section[] = [{ title: strings.sections.file, rows: fileRows }];
   const comments: string[] = [];
 
-  if (source.format === 'stl') {
+  if (source.format === 'pnts') {
+    fileRows.push(
+      ...tileRows(context, source, [
+        { label: strings.labels.points, text: format.count(source.points), mono: true },
+        ...source.semantics.map((name, index) => ({
+          label: index === 0 ? strings.tile.semantics : '',
+          text: name,
+          mono: true,
+        })),
+      ]),
+    );
+  } else if (source.format === 'stl') {
     if (source.header) fileRows.push({ label: words.header, text: source.header });
     const names = (source.solids ?? []).filter(Boolean);
     if (names.length > 0) fileRows.push({ label: words.solids, text: names.join(', ') });

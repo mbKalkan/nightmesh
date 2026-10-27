@@ -21,6 +21,8 @@ export const DEFAULT_UNITS: Readonly<Record<MeshFormat, Units>> = {
   stl: { unit: 'mm', up: 'z' },
   obj: { unit: 'm', up: 'y' },
   ply: { unit: 'm', up: 'y' },
+  // 3D Tiles: metres, and a tile's own frame has Z up.
+  pnts: { unit: 'm', up: 'z' },
 };
 
 /** A quarter turn about X, from Z up to Y up. */

@@ -30,7 +30,11 @@ export interface MeshObject {
 
 /** Something in the file that couldn't be drawn, said to the user with how often it happened. */
 export type MeshProblem =
-  { kind: 'faces'; count: number } | { kind: 'freeForm'; count: number } | { kind: 'truncated' };
+  | { kind: 'faces'; count: number }
+  | { kind: 'freeForm'; count: number }
+  | { kind: 'truncated' }
+  /** Geometry compressed in a way not read yet: a pnts tile's Draco points. */
+  | { kind: 'compressed' };
 
 /** A material the parts name: OBJ's `usemtl`, looked up in its libraries; PLY's texture. */
 export interface MeshMaterial {
