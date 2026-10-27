@@ -42,11 +42,19 @@ export function resolveResourceUri(uri: string, modelFolder: string, root: strin
 }
 
 function isInside(path: string, root: string): boolean {
-  // Windows paths in VS Code URIs look like /c:/folder; their file system ignores case.
+  return relativeInside(path, root) !== undefined;
+}
+
+/**
+ * `path` relative to `root`, both posix paths as in VS Code URIs; undefined if it isn't inside.
+ * Windows paths look like /c:/folder, and their file system ignores case: VS Code can give a
+ * workspace folder as /D:/ and a file in it as /d:/.
+ */
+export function relativeInside(path: string, root: string): string | undefined {
   const windows = /^\/[a-z]:/i.test(root);
   const [p, r] = windows ? [path.toLowerCase(), root.toLowerCase()] : [path, root];
   const prefix = r.endsWith('/') ? r : `${r}/`;
-  return p.startsWith(prefix);
+  return p.startsWith(prefix) ? path.slice(prefix.length) : undefined;
 }
 
 function decodeDataUri(uri: string): Resolution {

@@ -1,10 +1,11 @@
 // 3D Tiles (D-046): the tileset's JSON is checked and sent whole; the webview walks the tile tree
 // itself and asks for each tile as the camera comes near it, by a path relative to the folder the
 // viewer may read. Free of VS Code APIs, so the browser tests answer requests as the host does.
+import { posix } from 'node:path';
 import type { HostToWebviewMessage } from '../../shared/protocol';
 import { MAX_JSON_BYTES, sniff, withoutByteOrderMark } from './container';
 import type { LoadTexts, ResourceOpener } from './load';
-import { resourceName } from './resources';
+import { relativeInside, resourceName } from './resources';
 import type { ByteSource } from './sources';
 
 /** A tile is read into memory whole, to be posted; nothing real comes close to this. */
@@ -16,6 +17,18 @@ export const MAX_TILE_BYTES = 512 * 1024 * 1024;
  * without it, which tells it went outside rather than to some other file inside.
  */
 export const TILE_FOLDER = '/_/';
+
+/**
+ * The folder whose files a tileset's tiles may be, and the tileset's path in it, from posix paths
+ * as in VS Code URIs: its workspace folder, or its own folder outside one (D-005). VS Code can
+ * name a drive D: in the one and d: in the other.
+ */
+export function tilesetPlace(path: string, workspace: string): { root: string; path: string } {
+  const inside = relativeInside(path, workspace);
+  return inside === undefined
+    ? { root: posix.dirname(path), path: posix.basename(path) }
+    : { root: workspace, path: inside };
+}
 
 interface Tileset {
   asset?: { version?: unknown };
