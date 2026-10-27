@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   imageMimeType,
+  relativeInside,
   resolveResourceUri,
   resourceName,
 } from '../../src/extension/model/resources';
@@ -87,5 +88,26 @@ describe('resourceName', () => {
     expect(resourceName('textures/my%20paint.png')).toBe('my paint.png');
     expect(resourceName('..\\car.bin')).toBe('car.bin');
     expect(resourceName('data:image/png;base64,AAAA')).toBe('data: URI');
+  });
+});
+
+describe('relativeInside', () => {
+  it('gives a path relative to the folder it is in', () => {
+    expect(relativeInside('/home/me/models/city/tileset.json', '/home/me/models')).toBe(
+      'city/tileset.json',
+    );
+    expect(relativeInside('/home/me/models/city/tileset.json', '/home/me/models/')).toBe(
+      'city/tileset.json',
+    );
+  });
+
+  it('ignores the case of Windows paths, as VS Code mixes D: and d:', () => {
+    expect(relativeInside('/d:/Work/City/tileset.json', '/D:/work')).toBe('City/tileset.json');
+  });
+
+  it('keeps case elsewhere, and says when a path is outside', () => {
+    expect(relativeInside('/home/Me/a.json', '/home/me')).toBeUndefined();
+    expect(relativeInside('/home/me2/a.json', '/home/me')).toBeUndefined();
+    expect(relativeInside('/home/me', '/home/me')).toBeUndefined();
   });
 });

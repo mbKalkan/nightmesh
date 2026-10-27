@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
-import { readTile, tilesetMessage } from '../../src/extension/model/tiles';
+import { readTile, tilesetMessage, tilesetPlace } from '../../src/extension/model/tiles';
 import { memorySource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
 
@@ -101,6 +101,26 @@ describe('readTile', () => {
     expect(await readTile('/_/lfs-pointer.glb', opener, texts)).toEqual({
       problem:
         "lfs-pointer.glb is a Git LFS pointer: the tile hasn't been downloaded. Run git lfs pull to get it.",
+    });
+  });
+});
+
+describe('tilesetPlace', () => {
+  it('reads tiles from the workspace folder, whatever case VS Code gives its drive', () => {
+    expect(tilesetPlace('/d:/Work/city/tileset.json', '/D:/Work')).toEqual({
+      root: '/D:/Work',
+      path: 'city/tileset.json',
+    });
+  });
+
+  it("reads tiles from the tileset's own folder outside a workspace", () => {
+    expect(tilesetPlace('/home/me/city/tileset.json', '/home/me/city')).toEqual({
+      root: '/home/me/city',
+      path: 'tileset.json',
+    });
+    expect(tilesetPlace('/elsewhere/tileset.json', '/home/me')).toEqual({
+      root: '/elsewhere',
+      path: 'tileset.json',
     });
   });
 });

@@ -19,7 +19,7 @@ import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
 import { resolveResourceUri } from './model/resources';
 import { fileSource, memorySource, type ByteSource } from './model/sources';
-import { readTile } from './model/tiles';
+import { readTile, tilesetPlace } from './model/tiles';
 import { validationMessage } from './model/validation';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
@@ -139,8 +139,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     const meshParser = workerMeshParser(join(this.extensionUri.fsPath, 'dist', 'mesh.js'));
     const gltf = isGltfFormat(format);
     // A tileset's tiles are asked for by their path in the folder the viewer may read.
-    const root = readableRoot(uri);
-    const tilesetPath = posix.relative(root, uri.path);
+    const { root, path: tilesetPath } = tilesetPlace(uri.path, readableRoot(uri));
     const tileOpener = resourceOpener(uri, root);
     const load = async (reload: boolean) => {
       const id = ++loadId;
