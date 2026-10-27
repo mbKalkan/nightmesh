@@ -290,5 +290,8 @@ test('asks the host for nothing but the model', async ({ page }) => {
   await viewer.open('textured.gltf');
 
   await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
-  expect(await viewer.sent()).toEqual([{ type: 'ready' }]);
+  // Besides, the view hands the host the lighting it made, to keep for the next viewers.
+  await expect
+    .poll(async () => (await viewer.sent()).map((message) => message.type))
+    .toEqual(['ready', 'environment']);
 });

@@ -746,36 +746,43 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   ) as Record<StandardView, string>;
   const gizmo = new Gizmo(titles, (name) => created.look(name));
   shell.viewport.append(gizmo.element);
-  const created = new scene.ModelView(shell.viewport, canvas, context, {
-    picked: (node, frame) => {
-      // The structure shows what was picked, and tells the view to highlight it.
-      const key = node === undefined ? 'model' : `node:${node}`;
-      structure?.select(key);
-      const said = structure?.describe(key);
-      if (said) shell.announce(said);
-      if (frame) created.frameSelection();
+  const created = new scene.ModelView(
+    shell.viewport,
+    canvas,
+    context,
+    {
+      picked: (node, frame) => {
+        // The structure shows what was picked, and tells the view to highlight it.
+        const key = node === undefined ? 'model' : `node:${node}`;
+        structure?.select(key);
+        const said = structure?.describe(key);
+        if (said) shell.announce(said);
+        if (frame) created.frameSelection();
+      },
+      animation: (state) =>
+        animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
+      measured: (size, selection) =>
+        shell.setSize(size && withoutNoise(size), selection, (value) => metres.metres(value)),
+      menu: (node, x, y) => {
+        menuKey = node === undefined ? 'model' : `node:${node}`;
+        markMenuTarget(undefined);
+        // VS Code opens its menu for a context menu event no one has handled.
+        viewContextMenu = new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+        });
+        shell.viewport.dispatchEvent(viewContextMenu);
+      },
+      turned: (rotation) => gizmo.update(rotation),
+      moved: (camera) => cameraMoved(camera),
+      ruled: (measurement) => showMeasurement(measurement),
+      lengthText: (value) => metres.metres(value),
+      environment: (environment) => vscode.postMessage({ type: 'environment', environment }),
     },
-    animation: (state) =>
-      animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
-    measured: (size, selection) =>
-      shell.setSize(size && withoutNoise(size), selection, (value) => metres.metres(value)),
-    menu: (node, x, y) => {
-      menuKey = node === undefined ? 'model' : `node:${node}`;
-      markMenuTarget(undefined);
-      // VS Code opens its menu for a context menu event no one has handled.
-      viewContextMenu = new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-      });
-      shell.viewport.dispatchEvent(viewContextMenu);
-    },
-    turned: (rotation) => gizmo.update(rotation),
-    moved: (camera) => cameraMoved(camera),
-    ruled: (measurement) => showMeasurement(measurement),
-    lengthText: (value) => metres.metres(value),
-  });
+    opened?.environment,
+  );
   shownView = created;
   shell.viewButton.hidden = false;
   shell.measureButton.hidden = false;

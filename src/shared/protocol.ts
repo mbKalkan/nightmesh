@@ -501,6 +501,20 @@ export interface OpenMessage {
   locale: string;
   strings: ViewerStrings;
   preferences: Preferences;
+  /** The lighting environment a viewer made before, kept by the host for the next ones. */
+  environment?: Environment;
+}
+
+/**
+ * The prefiltered environment the 3D view lights models with (three.js PMREM, CubeUV layout),
+ * as half floats, four to a texel. Making it takes most of a second of shader work on some
+ * GPUs; uploading it takes milliseconds. `key` says how it was made.
+ */
+export interface Environment {
+  key: string;
+  width: number;
+  height: number;
+  data: Uint8Array;
 }
 
 /**
@@ -760,6 +774,8 @@ export interface CopyReferenceMessage {
 
 export type WebviewToHostMessage =
   | { type: 'ready' }
+  /** The lighting environment the 3D view made, for the host to keep for the next viewers. */
+  | { type: 'environment'; environment: Environment }
   /** A tile of the tileset shown, by a path made from `TilesetMessage.url` and its references. */
   | { type: 'tile'; id: number; path: string }
   /** The GPU context came back; the model has to be sent again to be drawn. */

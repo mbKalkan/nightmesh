@@ -1,6 +1,12 @@
 import {
   Box3,
   Color,
+  CubeUVReflectionMapping,
+  DataTexture,
+  DataUtils,
+  HalfFloatType,
+  LinearFilter,
+  LinearSRGBColorSpace,
   Matrix4,
   Mesh,
   NeutralToneMapping,
@@ -8,6 +14,8 @@ import {
   PMREMGenerator,
   PerspectiveCamera,
   Quaternion,
+  REVISION,
+  RGBAFormat,
   SRGBColorSpace,
   Scene,
   SkinnedMesh,
@@ -22,6 +30,7 @@ import {
   type Material,
   type Object3D,
   type Texture,
+  type WebGLRenderTarget,
 } from 'three';
 import type { TilesRenderer } from '3d-tiles-renderer/three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -35,9 +44,19 @@ import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
 import { Highlight, SelectionIndex, boundsOf, framingBounds, localBox } from './selection';
 import { Shading } from './shading';
-import type { CameraState, Projection, ShadingMode, StandardView } from '../../shared/protocol';
+import type {
+  CameraState,
+  Environment,
+  Projection,
+  ShadingMode,
+  StandardView,
+} from '../../shared/protocol';
 import { OPPOSITE, Viewpoint } from './viewpoint';
 import { sameCamera } from '../cameraState';
+
+/** How the lighting environment is blurred; with three.js's version, what makes it the same. */
+const ENVIRONMENT_SIGMA = 0.04;
+const ENVIRONMENT_KEY = `room-${ENVIRONMENT_SIGMA}-three-${REVISION}`;
 
 /** Decoders a model needs, made the first time any model needs them. */
 export interface Decoders {
@@ -71,6 +90,8 @@ export interface ViewEvents {
   ruled(measurement: Measurement | undefined): void;
   /** A length given in metres, as the view writes it over a measurement: in the unit set. */
   lengthText(metres: number): string;
+  /** The view made its lighting environment, which the next views can start with. */
+  environment(environment: Environment): void;
 }
 
 /** What a comparison found about a structure entry, to box it in the view. */
@@ -174,14 +195,14 @@ export class ModelView {
     private readonly canvas: HTMLCanvasElement,
     context: WebGL2RenderingContext,
     private readonly events: ViewEvents,
+    /** The lighting environment a view made before, if the host kept one. */
+    environment?: Environment,
   ) {
     this.renderer = new WebGLRenderer({ canvas, context });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     // Khronos PBR Neutral keeps base colors close to what the file says.
     this.renderer.toneMapping = NeutralToneMapping;
-    const pmrem = new PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    this.scene.environment = this.environmentTexture(environment);
     this.ruler = new Ruler(container);
     this.scene.add(
       this.highlight.group,
@@ -206,6 +227,62 @@ export class ModelView {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
+  }
+
+  /**
+   * The room the view lights models with (D-047): the one given, if it was made the same way;
+   * otherwise made here, and told to the host once the first frame is drawn.
+   */
+  private environmentTexture(given: Environment | undefined): Texture {
+    if (
+      given?.key === ENVIRONMENT_KEY &&
+      given.data.byteLength === given.width * given.height * 8
+    ) {
+      const data = given.data.byteOffset % 2 === 0 ? given.data : given.data.slice();
+      const texture = new DataTexture(
+        new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2),
+        given.width,
+        given.height,
+        RGBAFormat,
+        HalfFloatType,
+      );
+      texture.mapping = CubeUVReflectionMapping;
+      texture.colorSpace = LinearSRGBColorSpace;
+      texture.magFilter = LinearFilter;
+      texture.minFilter = LinearFilter;
+      texture.generateMipmaps = false;
+      texture.needsUpdate = true;
+      return texture;
+    }
+    const pmrem = new PMREMGenerator(this.renderer);
+    const target = pmrem.fromScene(new RoomEnvironment(), ENVIRONMENT_SIGMA);
+    pmrem.dispose();
+    setTimeout(() => {
+      const made = this.readEnvironment(target);
+      if (made) this.events.environment(made);
+    });
+    return target.texture;
+  }
+
+  /**
+   * The environment's texels as half floats. They are read as floats, which every WebGL 2 GPU
+   * that renders to half floats can give, and are halves already.
+   */
+  private readEnvironment(target: WebGLRenderTarget): Environment | undefined {
+    const { width, height } = target;
+    const floats = new Float32Array(width * height * 4);
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    const previous = this.renderer.getRenderTarget();
+    try {
+      this.renderer.setRenderTarget(target);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.FLOAT, floats);
+      if (gl.getError() !== gl.NO_ERROR) return undefined;
+    } finally {
+      this.renderer.setRenderTarget(previous);
+    }
+    const halves = new Uint16Array(floats.length);
+    for (let i = 0; i < floats.length; i++) halves[i] = DataUtils.toHalfFloat(floats[i]);
+    return { key: ENVIRONMENT_KEY, width, height, data: new Uint8Array(halves.buffer) };
   }
 
   /** Clears to this color, given as sRGB channels from 0 to 1. */
