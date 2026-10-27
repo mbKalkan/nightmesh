@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   origin with up as +Y, seen from the south. Tiles are read from disk by the extension, only
   inside the tileset's workspace folder, and the notice above the view says which ones couldn't
   be had.
+- **Tile tree and inspector for tilesets**: the panels list a tileset's tiles as soon as it opens,
+  by their content, with the path from the root. Selecting one shows its geometric error,
+  refinement, content type, bounding volume (box, region or sphere) and implicit tiling, and
+  whether the view has it loaded and drawn, with its screen-space error. The tile's bounding
+  volume is boxed in the view and measured in its corner; Enter or a double-click frames it, and
+  a click on the model selects the tile drawn there. The tileset itself shows how many tiles the
+  file has and how many are loaded, drawn and on their way, and the memory they take.
 
 ### Changed
 

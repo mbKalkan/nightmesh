@@ -99,6 +99,72 @@ test('puts east to the right seen from the front, and north to the right seen fr
   expect(await yellowAcross(page), 'right').toBeGreaterThan(0.55);
 });
 
+const selectedRow = (page: Page) => page.locator('.nm-tree-row[aria-selected="true"]');
+
+test('lists the tiles at once, and says what each is and how the view has it', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/tileset.json');
+  await expect(page.locator('.nm-tree-row .nm-tree-label')).toHaveText([
+    'tiles/tileset.json',
+    'district.b3dm',
+    'south-west.b3dm',
+    'north-west.b3dm',
+    'south-east.b3dm',
+    'east/tileset.json',
+  ]);
+  await settle(page, viewer, 6);
+  const inspector = page.locator('.nm-inspector-content');
+  await expect(inspector).toContainText('Tiles in the file5');
+  // The renderer's counts fill in as tiles load: the quarters are drawn, the coarse root not.
+  await expect(inspector).toContainText('Tiles drawn4');
+
+  await page.locator('.nm-tree-row', { hasText: 'north-west.b3dm' }).click();
+  await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/1');
+  await expect(inspector).toContainText('Batched 3D Model (b3dm)');
+  await expect(inspector).toContainText('StateLoaded');
+  // The tile's bounding volume is what the corner of the view measures.
+  await expect(page.locator('.nm-measure')).toHaveAttribute(
+    'aria-label',
+    'Size of the selection: width (X), height (Y) and depth (Z): 50 m × 50 m × 30 m',
+  );
+  await page.screenshot({ path: `${SCREENS}/tiles-selected-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
+test('selects the tile clicked in the view, the tileset that holds it for an external one', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/tileset.json');
+  await settle(page, viewer, 6);
+  await page.locator('.nm-viewport').focus();
+  await page.keyboard.press('1');
+  await settle(page, viewer, 6);
+  // The yellow tower is in the external tileset, which the file lists as one tile.
+  const pixels = await pixelsOf(page, '.nm-canvas');
+  const box = (await page.locator('.nm-canvas').boundingBox())!;
+  let [sumX, sumY, count] = [0, 0, 0];
+  for (let y = 0; y < pixels.height; y += 2) {
+    for (let x = 0; x < pixels.width; x += 2) {
+      const [r, g, b] = pixels.at(x, y);
+      if (r > b * 1.6 && g > b * 1.6 && g > r * 0.75 && r > 80) {
+        sumX += x;
+        sumY += y;
+        count++;
+      }
+    }
+  }
+  expect(count).toBeGreaterThan(50);
+  await page.mouse.click(
+    box.x + (sumX / count) * (box.width / pixels.width),
+    box.y + (sumY / count) * (box.height / pixels.height),
+  );
+  await expect(selectedRow(page)).toContainText('east/tileset.json');
+  // Empty space selects the tileset.
+  await page.mouse.click(box.x + 8, box.y + 8);
+  await expect(selectedRow(page)).toContainText('tiles/tileset.json');
+});
+
 test('says which tiles could not be had, and draws the rest', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('tiles/problems.json');
