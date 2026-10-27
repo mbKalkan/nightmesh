@@ -6,7 +6,7 @@ import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
 import { formatForPath } from '../../src/shared/formats';
-import type { ImageInfo, TileFacts } from '../../src/shared/protocol';
+import type { ImageInfo, StructureMessage } from '../../src/shared/protocol';
 import { GltfModel } from '../../src/webview/structure/gltf';
 import { sizeAnalysis, type SizeAnalysis } from '../../src/webview/structure/sizes';
 import { ModelUsage } from '../../src/webview/structure/usage';
@@ -23,7 +23,7 @@ async function analyse(name: string): Promise<SizeAnalysis> {
   );
   let json = '{}';
   let chunks;
-  let tile: TileFacts | undefined;
+  let tile: StructureMessage['tile'];
   let images;
   let bytes;
   try {
@@ -45,7 +45,7 @@ async function analyse(name: string): Promise<SizeAnalysis> {
     fileName: name,
     fileSize: statSync(join(FIXTURES, name)).size,
     chunks,
-    tile,
+    tile: tile?.format === 'cmpt' ? undefined : tile,
     images,
     imageBytes: bytes,
   });

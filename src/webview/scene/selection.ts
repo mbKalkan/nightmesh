@@ -7,6 +7,7 @@ import {
   Vector3,
   Matrix4,
   type BufferGeometry,
+  type InstancedMesh,
   type Material,
   type Mesh,
   type Object3D,
@@ -81,8 +82,47 @@ export class SelectionIndex {
 /** World-space bounds of `objects`, as their geometry's precomputed boxes give them. */
 export function boundsOf(objects: readonly Object3D[]): Box3 {
   const box = new Box3();
-  for (const object of objects) box.expandByObject(object);
+  for (const object of objects) {
+    object.updateWorldMatrix(true, true);
+    object.traverse((child) => addDrawn(box, child));
+  }
   return box;
+}
+
+const instanceMatrix = new Matrix4();
+const drawnPart = new Box3();
+
+/**
+ * Grows `box` by what `object` itself draws, in world space. An instanced mesh is boxed instance
+ * by instance: three.js boxes its instances along the mesh's axes, then that box along the
+ * world's, so turned instances under a turned node come out much larger than they are.
+ */
+export function addDrawn(box: Box3, object: Object3D): void {
+  const drawn = object as Object3D & {
+    geometry?: BufferGeometry;
+    boundingBox?: Box3 | null;
+    computeBoundingBox?: () => void;
+  };
+  if (!drawn.geometry) return;
+  const instanced = object as Partial<InstancedMesh>;
+  if (instanced.isInstancedMesh) {
+    if (!drawn.geometry.boundingBox) drawn.geometry.computeBoundingBox();
+    for (let i = 0; i < instanced.count!; i++) {
+      instanced.getMatrixAt!(i, instanceMatrix);
+      instanceMatrix.premultiply(object.matrixWorld);
+      box.union(drawnPart.copy(drawn.geometry.boundingBox!).applyMatrix4(instanceMatrix));
+    }
+    return;
+  }
+  // Skinned meshes measure themselves, in their pose.
+  if (drawn.boundingBox !== undefined) {
+    if (drawn.boundingBox === null) drawn.computeBoundingBox!();
+    drawnPart.copy(drawn.boundingBox!);
+  } else {
+    if (!drawn.geometry.boundingBox) drawn.geometry.computeBoundingBox();
+    drawnPart.copy(drawn.geometry.boundingBox!);
+  }
+  box.union(drawnPart.applyMatrix4(object.matrixWorld));
 }
 
 /**

@@ -75,8 +75,11 @@ describe('loadMessages', () => {
       chunks: { json: bytes.readUInt32LE(glb + 12) },
       tile: { format: 'b3dm', batchLength: 3 },
     });
-    expect(structure.type === 'structure' && JSON.parse(structure.json).nodes).toHaveLength(3);
-    expect(messages.map((message) => message.type)).toContain('model');
+    // Three buildings under a node that turns them to the Earth's axes, as such tiles have them.
+    expect(structure.type === 'structure' && JSON.parse(structure.json).nodes).toHaveLength(4);
+    // On the globe, the model is placed where it is, to stand upright in the view.
+    const model = messages.find((message) => message.type === 'model');
+    expect(model).toMatchObject({ extensions: ['EXT_mesh_gpu_instancing'] });
 
     const failed = async (name: string) => {
       const [message] = await loadAll(name, 'b3dm');
@@ -112,6 +115,33 @@ describe('loadMessages', () => {
       type: 'failed',
       message: expect.stringContaining('../scene.glb'),
     });
+  });
+
+  it('draws the b3dm and i3dm tiles of a composite as one model, and says what it leaves out', async () => {
+    const messages = await loadAll('tiles/composite.cmpt', 'cmpt');
+    const structure = messages.find((message) => message.type === 'structure');
+    const model = messages.find((message) => message.type === 'model');
+    if (structure?.type !== 'structure' || model?.type !== 'model') throw new Error('not drawn');
+    expect(structure).toMatchObject({
+      fileSize: statSync(join(FIXTURES, 'tiles/composite.cmpt')).size,
+      tile: {
+        format: 'cmpt',
+        tiles: [
+          { path: '1', format: 'b3dm' },
+          { path: '2', format: 'i3dm' },
+          { path: '3', format: 'cmpt' },
+          { path: '3/1', format: 'pnts' },
+        ],
+      },
+    });
+    const json = JSON.parse(structure.json);
+    const holders = json.scenes[0].nodes.map((index: number) => json.nodes[index].name);
+    expect(holders).toEqual(['b3dm 1', 'i3dm 2']);
+    expect(model.notices).toEqual([expect.stringContaining('pnts 3/1')]);
+    // The buildings and the posts 40 m east of them, together.
+    const instances = messages.find((message) => message.type === 'instances');
+    if (instances?.type !== 'instances') throw new Error('no instances');
+    expect(instances.nodes).toHaveLength(4);
   });
 
   it('sends the structure of models it cannot draw', async () => {

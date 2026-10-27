@@ -350,7 +350,7 @@
   "{0} JSON, {1} binary": "{0} JSON, {1} ikili",
   "Features": "Feature sayısı",
   "Center (RTC_CENTER)": "Merkez (RTC_CENTER)",
-  "positions are relative to it; the view leaves it out": "konumlar buna göre; görünüm onu uygulamaz",
+  "the point positions are given from": "konumların verildiği nokta",
   "Feature properties": "Feature özellikleri",
   "The file isn't a pnts tile, or it is damaged.": "Dosya bir pnts karosu değil ya da bozuk.",
   "This tile's points are compressed with Draco, which Nightmesh doesn't read in pnts tiles yet.": "Bu karonun noktaları Draco ile sıkıştırılmış; Nightmesh pnts karolarında bunu henüz okumuyor.",
@@ -358,5 +358,8 @@
   "Feature table data": "Feature tablosu verisi",
   "The file isn't an i3dm tile, or it is damaged.": "Dosya bir i3dm karosu değil ya da bozuk.",
   "This tile is i3dm version {0}. Nightmesh opens version 1 tiles.": "Bu karo i3dm sürüm {0}. Nightmesh sürüm 1 karoları açar.",
-  "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.": "Bu karonun modeli başka bir dosyada ({0}); Nightmesh bunu henüz izlemiyor. Modeli görmek için o dosyayı açın."
+  "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.": "Bu karonun modeli başka bir dosyada ({0}); Nightmesh bunu henüz izlemiyor. Modeli görmek için o dosyayı açın.",
+  "The file isn't a cmpt tile, or it is damaged.": "Dosya bir cmpt karosu değil ya da bozuk.",
+  "This tile is cmpt version {0}. Nightmesh opens version 1 tiles.": "Bu karo cmpt sürüm {0}. Nightmesh sürüm 1 karoları açar.",
+  "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles that hold their model.": "Bu bileşik karoda çizilmeyen karolar: {0}. Nightmesh modelini kendi içinde taşıyan b3dm ve i3dm karolarını çizer."
 }

@@ -230,6 +230,19 @@ function octDecode(u: number, v: number): Vec3 {
 /** Below this far from the Earth's center, a place isn't on the globe: its frame is the tile's. */
 const GLOBE = 1e6;
 
+/**
+ * Where a b3dm tile's model is, as an instance: at its RTC_CENTER. Undefined when that isn't on
+ * the globe, where the model is in a frame of its own and is shown as it is.
+ */
+export function rtcPlacement(center: readonly number[] | undefined): Float64Array | undefined {
+  return center && Math.hypot(...center) >= GLOBE ? translation(center) : undefined;
+}
+
+/** A matrix that moves by `[x, y, z]`, by columns. */
+export function translation([x, y, z]: readonly number[]): Float64Array {
+  return Float64Array.from([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
+}
+
 /** East, north and up where `place` is on the WGS84 ellipsoid, in Earth-centered coordinates. */
 function eastNorthUp(place: Vec3): [Vec3, Vec3, Vec3] {
   if (Math.hypot(...place) < GLOBE) {
@@ -374,6 +387,8 @@ function decompose(m: Mat4): { t: Vec3; r: [number, number, number, number]; s: 
 export function instancedGltf(
   json: Gltf,
   instances: Float64Array,
+  /** The frame to show them in; by default their own (`viewFrame`). */
+  frame: Float64Array = viewFrame(instances),
 ): { json: Gltf; buffer: Uint8Array } | undefined {
   const length = instances.length / 16;
   const nodes = (json.nodes ?? []) as Record<string, unknown>[];
@@ -396,7 +411,7 @@ export function instancedGltf(
   }
   if (placed.length === 0) return undefined;
 
-  const view = multiply(Z_UP_TO_Y_UP, viewFrame(instances));
+  const view = multiply(Z_UP_TO_Y_UP, frame);
   const floats = new Float32Array(placed.length * length * 10);
   const out = structuredClone(json) as Gltf & Record<string, unknown>;
   const outNodes = out.nodes as Record<string, unknown>[];

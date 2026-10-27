@@ -1457,6 +1457,47 @@ async function instancedTiles() {
       { embedded: false },
     ),
   );
+
+  // A composite of the buildings, posts 40 m east of them, and a composite holding a point
+  // cloud, which isn't drawn inside one.
+  const east = grid.map(([e, n, u]) => [e + 40, n, u]);
+  const eastBody = packed(new Float32Array(east.flatMap(toEarth)));
+  const posts = i3dm(
+    {
+      featureTable: {
+        INSTANCES_LENGTH: east.length,
+        RTC_CENTER: place,
+        EAST_NORTH_UP: true,
+        POSITION: { byteOffset: eastBody.offsets[0] },
+      },
+      featureBinary: eastBody.bytes,
+    },
+    glb,
+  );
+  const point = tileFile('pnts', {
+    featureTable: { POINTS_LENGTH: 1, POSITION: { byteOffset: 0 } },
+    featureBinary: new Float32Array(3),
+  });
+  write('tiles/composite.cmpt', cmpt(await batchedTile(), posts, cmpt(point)));
+}
+
+/**
+ * A Composite tile: a 16-byte header and the tiles, each padded to a multiple of 8 bytes, with
+ * its length saying so.
+ */
+function cmpt(...tiles) {
+  const padded = tiles.map((tile) => {
+    const bytes = Buffer.alloc((tile.length + 7) & ~7);
+    Buffer.from(tile).copy(bytes);
+    bytes.writeUInt32LE(bytes.length, 8);
+    return bytes;
+  });
+  const header = Buffer.alloc(16);
+  header.write('cmpt', 0, 'ascii');
+  header.writeUInt32LE(1, 4);
+  header.writeUInt32LE(16 + padded.reduce((sum, tile) => sum + tile.length, 0), 8);
+  header.writeUInt32LE(tiles.length, 12);
+  return Buffer.concat([header, ...padded]);
 }
 
 /**
@@ -1532,10 +1573,18 @@ function pointClouds() {
   );
 }
 
+/** Column-major 4×4 product. */
+const multiply4 = (a, b) =>
+  Array.from({ length: 16 }, (_, i) => {
+    const [column, row] = [Math.floor(i / 4), i % 4];
+    return [0, 1, 2, 3].reduce((sum, k) => sum + a[k * 4 + row] * b[column * 4 + k], 0);
+  });
+
 /**
  * A b3dm tile as 3D Tiles 1.0 writers make them: buildings told apart by `_BATCHID`, a batch
  * table with their properties in JSON and in its binary body, and positions relative to
- * `RTC_CENTER`, a place on the globe.
+ * `RTC_CENTER`, a place on the globe, along the Earth's axes: a node turns the buildings from
+ * east, north and up where they stand, as glTF's Y up, to them.
  */
 async function batchedTile() {
   const doc = newDocument();
@@ -1556,7 +1605,15 @@ async function batchedTile() {
     );
     return doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(primitive));
   });
-  scene(doc, 'Batched', ...nodes);
+  const frame = eastNorthUp(41.0082, 28.9784);
+  const turn = [...frame.slice(0, 12), 0, 0, 0, 1];
+  const yUpToZUp = [1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1];
+  const zUpToYUp = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
+  const earth = doc
+    .createNode('Earth axes')
+    .setMatrix(multiply4(zUpToYUp, multiply4(turn, yUpToZUp)).map((v) => Number(v.toFixed(9)) + 0));
+  nodes.forEach((node) => earth.addChild(node));
+  scene(doc, 'Batched', earth);
   const heights = new Float32Array(buildings.map(([, , [, height]]) => height));
   return b3dm(await io.writeBinary(doc), {
     featureTable: {

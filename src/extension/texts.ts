@@ -380,13 +380,15 @@ function structureStrings(t: Translate): StructureStrings {
       table: t('{0} JSON, {1} binary', '{0}', '{1}'),
       features: t('Features'),
       center: t('Center (RTC_CENTER)'),
-      centerNote: t('positions are relative to it; the view leaves it out'),
+      centerNote: t('the point positions are given from'),
       properties: t('Feature properties'),
       extensions: t('Table extensions'),
       pointCloud: t('Point Cloud (pnts)'),
       semantics: t('Feature table data'),
       instanced: t('Instanced 3D Model (i3dm)'),
       instances: t('Instances'),
+      composite: t('Composite (cmpt)'),
+      tiles: t('Tiles'),
     },
     source: {
       format: t('Format'),
@@ -495,11 +497,20 @@ export function loadTexts(t: Translate): LoadTexts {
     notTile: (format) =>
       format === 'b3dm'
         ? t("The file isn't a b3dm tile, or it is damaged.")
-        : t("The file isn't an i3dm tile, or it is damaged."),
+        : format === 'i3dm'
+          ? t("The file isn't an i3dm tile, or it is damaged.")
+          : t("The file isn't a cmpt tile, or it is damaged."),
     tileVersion: (format, version) =>
       format === 'b3dm'
         ? t('This tile is b3dm version {0}. Nightmesh opens version 1 tiles.', version)
-        : t('This tile is i3dm version {0}. Nightmesh opens version 1 tiles.', version),
+        : format === 'i3dm'
+          ? t('This tile is i3dm version {0}. Nightmesh opens version 1 tiles.', version)
+          : t('This tile is cmpt version {0}. Nightmesh opens version 1 tiles.', version),
+    composite: (tiles) =>
+      t(
+        "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles that hold their model.",
+        tiles,
+      ),
     externalGltf: (uri) =>
       t(
         "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.",

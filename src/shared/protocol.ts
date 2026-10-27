@@ -3,7 +3,7 @@
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
 export type MeshFormat = 'obj' | 'stl' | 'ply' | 'pnts';
 
-export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'i3dm' | 'tileset';
+export type ModelFormat = 'glb' | 'gltf' | MeshFormat | 'b3dm' | 'i3dm' | 'cmpt' | 'tileset';
 
 /** What a 3D Tiles tile file says in its header and its feature and batch tables. */
 export interface TileTables {
@@ -34,6 +34,15 @@ export interface TileFacts extends TileTables {
   semantics?: string[];
   /** The glTF file an i3dm tile names, when it doesn't hold its glTF itself. */
   gltfUri?: string;
+}
+
+/** What a Composite (cmpt) tile holds: its tiles, those in inner composites too. */
+export interface CmptFacts {
+  format: 'cmpt';
+  version: number;
+  header: number;
+  /** Each tile by where it is among the others (`2/1`: the first in the second), and its kind. */
+  tiles: { path: string; format: string; bytes: number }[];
 }
 
 /** What a Point Cloud (pnts) tile says about itself; its glTF was made from its points. */
@@ -231,6 +240,9 @@ export interface TileFileStrings {
   /** The i3dm format's name. */
   instanced: string;
   instances: string;
+  /** The cmpt format's name. */
+  composite: string;
+  tiles: string;
 }
 
 /** Words for the Changes tab and the tree's marks, while two versions of a model are compared. */
@@ -677,8 +689,11 @@ export interface StructureMessage {
   chunks?: { json: number; bin?: number };
   /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
   source?: SourceFacts;
-  /** What a b3dm or i3dm tile says around the GLB it holds; `fileSize` is the tile's. */
-  tile?: TileFacts;
+  /**
+   * What a b3dm or i3dm tile says around the GLB it holds, or what a cmpt tile holds;
+   * `fileSize` is the tile's.
+   */
+  tile?: TileFacts | CmptFacts;
 }
 
 /** How much of an OBJ, STL or PLY file has been read, before there is a model to send. */
