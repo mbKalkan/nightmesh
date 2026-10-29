@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   imageMimeType,
+  linkedOpener,
+  rebaseUri,
   relativeInside,
   resolveResourceUri,
   resourceName,
@@ -109,5 +111,25 @@ describe('relativeInside', () => {
     expect(relativeInside('/home/Me/a.json', '/home/me')).toBeUndefined();
     expect(relativeInside('/home/me2/a.json', '/home/me')).toBeUndefined();
     expect(relativeInside('/home/me', '/home/me')).toBeUndefined();
+  });
+});
+
+describe('rebaseUri', () => {
+  it("makes a linked file's paths relative to the file that links to it", () => {
+    expect(rebaseUri('box.bin', 'models/box.gltf')).toBe('models/box.bin');
+    expect(rebaseUri('tex/a%20b.png', '../shared/box.glb')).toBe('../shared/tex/a%20b.png');
+    expect(rebaseUri('../up.bin', 'a\\b\\box.gltf?v=2#x')).toBe('a/b/../up.bin');
+    expect(rebaseUri('box.bin', 'box.gltf')).toBe('box.bin');
+  });
+
+  it('leaves what is not a relative path as it is, to be refused or decoded the same', () => {
+    const uris = ['data:,abc', 'https://a.b/c.bin', 'file:///c.bin', '/c.bin', '\\c.bin', ''];
+    for (const uri of uris) expect(rebaseUri(uri, 'models/box.gltf')).toBe(uri);
+  });
+
+  it('keeps a linked file inside the folder the viewer may read', () => {
+    const open = linkedOpener((uri) => resolve(uri), '../shared/box.gltf');
+    expect(open('box.bin')).toEqual({ kind: 'path', path: '/work/models/shared/box.bin' });
+    expect(open('../../../../etc/x.bin')).toEqual({ kind: 'refused', reason: 'outside' });
   });
 });

@@ -58,7 +58,10 @@ export interface SizeInputs {
   fileSize: number;
   /** A GLB's chunk sizes; undefined for a .gltf. */
   chunks?: { json: number; bin?: number };
-  /** A b3dm tile's header and tables, before the GLB; `fileSize` is the tile's. */
+  /**
+   * A tile's header and tables, before the GLB; `fileSize` is the tile's. An i3dm tile can name
+   * its glTF instead, whose size it then gives.
+   */
   tile?: TileFacts;
   images?: readonly (ImageInfo | null)[];
   /** Each image's own bytes, from the host. */
@@ -134,10 +137,14 @@ export function sizeAnalysis(
   const buffers = model.items('buffers');
   const hasData = (buffer: number | undefined) =>
     buffer !== undefined && (text(buffers[buffer].uri) !== undefined || (glb && buffer === 0));
-  const tile = inputs.tile ? tileBytes(inputs.tile) : 0;
+  // The glTF's own bytes: the tile's after its tables, or a file of their own the tile names,
+  // which leaves all of the tile to its header and tables.
+  const linked = inputs.tile?.gltfBytes;
+  const tile = linked !== undefined ? inputs.fileSize : inputs.tile ? tileBytes(inputs.tile) : 0;
+  const gltfSize = linked ?? inputs.fileSize - tile;
   // A GLB cut short holds less of its binary chunk than its JSON says: count what is there.
   const binary = inputs.chunks
-    ? Math.max(0, inputs.fileSize - tile - (GLB_HEADER + 2 * CHUNK_HEADER + inputs.chunks.json))
+    ? Math.max(0, gltfSize - (GLB_HEADER + 2 * CHUNK_HEADER + inputs.chunks.json))
     : Infinity;
   const storedIn = (buffer: number | undefined, offset: unknown, length: unknown) => {
     if (!hasData(buffer)) return 0;
@@ -220,8 +227,8 @@ export function sizeAnalysis(
     }
   });
 
-  const total = inputs.fileSize + external;
-  add('json', inputs.chunks ? inputs.chunks.json : Math.max(0, inputs.fileSize - embedded));
+  const total = inputs.fileSize + (linked ?? 0) + external;
+  add('json', inputs.chunks ? inputs.chunks.json : Math.max(0, gltfSize - embedded));
   add('tile', tile);
   const counted = [...categories.values()].reduce((a, b) => a + b, 0);
   add('other', total - counted);
@@ -238,7 +245,7 @@ export function sizeAnalysis(
     .sort((a, b) => b.bytes - a.bytes);
   const result: SizeAnalysis = {
     total,
-    files: 1 + files.size,
+    files: 1 + (linked !== undefined ? 1 : 0) + files.size,
     categories: sorted,
     largest: [...entries]
       .map(([key, bytes]) => ({ key, bytes: Math.round(bytes) }))

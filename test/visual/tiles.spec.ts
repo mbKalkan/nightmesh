@@ -301,6 +301,34 @@ for (const [fixture, theme] of [
 }
 
 for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`draws the glTF an i3dm tile names, with its own files, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open('tiles/external.i3dm');
+    await viewer.post(await viewer.validation('tiles/external.i3dm'));
+
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    await expect(page.locator('.nm-error')).toBeHidden();
+    await expect(page.locator('.nm-notice')).toBeHidden();
+    const tile = page
+      .locator('.nm-section', {
+        has: page.locator('.nm-section-title', { hasText: 'Instanced 3D Model (i3dm)' }),
+      })
+      .locator('dt, dd');
+    await expect(tile).toContainText(['Instances', '3', 'glTF file', '../textured.gltf']);
+    // Three 1 m boxes, 2 m apart.
+    await expect(page.locator('.nm-measure')).toHaveAttribute(
+      'aria-label',
+      'Size of the model: width (X), height (Y) and depth (Z): 5 m × 1 m × 1 m',
+    );
+    await page.screenshot({ path: `${SCREENS}/i3dm-linked-${theme}.png` });
+    // The validator reads the named glTF and the files next to it.
+    await page.locator('.nm-panel-tab', { hasText: 'Validation' }).click();
+    await expect(page.locator('.nm-validation-clean')).toHaveText('No issues found.');
+    expect(viewer.problems).toEqual([]);
+  });
+
   test(`draws the b3dm and i3dm tiles of a composite together, ${theme} theme`, async ({
     page,
   }) => {

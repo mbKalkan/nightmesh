@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { extname, join, posix, resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
-import { gltfSource } from '../../src/extension/model/tileGltf';
+import { gltfFile } from '../../src/extension/model/tileGltf';
 import { readTile } from '../../src/extension/model/tiles';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';
@@ -200,7 +200,11 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
           largeBytes,
           tilesetPath: fixture,
         };
-        for await (const message of loadMessages(source, fixtureOpener(), options)) {
+        for await (const message of loadMessages(
+          source,
+          fixtureOpener(fixtureFolder(fixture)),
+          options,
+        )) {
           messages.push(message);
         }
       } finally {
@@ -211,15 +215,21 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
     /** What the host sends once it has validated a fixture, for the last load. */
     async validation(fixture: string) {
       const source = await fileSource(join(FIXTURES, fixture));
+      const gltf = await gltfFile(
+        source,
+        formatForPath(fixture) ?? 'glb',
+        fixtureOpener(fixtureFolder(fixture)),
+      );
       try {
         return await validationMessage(
-          await gltfSource(source, formatForPath(fixture) ?? 'glb'),
-          fixtureOpener(),
+          gltf.source,
+          gltf.open,
           runValidator,
           loadId,
           loadTexts(english),
         );
       } finally {
+        await gltf.close();
         await source.close();
       }
     },
@@ -235,8 +245,12 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
 }
 
 /** Resources of a fixture: the fixtures folder stands in for the workspace. */
-function fixtureOpener() {
-  return fileResourceOpener('/fixtures', '/fixtures', (path) =>
+/** A fixture's folder, as a model's is in a VS Code URI. */
+const fixtureFolder = (fixture: string) => posix.dirname(`/fixtures/${fixture}`);
+
+/** Opens what a fixture refers to, relative to `folder`: the fixture's own, or the root. */
+function fixtureOpener(folder = '/fixtures') {
+  return fileResourceOpener(folder, '/fixtures', (path) =>
     join(FIXTURES, path.slice('/fixtures'.length)),
   );
 }

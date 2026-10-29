@@ -55,10 +55,13 @@ describe('readI3dm', () => {
   });
 
   it('names a glTF it does not hold, and tells what it cannot read', async () => {
-    expect(await readI3dm(memorySource(fixture('tiles/external.i3dm')))).toMatchObject({
-      uri: '../scene.glb',
-      facts: { gltfUri: '../scene.glb', instances: 1 },
+    const external = await readI3dm(memorySource(fixture('tiles/external.i3dm')));
+    expect(external).toMatchObject({
+      uri: '../textured.gltf',
+      facts: { gltfUri: '../textured.gltf', instances: 3 },
     });
+    // Its instances are placed as an embedded glTF's are.
+    expect('instances' in external && external.instances).toHaveLength(3 * 16);
     expect(await readI3dm(memorySource(fixture('tiles/batched.b3dm')))).toEqual({
       failure: 'notTile',
     });

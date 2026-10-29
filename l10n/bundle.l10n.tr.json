@@ -76,6 +76,7 @@
   "Statistics": "İstatistik",
   "For the scene shown, with each mesh counted every time it is drawn.": "Gösterilen sahne için; her mesh çizildiği her yerde sayılır.",
   "Instances": "Örnekler",
+  "glTF file": "glTF dosyası",
   "Draw calls": "Çizim çağrıları",
   "Dimensions": "Boyutlar",
   "Total": "Toplam",
@@ -358,8 +359,8 @@
   "Feature table data": "Feature tablosu verisi",
   "The file isn't an i3dm tile, or it is damaged.": "Dosya bir i3dm karosu değil ya da bozuk.",
   "This tile is i3dm version {0}. Nightmesh opens version 1 tiles.": "Bu karo i3dm sürüm {0}. Nightmesh sürüm 1 karoları açar.",
-  "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.": "Bu karonun modeli başka bir dosyada ({0}); Nightmesh bunu henüz izlemiyor. Modeli görmek için o dosyayı açın.",
+  "This tile's model is in a file of its own. {0}": "Bu karonun modeli ayrı bir dosyada. {0}",
   "The file isn't a cmpt tile, or it is damaged.": "Dosya bir cmpt karosu değil ya da bozuk.",
   "This tile is cmpt version {0}. Nightmesh opens version 1 tiles.": "Bu karo cmpt sürüm {0}. Nightmesh sürüm 1 karoları açar.",
-  "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles that hold their model.": "Bu bileşik karoda çizilmeyen karolar: {0}. Nightmesh modelini kendi içinde taşıyan b3dm ve i3dm karolarını çizer."
+  "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles whose model it can read.": "Bu bileşik karoda çizilmeyen karolar: {0}. Nightmesh modelini okuyabildiği b3dm ve i3dm karolarını çizer."
 }

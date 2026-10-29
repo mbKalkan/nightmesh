@@ -41,6 +41,27 @@ export function resolveResourceUri(uri: string, modelFolder: string, root: strin
   return isInside(path, root) ? { kind: 'path', path } : { kind: 'refused', reason: 'outside' };
 }
 
+/**
+ * A URI in a file that another one links to by `link`, made relative to the linking file's
+ * folder, as its own paths are: paths in the linked file are relative to its folder. Anything
+ * else (`data:`, a scheme, an absolute path) stays as it is, to be decoded or refused the same.
+ */
+export function rebaseUri(uri: string, link: string): string {
+  const trimmed = uri.trim();
+  const relative = !/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^[/\\]/.test(trimmed);
+  if (!relative || trimmed === '') return uri;
+  const clean = link
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/[?#].*$/, '');
+  return clean.slice(0, clean.lastIndexOf('/') + 1) + trimmed;
+}
+
+/** Opens the URIs in the file `link` names, by the linking file's opener. */
+export function linkedOpener<T>(open: (uri: string) => T, link: string): (uri: string) => T {
+  return (uri) => open(rebaseUri(uri, link));
+}
+
 function isInside(path: string, root: string): boolean {
   return relativeInside(path, root) !== undefined;
 }

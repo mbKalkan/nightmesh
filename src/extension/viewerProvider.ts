@@ -17,7 +17,7 @@ import { lfsObjectId } from './gitObject';
 import { sniff } from './model/container';
 import { isI3dm } from './model/i3dm';
 import { isB3dm } from './model/tileFile';
-import { gltfSource } from './model/tileGltf';
+import { gltfFile, type GltfFile } from './model/tileGltf';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
@@ -206,11 +206,13 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       const current = () => id === loadId && !disposed;
       await post({ type: 'validation', loadId: id, state: 'running' });
       let source: ByteSource | undefined;
+      let gltf: GltfFile | undefined;
       try {
         source = await openSource(uri, format);
+        gltf = await gltfFile(source, format, resourceOpener(uri));
         const message = await validationMessage(
-          await gltfSource(source, format),
-          resourceOpener(uri),
+          gltf.source,
+          gltf.open,
           validator.validate,
           id,
           loadTexts(vscode.l10n.t),
@@ -219,6 +221,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
       } catch {
         if (current()) await post({ type: 'validation', loadId: id, state: 'failed' });
       } finally {
+        await gltf?.close();
         await source?.close();
       }
     };

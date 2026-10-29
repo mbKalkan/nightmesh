@@ -228,6 +228,27 @@ const tests: Record<string, () => Promise<void>> = {
     }
   },
 
+  async "draws the glTF an i3dm tile names, found from the tile's folder"() {
+    await openInEditor('tiles/external.i3dm');
+    const saved = await vscode.env.clipboard.readText();
+    try {
+      let copied = '';
+      // The size shows once the named glTF, its buffer and its image are read and drawn.
+      for (
+        const start = Date.now();
+        !copied.includes('Dimensions') && Date.now() - start < 30_000;
+      ) {
+        await vscode.env.clipboard.writeText('');
+        await vscode.commands.executeCommand('nightmesh.copyReferenceWithDetails');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        copied = await vscode.env.clipboard.readText();
+      }
+      assert.match(copied, /\n- Dimensions: \[5, 1, 1\] m/);
+    } finally {
+      await vscode.env.clipboard.writeText(saved);
+    }
+  },
+
   async 'copies a reference to the model, with what the inspector says'() {
     await openInEditor('scene.glb');
     const saved = await vscode.env.clipboard.readText();
