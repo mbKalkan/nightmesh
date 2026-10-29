@@ -159,10 +159,9 @@ body {
 .nm-panel-tabs {
   display: flex;
   flex: none;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 0 4px;
   padding: 0 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
   user-select: none;
 }
 
@@ -837,6 +836,7 @@ body.vscode-high-contrast .nm-link {
 .nm-viewport {
   position: relative;
   flex: 1;
+  container-type: inline-size;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1070,6 +1070,13 @@ body.vscode-high-contrast .nm-axis-z {
   background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
   color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
   box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+}
+
+/* In a narrow view the notice's width reaches the size in the top right corner: it goes under. */
+@container (max-width: 720px) {
+  .nm-notice {
+    top: 40px;
+  }
 }
 
 .nm-notice-header {

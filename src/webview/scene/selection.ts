@@ -224,14 +224,21 @@ export function localBox(object: Object3D): Box3 | undefined {
   const box = new Box3();
   const part = new Box3();
   const placed = new Matrix4();
+  const instance = new Matrix4();
   object.traverse((child) => {
     const geometry = (child as Partial<Mesh>).geometry as BufferGeometry | undefined;
     if (!geometry?.boundingBox) return;
-    box.union(
-      part
-        .copy(geometry.boundingBox)
-        .applyMatrix4(placed.multiplyMatrices(toLocal, child.matrixWorld)),
-    );
+    placed.multiplyMatrices(toLocal, child.matrixWorld);
+    // An instanced mesh draws its geometry once for each instance: the box holds them all.
+    const instanced = child as Partial<InstancedMesh>;
+    if (instanced.isInstancedMesh) {
+      for (let i = 0; i < instanced.count!; i++) {
+        instanced.getMatrixAt!(i, instance);
+        box.union(part.copy(geometry.boundingBox).applyMatrix4(instance.premultiply(placed)));
+      }
+      return;
+    }
+    box.union(part.copy(geometry.boundingBox).applyMatrix4(placed));
   });
   return box.isEmpty() ? undefined : box;
 }

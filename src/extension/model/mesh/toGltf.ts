@@ -63,6 +63,9 @@ export function toGltf(
   };
 
   const accessor = (fields: Record<string, unknown>) => accessors.push(fields) - 1;
+  // Vertex colors' alpha shows only through a blended material (glTF); parts with none of their
+  // own get glTF's default material, blended.
+  let blended = false;
 
   const primitive = (part: MeshPart): Record<string, unknown> | undefined => {
     const count = part.positions.length / 3;
@@ -115,6 +118,9 @@ export function toGltf(
     }
     if (part.material !== undefined && part.material < materials.length) {
       result.material = part.material;
+    } else if (part.alpha) {
+      blended = true;
+      result.material = materials.length;
     }
     return result;
   };
@@ -167,7 +173,8 @@ export function toGltf(
     json.bufferViews = bufferViews;
     json.buffers = buffers.map((bytes) => ({ byteLength: bytes.length }));
   }
-  if (materials.length > 0) json.materials = materials.map(material);
+  if (materials.length > 0 || blended) json.materials = materials.map(material);
+  if (blended) json.materials!.push({ name: 'Vertex colors with alpha', alphaMode: 'BLEND' });
   if (images.length > 0) {
     json.images = images.map((uri) => ({ uri }));
     json.textures = images.map((_, source) => ({ source }));
