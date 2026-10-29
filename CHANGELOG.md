@@ -41,12 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Instances placed on the globe are shown around their middle, upright where they stand. The
   panels show the tile's GLB as the file has it, with the glTF Validator, JSON and measuring;
   sizes count every instance. The model's details add the tile's header, tables, instance count
-  and the data its feature table gives. A tile whose model is in a file of its own names that
-  file to open instead.
+  and the data its feature table gives. A tile whose model is a glTF or GLB file of its own draws
+  that file, its buffers and textures found next to it; the panels show its glTF and the
+  inspector names the file.
 - **cmpt tiles open on their own**: a composite's b3dm and i3dm tiles, those in composites inside
   it too, are drawn together as one model, each where it says, under a node of its own in the
   scene tree. The model's details list the tiles the composite holds; the notice above the view
-  names those not drawn (point clouds, models in files of their own).
+  names those not drawn (point clouds, and models that can't be read).
 - **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
   model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 

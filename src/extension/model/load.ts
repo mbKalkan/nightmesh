@@ -18,7 +18,7 @@ import { MeshFormatError, type ParsedMesh } from './mesh/geometry';
 import { HEAD_BYTES, headerFacts, looksLike, parseInThread, type MeshParser } from './mesh/parse';
 import { toGltf } from './mesh/toGltf';
 import { planRender, type Gltf, type Part, type RenderPlan, type ResourceData } from './plan';
-import { resourceName } from './resources';
+import { linkedOpener, rebaseUri, resourceName } from './resources';
 import { memorySource, type ByteSource } from './sources';
 import { readCmpt } from './cmpt';
 import { instancedGltf, readI3dm, rtcPlacement, translation, viewFrame } from './i3dm';
@@ -63,8 +63,8 @@ export interface LoadTexts {
   tileVersion(format: 'b3dm' | 'i3dm' | 'cmpt', version: string): string;
   /** Tiles in a composite that aren't drawn: their kinds and places, `pnts 2, i3dm 3/1`. */
   composite(tiles: string): string;
-  /** An i3dm tile whose glTF is a file of its own, which it names. */
-  externalGltf(uri: string): string;
+  /** An i3dm tile whose glTF is a file of its own, which couldn't be opened, and why. */
+  linkedGltf(reason: string): string;
   /** A JSON file opened as a tileset that isn't one. */
   notTileset: string;
   tilesetVersion(version: string): string;
@@ -156,13 +156,30 @@ async function* tileMessages(
         : texts.notTile(format),
     );
   }
-  if ('uri' in tile) return yield failure(options, texts.externalGltf(tile.uri));
-  yield* gltfMessages(tile.glb, resources, options, {
-    fileSize: source.size,
-    tile: tile.facts,
-    // A b3dm model on the globe is placed there, as an instance, to stand upright in the view.
-    instances: instancesOf(tile) ?? rtcPlacement(tile.facts.rtcCenter),
-  });
+  // A b3dm model on the globe is placed there, as an instance, to stand upright in the view.
+  const instances = instancesOf(tile) ?? rtcPlacement(tile.facts.rtcCenter);
+  if ('glb' in tile) {
+    return yield* gltfMessages(tile.glb, resources, options, {
+      fileSize: source.size,
+      tile: tile.facts,
+      instances,
+    });
+  }
+  // An i3dm tile can name its glTF, a file whose own resources are relative to its folder.
+  const linked = await resources.open(tile.uri);
+  if (typeof linked === 'string') {
+    return yield failure(options, texts.linkedGltf(texts.resource(linked, resourceName(tile.uri))));
+  }
+  const own = new Resources(linkedOpener(resources.openResource, tile.uri), texts);
+  try {
+    yield* gltfMessages(linked, own, options, {
+      fileSize: source.size,
+      tile: { ...tile.facts, gltfBytes: linked.size },
+      instances,
+    });
+  } finally {
+    await own.close();
+  }
 }
 
 /** A composite tile: the models of the b3dm and i3dm tiles in it, as one, where each puts them. */
@@ -196,8 +213,8 @@ async function* cmptMessages(
         : inner.format === 'i3dm'
           ? await readI3dm(inner.source)
           : undefined;
-    const gltf = tile && 'glb' in tile ? await readGltf(tile.glb, texts) : undefined;
-    if (!tile || !('glb' in tile) || !gltf || 'failure' in gltf) {
+    const gltf = !tile || 'failure' in tile ? undefined : await tileGltf(tile, resources, texts);
+    if (!tile || 'failure' in tile || !gltf || 'failure' in gltf) {
       skipped.push(name);
       continue;
     }
@@ -233,6 +250,26 @@ async function* cmptMessages(
   const notices = read.some(({ gltf }) => gltf.truncated) ? [texts.truncated] : [];
   if (skipped.length > 0) notices.push(texts.composite(skipped.join(', ')));
   yield* drawMessages(merged.json, merged.buffers, resources, options, notices);
+}
+
+/**
+ * A tile's glTF inside a composite: its GLB, or the file an i3dm tile names, its resources then
+ * made relative to the composite, which they are drawn from.
+ */
+async function tileGltf(
+  tile: { glb: ByteSource } | { uri: string },
+  resources: Resources,
+  texts: LoadTexts,
+): Promise<GltfRead | { failure: string } | undefined> {
+  if ('glb' in tile) return readGltf(tile.glb, texts);
+  const linked = await resources.open(tile.uri);
+  if (typeof linked === 'string') return undefined;
+  const gltf = await readGltf(linked, texts);
+  if ('failure' in gltf) return gltf;
+  for (const item of [...(gltf.json.buffers ?? []), ...(gltf.json.images ?? [])]) {
+    if (typeof item.uri === 'string') item.uri = rebaseUri(item.uri, tile.uri);
+  }
+  return gltf;
 }
 
 /** A glTF model's JSON, as text and read, and where its binary chunk is when it is a GLB. */
@@ -549,7 +586,7 @@ export class Resources {
   readonly problems = new Map<string, string>();
 
   constructor(
-    private readonly openResource: ResourceOpener,
+    readonly openResource: ResourceOpener,
     private readonly texts: LoadTexts,
   ) {}
 

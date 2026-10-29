@@ -9,8 +9,8 @@ import { batchFacts, count, isObject, parseTable } from './tileFile';
 
 export type I3dm =
   | { facts: TileFacts; glb: ByteSource; instances: Float64Array }
-  /** The glTF is a file of its own, which the tile names. */
-  | { facts: TileFacts; uri: string }
+  /** The glTF is a file of its own, which the tile names, relative to the tile's folder. */
+  | { facts: TileFacts; uri: string; instances: Float64Array }
   | { failure: 'notTile' | 'damaged' }
   | { failure: 'version'; version: number };
 
@@ -64,14 +64,14 @@ export async function readI3dm(source: ByteSource): Promise<I3dm> {
     facts.extensions.unshift(...Object.keys(featureTable.extensions));
   }
 
+  const instances =
+    length <= MAX_INSTANCES ? instanceMatrices(featureTable, body, length) : new Float64Array();
   if (gltfFormat === 0) {
     const text = new TextDecoder().decode(await source.read(gltf, source.size - gltf));
     const uri = text.replace(/[\0\s]+$/, '');
     facts.gltfUri = uri;
-    return { facts, uri };
+    return { facts, uri, instances };
   }
-  const instances =
-    length <= MAX_INSTANCES ? instanceMatrices(featureTable, body, length) : new Float64Array();
   return { facts, glb: sliceSource(source, gltf, source.size - gltf), instances };
 }
 

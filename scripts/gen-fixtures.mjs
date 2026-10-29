@@ -1447,14 +1447,16 @@ async function instancedTiles() {
       glb,
     ),
   );
+  // Three textured boxes in a row, from a glTF in the folder above whose buffer and image are
+  // files of their own, relative to it.
   write(
     'tiles/external.i3dm',
     i3dm(
       {
-        featureTable: { INSTANCES_LENGTH: 1, POSITION: { byteOffset: 0 } },
-        featureBinary: new Float32Array(3),
+        featureTable: { INSTANCES_LENGTH: 3, POSITION: { byteOffset: 0 } },
+        featureBinary: packed(new Float32Array([-2, 0, 0, 0, 0, 0, 2, 0, 0])).bytes,
       },
-      Buffer.from('../scene.glb'),
+      Buffer.from('../textured.gltf'),
       { embedded: false },
     ),
   );

@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
@@ -18,7 +18,7 @@ const english: Translate = (message, ...args) =>
 /** A fixture's size analysis, from what the host sends for it. */
 async function analyse(name: string): Promise<SizeAnalysis> {
   const source = await fileSource(join(FIXTURES, name));
-  const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
+  const opener = fileResourceOpener(posix.dirname(`/fixtures/${name}`), '/fixtures', (path) =>
     join(FIXTURES, path.slice('/fixtures'.length)),
   );
   let json = '{}';
@@ -105,6 +105,20 @@ describe('sizeAnalysis', () => {
       expect.objectContaining({ name: 'checker', bytes: png, texture: 0, warnings: [] }),
     ]);
     expect(analysis.compression.textures).toEqual({ png: 1 });
+  });
+
+  it("counts the glTF an i3dm tile names, and that glTF's files, apart from the tile", async () => {
+    const analysis = await analyse('tiles/external.i3dm');
+    const tile = statSync(join(FIXTURES, 'tiles/external.i3dm')).size;
+    const own = statSync(join(FIXTURES, 'textured.gltf')).size;
+    const bin = statSync(join(FIXTURES, 'textured.bin')).size;
+    const png = statSync(join(FIXTURES, 'checker.png')).size;
+    expect(analysis.files).toBe(4);
+    expect(analysis.total).toBe(tile + own + bin + png);
+    expect(byCategory(analysis)).toMatchObject({ tile, json: own, textures: png });
+    expect(Math.abs(sum(analysis) - analysis.total)).toBeLessThanOrEqual(
+      analysis.categories.length,
+    );
   });
 
   it('leaves data embedded in the JSON out of its share', async () => {

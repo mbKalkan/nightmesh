@@ -19,7 +19,8 @@ export function memorySource(bytes: Uint8Array): ByteSource {
     size: bytes.length,
     read: async (offset, length) => {
       checkRange(source, offset, length);
-      return bytes.slice(offset, offset + length);
+      // A Node Buffer's own slice() shares its memory; the copy has a buffer of its own.
+      return Uint8Array.prototype.slice.call(bytes, offset, offset + length);
     },
     close: async () => {},
   };

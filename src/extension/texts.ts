@@ -387,6 +387,7 @@ function structureStrings(t: Translate): StructureStrings {
       semantics: t('Feature table data'),
       instanced: t('Instanced 3D Model (i3dm)'),
       instances: t('Instances'),
+      gltfFile: t('glTF file'),
       composite: t('Composite (cmpt)'),
       tiles: t('Tiles'),
     },
@@ -507,14 +508,10 @@ export function loadTexts(t: Translate): LoadTexts {
           : t('This tile is cmpt version {0}. Nightmesh opens version 1 tiles.', version),
     composite: (tiles) =>
       t(
-        "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles that hold their model.",
+        "Tiles in this composite that aren't drawn: {0}. Nightmesh draws the b3dm and i3dm tiles whose model it can read.",
         tiles,
       ),
-    externalGltf: (uri) =>
-      t(
-        "This tile's model is in another file, {0}, which Nightmesh doesn't follow yet. Open that file to see the model.",
-        uri,
-      ),
+    linkedGltf: (reason) => t("This tile's model is in a file of its own. {0}", reason),
     notTileset: t("This JSON file isn't a 3D Tiles tileset."),
     tilesetVersion: (version) =>
       t('This tileset is 3D Tiles {0}. Nightmesh opens 3D Tiles 1.0 and 1.1 tilesets.', version),

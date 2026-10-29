@@ -5,7 +5,7 @@ import * as esbuild from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { fileSource, type ByteSource } from '../../src/extension/model/sources';
-import { gltfSource } from '../../src/extension/model/tileGltf';
+import { gltfFile } from '../../src/extension/model/tileGltf';
 import {
   MAX_VALIDATION_BYTES,
   validationMessage,
@@ -131,19 +131,29 @@ describe('validationMessage', () => {
   for (const [name, format] of [
     ['batched.b3dm', 'b3dm'],
     ['instanced.i3dm', 'i3dm'],
+    // Its glTF is a file in the folder above, with a buffer and an image next to it.
+    ['external.i3dm', 'i3dm'],
   ] as const) {
-    it(`validates the GLB inside a ${format} tile, as the viewer does`, async () => {
+    it(`validates the glTF of a ${format} tile (${name}), as the viewer does`, async () => {
       const source = await fileSource(join(FIXTURES, 'tiles', name));
+      const opener = fileResourceOpener('/fixtures/tiles', '/fixtures', (path) =>
+        join(FIXTURES, path.slice('/fixtures'.length)),
+      );
+      const gltf = await gltfFile(source, format, opener);
       try {
         const message = await validationMessage(
-          await gltfSource(source, format),
-          async () => 'missing',
+          gltf.source,
+          gltf.open,
           runValidator,
           7,
           loadTexts(english),
         );
-        expect(message).toMatchObject({ state: 'done', report: { counts: { error: 0 } } });
+        expect(message).toMatchObject({
+          state: 'done',
+          report: { counts: { error: 0, warning: 0 } },
+        });
       } finally {
+        await gltf.close();
         await source.close();
       }
     });

@@ -34,6 +34,8 @@ export interface TileFacts extends TileTables {
   semantics?: string[];
   /** The glTF file an i3dm tile names, when it doesn't hold its glTF itself. */
   gltfUri?: string;
+  /** That file's size, once it is opened: the panels show its glTF. */
+  gltfBytes?: number;
 }
 
 /** What a Composite (cmpt) tile holds: its tiles, those in inner composites too. */
@@ -240,6 +242,8 @@ export interface TileFileStrings {
   /** The i3dm format's name. */
   instanced: string;
   instances: string;
+  /** The glTF file an i3dm tile names, when it doesn't hold its glTF itself. */
+  gltfFile: string;
   /** The cmpt format's name. */
   composite: string;
   tiles: string;

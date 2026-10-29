@@ -1,9 +1,9 @@
 import { readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
-import { fileSource } from '../../src/extension/model/sources';
+import { fileSource, memorySource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
 import type { HostToWebviewMessage, ModelFormat } from '../../src/shared/protocol';
 
@@ -14,7 +14,7 @@ const english: Translate = (message, ...args) =>
 /** Loads a fixture as the extension host does, with the fixtures folder as the workspace. */
 async function loadAll(name: string, format?: ModelFormat): Promise<HostToWebviewMessage[]> {
   const source = await fileSource(join(FIXTURES, name));
-  const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
+  const opener = fileResourceOpener(posix.dirname(`/fixtures/${name}`), '/fixtures', (path) =>
     join(FIXTURES, path.slice('/fixtures'.length)),
   );
   const messages: HostToWebviewMessage[] = [];
@@ -109,12 +109,60 @@ describe('loadMessages', () => {
     const [{ min, max }] = instances.nodes;
     expect(max[0] - min[0]).toBeCloseTo(22, 3);
     expect(max[1] - min[1]).toBeCloseTo(6, 3);
+  });
 
-    const [external] = await loadAll('tiles/external.i3dm', 'i3dm');
-    expect(external).toMatchObject({
-      type: 'failed',
-      message: expect.stringContaining('../scene.glb'),
+  it("draws the glTF an i3dm tile names, with that file's own resources", async () => {
+    const messages = await loadAll('tiles/external.i3dm', 'i3dm');
+    const structure = messages.find((message) => message.type === 'structure');
+    const model = messages.find((message) => message.type === 'model');
+    if (structure?.type !== 'structure' || model?.type !== 'model') throw new Error('not drawn');
+    // The panels show the named glTF, with the tile's size and the glTF file's.
+    expect(JSON.parse(structure.json).buffers).toEqual([{ uri: 'textured.bin', byteLength: 840 }]);
+    expect(structure).toMatchObject({
+      fileSize: statSync(join(FIXTURES, 'tiles/external.i3dm')).size,
+      tile: {
+        format: 'i3dm',
+        instances: 3,
+        gltfUri: '../textured.gltf',
+        gltfBytes: statSync(join(FIXTURES, 'textured.gltf')).size,
+      },
     });
+    // Its buffer and image are found next to it, not next to the tile.
+    expect(model.notices).toEqual([]);
+    expect(model.extensions).toContain('EXT_mesh_gpu_instancing');
+    expect(messages.find((message) => message.type === 'images')).toMatchObject({
+      images: [{ width: 64, height: 64 }],
+    });
+  });
+
+  it("says why an i3dm tile's glTF can't be opened", async () => {
+    const tile = readFileSync(join(FIXTURES, 'tiles/external.i3dm'));
+    const named = (uri: string) => {
+      const at = tile.indexOf('../textured.gltf');
+      return Buffer.concat([tile.subarray(0, at), Buffer.from(uri.padEnd(16, ' '))]);
+    };
+    const opener = fileResourceOpener('/fixtures/tiles', '/fixtures', (path) =>
+      join(FIXTURES, path.slice('/fixtures'.length)),
+    );
+    const options = {
+      loadId: 1,
+      reload: false,
+      texts: loadTexts(english),
+      format: 'i3dm' as const,
+    };
+    for (const [uri, reason] of [
+      ['gone.glb', "gone.glb wasn't found"],
+      ['../../out.glb', 'outside'],
+      ['https://a.b/c.glb', "doesn't use the network"],
+    ]) {
+      const messages = loadMessages(memorySource(named(uri)), opener, options);
+      const { value: message } = await messages.next();
+      await messages.return(undefined);
+      expect(message).toMatchObject({
+        type: 'failed',
+        message: expect.stringMatching(new RegExp(`in a file of its own[.] .*${reason}`)),
+      });
+    }
   });
 
   it('draws the b3dm and i3dm tiles of a composite as one model, and says what it leaves out', async () => {
@@ -142,6 +190,35 @@ describe('loadMessages', () => {
     const instances = messages.find((message) => message.type === 'instances');
     if (instances?.type !== 'instances') throw new Error('no instances');
     expect(instances.nodes).toHaveLength(4);
+  });
+
+  it("draws a composite's i3dm tile that names its glTF, from that glTF's folder", async () => {
+    const inner = readFileSync(join(FIXTURES, 'tiles/external.i3dm'));
+    const header = Buffer.alloc(16);
+    header.write('cmpt', 0, 'ascii');
+    header.writeUInt32LE(1, 4);
+    header.writeUInt32LE(16 + inner.length, 8);
+    header.writeUInt32LE(1, 12);
+    const opener = fileResourceOpener('/fixtures/tiles', '/fixtures', (path) =>
+      join(FIXTURES, path.slice('/fixtures'.length)),
+    );
+    const options = {
+      loadId: 1,
+      reload: false,
+      texts: loadTexts(english),
+      format: 'cmpt' as const,
+    };
+    const messages: HostToWebviewMessage[] = [];
+    const source = memorySource(Buffer.concat([header, inner]));
+    for await (const message of loadMessages(source, opener, options)) messages.push(message);
+    const structure = messages.find((message) => message.type === 'structure');
+    const model = messages.find((message) => message.type === 'model');
+    if (structure?.type !== 'structure' || model?.type !== 'model') throw new Error('not drawn');
+    // Its buffer and image are named from the composite's folder, where the merged model is.
+    const json = JSON.parse(structure.json);
+    expect(json.buffers[0].uri).toBe('../textured.bin');
+    expect(json.images[0].uri).toBe('../checker.png');
+    expect(model.notices).toEqual([]);
   });
 
   it('sends the structure of models it cannot draw', async () => {

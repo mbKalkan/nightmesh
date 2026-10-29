@@ -296,6 +296,16 @@ function tileSection(context: InspectContext, tile: TileFacts): Section {
   const between: Row[] = instanced
     ? [
         { label: strings.tile.instances, text: format.count(tile.instances ?? 0), mono: true },
+        ...(tile.gltfUri !== undefined
+          ? [
+              {
+                label: strings.tile.gltfFile,
+                text: tile.gltfUri,
+                mono: true,
+                note: tile.gltfBytes !== undefined ? format.bytes(tile.gltfBytes) : undefined,
+              },
+            ]
+          : []),
         ...(tile.semantics ?? []).map((name, index) => ({
           label: index === 0 ? strings.tile.semantics : '',
           text: name,
