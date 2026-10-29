@@ -322,16 +322,27 @@ for (const [fixture, theme, expected] of [
     const feature = page.locator('.nm-section', {
       has: page.locator('.nm-section-title', { hasText: /^Feature$/ }),
     });
-    // Somewhere near the middle of the view there is a feature to click.
-    const view = (await page.locator('.nm-viewport').boundingBox())!;
-    const spots = [0.5, 0.45, 0.55, 0.4, 0.6].flatMap((y) =>
-      [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65].map((x) => [x, y]),
-    );
-    for (const [x, y] of spots) {
-      await page.mouse.click(view.x + view.width * x, view.y + view.height * y);
-      if (await feature.isVisible({ timeout: 500 }).catch(() => false)) break;
+    // The model's pixel nearest the middle of the view: one whose neighbours also differ from
+    // the background, so not a line of the grid.
+    const pixels = await pixelsOf(page, '.nm-canvas');
+    const canvas = (await page.locator('.nm-canvas').boundingBox())!;
+    const background = pixels.at(2, 2);
+    const model = (x: number, y: number) =>
+      pixels.at(x, y).reduce((sum, value, i) => sum + Math.abs(value - background[i]), 0) > 60;
+    let best = { x: pixels.width / 2, y: pixels.height / 2, distance: Infinity };
+    for (let y = 2; y < pixels.height - 2; y += 2) {
+      for (let x = 2; x < pixels.width - 2; x += 2) {
+        if (![-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => model(x + dx, y + dy)))) continue;
+        const distance = (x - pixels.width / 2) ** 2 + (y - pixels.height / 2) ** 2;
+        if (distance < best.distance) best = { x, y, distance };
+      }
     }
-    await expect(feature).toBeVisible();
+    await page.mouse.click(
+      canvas.x + best.x * (canvas.width / pixels.width),
+      canvas.y + best.y * (canvas.height / pixels.height),
+    );
+    // The tables come from the host after the click.
+    await expect(feature).toBeVisible({ timeout: 15_000 });
     const labels = feature.locator('dt');
     await expect(labels.first()).toHaveText('Batch ID');
     await expect(labels).toContainText(expected);
