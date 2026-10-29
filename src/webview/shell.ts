@@ -51,6 +51,11 @@ export class Shell {
   private onDraw: (() => void) | undefined;
 
   private panelsAvailable = false;
+  /**
+   * The structure panel starts closed in a viewer too narrow for both panels and the view, such
+   * as each side of a comparison; the user's layout stays as it is. Undefined until decided.
+   */
+  private narrowed: boolean | undefined;
 
   constructor(
     container: HTMLElement,
@@ -160,8 +165,11 @@ export class Shell {
       if (button?.dataset.action === 'measure') return this.events.measure();
       const panel = button?.dataset.panel as 'structure' | 'inspector' | undefined;
       if (!panel) return;
-      this.layout[panel] = !this.layout[panel];
-      this.events.layoutChanged(this.layout);
+      if (panel === 'structure' && this.narrowed) this.narrowed = false;
+      else {
+        this.layout[panel] = !this.layout[panel];
+        this.events.layoutChanged(this.layout);
+      }
       this.showPanels();
     });
   }
@@ -319,16 +327,32 @@ export class Shell {
   /** Shows the side panels, as the layout has them, once there is a structure to put in them. */
   setPanelsAvailable(available: boolean): void {
     this.panelsAvailable = available;
+    if (available && this.narrowed === undefined) this.narrowed = this.tooNarrow();
     this.showPanels();
   }
 
+  /** Whether the open panels would leave the view less than half of the viewer's width. */
+  private tooNarrow(): boolean | undefined {
+    const width = this.center.parentElement?.getBoundingClientRect().width ?? 0;
+    // A viewer not shown yet has no width: it decides once it has one.
+    if (width === 0) return undefined;
+    if (!this.layout.structure) return false;
+    const panels =
+      this.layout.structureWidth + (this.layout.inspector ? this.layout.inspectorWidth : 0);
+    return width - panels < width / 2;
+  }
+
   private showPanels(): void {
+    const open = {
+      structure: this.layout.structure && !this.narrowed,
+      inspector: this.layout.inspector,
+    };
     this.toggles.hidden = !this.panelsAvailable;
-    this.structurePanel.element.hidden = !(this.panelsAvailable && this.layout.structure);
-    this.inspectorPanel.element.hidden = !(this.panelsAvailable && this.layout.inspector);
+    this.structurePanel.element.hidden = !(this.panelsAvailable && open.structure);
+    this.inspectorPanel.element.hidden = !(this.panelsAvailable && open.inspector);
     for (const button of this.toggles.querySelectorAll<HTMLElement>('[data-panel]')) {
       const panel = button.dataset.panel as 'structure' | 'inspector';
-      button.setAttribute('aria-pressed', String(this.layout[panel]));
+      button.setAttribute('aria-pressed', String(open[panel]));
     }
   }
 

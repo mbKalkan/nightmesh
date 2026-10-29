@@ -114,6 +114,18 @@ describe('loading OBJ, STL and PLY', () => {
     expect(indices).toMatchObject({ componentType: 5123, count: 72 });
   });
 
+  it("blends colors' alpha, through glTF's default material made blended", async () => {
+    const { gltf } = structureOf(await loadAll('tiles/quantized.pnts'));
+    const [primitive] = gltf.meshes[0].primitives;
+    expect(gltf.accessors[primitive.attributes.COLOR_0]).toMatchObject({ type: 'VEC4' });
+    expect(gltf.materials).toEqual([{ name: 'Vertex colors with alpha', alphaMode: 'BLEND' }]);
+    expect(primitive.material).toBe(0);
+    // Opaque colors keep glTF's default material.
+    const opaque = structureOf(await loadAll('tiles/points.pnts')).gltf;
+    expect(opaque.materials).toBeUndefined();
+    expect(opaque.meshes[0].primitives[0].material).toBeUndefined();
+  });
+
   it('moves geometry far from the origin back with a node of its own', async () => {
     const { gltf } = structureOf(await loadAll('cloud.ply'));
     expect(gltf.nodes).toEqual([

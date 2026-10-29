@@ -161,6 +161,44 @@ test('hides, shows and resizes the panels', async ({ page }) => {
   expect(viewer.problems).toEqual([]);
 });
 
+test('opens a narrow viewer, as each side of a comparison is, with the structure closed', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 760 });
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  await viewer.open('scene.glb');
+  const toggle = page.locator('[data-panel="structure"]');
+  // Both panels would leave the view less than half the width: the inspector stays.
+  await expect(page.locator('.nm-panel-right')).toBeVisible();
+  await expect(page.locator('.nm-panel-left')).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  const saved = async () =>
+    (await viewer.sent()).filter((message) => message.type === 'preferences').length;
+  const before = await saved();
+  // One click opens it, and the layout the user keeps for other viewers doesn't change.
+  await toggle.click();
+  await expect(page.locator('.nm-panel-left')).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  expect(await saved()).toBe(before);
+  await toggle.click();
+  await expect(page.locator('.nm-panel-left')).toBeHidden();
+
+  // Narrower still, the tabs that don't fit go to a second row, each name whole.
+  await page.setViewportSize({ width: 460, height: 760 });
+  const fits = await page.locator('.nm-panel-right .nm-panel-tabs').evaluate((list) => {
+    const right = list.getBoundingClientRect().right;
+    const tabs = [...list.querySelectorAll<HTMLElement>('.nm-panel-tab')];
+    return {
+      inside: tabs.every((tab) => tab.getBoundingClientRect().right <= right + 1),
+      whole: tabs.every((tab) => tab.scrollWidth <= tab.clientWidth),
+      rows: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+    };
+  });
+  expect(fits).toEqual({ inside: true, whole: true, rows: 2 });
+  await page.screenshot({ path: 'test-results/screens/narrow-tabs.png' });
+  expect(viewer.problems).toEqual([]);
+});
+
 test('keeps what is open and selected when the file changes', async ({ page }) => {
   const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');

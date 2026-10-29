@@ -56,9 +56,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Models open faster**: the 3D view made its lighting anew for every file, which takes most of
   a second of GPU work on some machines. It is now made once and kept, so every viewer after the
   first starts drawing about 0.6 s sooner (measured on Windows: 740 ms to 75–105 ms).
+- **Narrow viewers open with the structure panel closed**: when both panels would leave the 3D
+  view less than half of the viewer's width, as on each side of a comparison, the structure
+  panel starts closed in that viewer and the inspector stays. Its toolbar button opens it; the
+  layout kept for other viewers doesn't change. In a narrow panel, tabs that don't fit go to a
+  second row instead of out of sight.
 
 ### Fixed
 
+- **Translucent point and vertex colors**: points and vertices whose colors have alpha (pnts
+  `RGBA`, PLY alpha) were drawn opaque. They now blend, as their colors say.
+- **Selection box of GPU instances**: selecting a node drawn with EXT_mesh_gpu_instancing boxed
+  one instance in the view; the box now holds them all, as the measured size does.
+- **Notice under the size**: in a narrow view the notice above the model ran under the size in
+  the top right corner. It now sits below it.
 - **Size of turned GPU instances**: a model whose instances (EXT_mesh_gpu_instancing) are turned,
   under a node that is turned too, measured larger than drawn in the corner of the view and was
   framed too far away. Each instance is now measured where it is.

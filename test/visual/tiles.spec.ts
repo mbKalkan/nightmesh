@@ -300,6 +300,25 @@ for (const [fixture, theme] of [
   });
 }
 
+for (const width of [1280, 760]) {
+  test(`keeps the notice clear of the size in the corner, ${width} px wide`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    const viewer = await openViewer(page, 'dark');
+    await viewer.open('tiles/composite.cmpt');
+    await expect(page.locator('.nm-notice')).toBeVisible();
+    await expect(page.locator('.nm-measure')).toBeVisible();
+    const notice = (await page.locator('.nm-notice').boundingBox())!;
+    const size = (await page.locator('.nm-measure').boundingBox())!;
+    const apart =
+      notice.x + notice.width <= size.x ||
+      notice.y >= size.y + size.height ||
+      size.x + size.width <= notice.x ||
+      size.y >= notice.y + notice.height;
+    expect(apart).toBe(true);
+    await page.screenshot({ path: `${SCREENS}/notice-${width}.png` });
+  });
+}
+
 for (const theme of ['dark', 'light'] as ThemeName[]) {
   test(`draws the glTF an i3dm tile names, with its own files, ${theme} theme`, async ({
     page,
