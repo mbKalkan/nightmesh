@@ -244,6 +244,14 @@ export interface TileFileStrings {
   instances: string;
   /** The glTF file an i3dm tile names, when it doesn't hold its glTF itself. */
   gltfFile: string;
+  /** The section of a feature clicked in the view. */
+  feature: string;
+  /** Its row: its batch id, `12`, noted `of 340`. */
+  featureId: string;
+  /** `of {0}` features. */
+  featureOf: string;
+  /** A note on a property a feature takes from a class of the batch table hierarchy. */
+  featureClass: string;
   /** The cmpt format's name. */
   composite: string;
   tiles: string;
@@ -818,6 +826,23 @@ export type TileMessage = { type: 'tile'; id: number } & (
   { data: Uint8Array } | { problem: string }
 );
 
+/**
+ * A b3dm, i3dm or pnts tile's feature and batch tables, each its JSON then its binary body, for
+ * the webview to read a clicked feature's properties from.
+ */
+export interface TileTablesBytes {
+  format: 'b3dm' | 'i3dm' | 'pnts';
+  feature: { bytes: Uint8Array; json: number };
+  batch: { bytes: Uint8Array; json: number };
+}
+
+/** The tables of the tile the webview asked for; none when it has none or can't be read. */
+export interface TileTablesMessage {
+  type: 'tileTables';
+  id: number;
+  tables?: TileTablesBytes;
+}
+
 /** The model can't be shown at all. */
 export interface FailedMessage {
   type: 'failed';
@@ -907,6 +932,7 @@ export type HostToWebviewMessage =
   | ModelMessage
   | TilesetMessage
   | TileMessage
+  | TileTablesMessage
   | LargeMessage
   | PartMessage
   | PartsMessage
@@ -944,6 +970,11 @@ export type WebviewToHostMessage =
   | { type: 'environment'; environment: Environment }
   /** A tile of the tileset shown, by a path made from `TilesetMessage.url` and its references. */
   | { type: 'tile'; id: number; path: string }
+  /**
+   * The feature and batch tables of the tile file shown, or of the tile at `part` inside it (a
+   * composite's `2/1`), to read a clicked feature from.
+   */
+  | { type: 'tileTables'; id: number; part?: string }
   /** The GPU context came back; the model has to be sent again to be drawn. */
   | { type: 'reload' }
   /** The user asked to draw a large model after all. */

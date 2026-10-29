@@ -42,6 +42,41 @@ export interface SurfacePoint {
   object: Object3D;
 }
 
+/**
+ * A feature of a 3D Tiles tile drawn under the pointer, by how the tile numbers it: a vertex's
+ * batch id (b3dm), an instance (i3dm) or a point (pnts), which the tile's tables then map.
+ */
+export interface FeatureHit {
+  object: Object3D;
+  kind: FeatureKind;
+  index: number;
+}
+
+export type FeatureKind = 'batch' | 'instance' | 'point';
+
+/** How an object's features are numbered: by attribute, instance or point; none for others. */
+export function featureKind(object: Object3D): FeatureKind | undefined {
+  const drawable = object as Partial<Mesh & Points & InstancedMesh>;
+  if (drawable.geometry?.attributes._batchid) return 'batch';
+  if (drawable.isInstancedMesh) return 'instance';
+  if (drawable.isPoints) return 'point';
+  return undefined;
+}
+
+/** What each kind writes as its feature's number, in the vertex shader. */
+const FEATURE_SOURCE: Record<FeatureKind, string> = {
+  batch: '_batchid',
+  instance: 'float(gl_InstanceID)',
+  point: 'float(gl_VertexID)',
+};
+
+/** Writes the feature's number plus one in three bytes, low byte first; 0 is no feature. */
+const FEATURE_FRAGMENT = `#include <premultiplied_alpha_fragment>
+	float nmValue = nmFeature + 1.0;
+	float nmHigh = floor(nmValue / 65536.0);
+	float nmMiddle = floor((nmValue - nmHigh * 65536.0) / 256.0);
+	gl_FragColor = vec4(vec3(nmValue - nmHigh * 65536.0 - nmMiddle * 256.0, nmMiddle, nmHigh) / 255.0, 1.0);`;
+
 /** The largest number three bytes hold: distances are written in 24 bits. */
 const LEVELS = 2 ** 24 - 1;
 
@@ -74,6 +109,7 @@ export class Picker {
   private readonly materials = new WeakMap<Object3D, PickMaterial>();
   private readonly distanceMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly depthMaterials = new WeakMap<Object3D, PickMaterial>();
+  private readonly featureMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly vertexMaterials: PointsMaterial[] = [];
   private readonly made: PickMaterial[] = [];
   /** Where vertices near the pointer are drawn, as floats, and how many pixels across. */
@@ -141,6 +177,30 @@ export class Picker {
       point = eye.addScaledVector(onNear.sub(eye).normalize(), distance);
     }
     return { point, object: picked.object };
+  }
+
+  /**
+   * The feature drawn at the pixel of `region`, or at the nearest pixel around it with something
+   * on it: the scene drawn once more with each object writing its features' numbers.
+   */
+  feature(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: Camera,
+    model: Object3D,
+    hidden: readonly Object3D[],
+    region: PickRegion,
+  ): FeatureHit | undefined {
+    const picked = this.pickPixel(renderer, scene, camera, model, hidden, region);
+    const kind = picked && featureKind(picked.object);
+    if (!picked || !kind) return undefined;
+    this.draw(renderer, scene, camera, model, hidden, region, (object) =>
+      this.featureMaterialFor(object),
+    );
+    const offset = (picked.row * SIZE + picked.column) * 4;
+    const pixels = this.pixels;
+    const value = pixels[offset] | (pixels[offset + 1] << 8) | (pixels[offset + 2] << 16);
+    return value === 0 ? undefined : { object: picked.object, kind, index: value - 1 };
   }
 
   /**
@@ -407,6 +467,36 @@ export class Picker {
     };
     material.customProgramCacheKey = () => 'nightmesh-distance';
     this.distanceMaterials.set(object, material);
+    return material;
+  }
+
+  /**
+   * A material that writes the number of each pixel's feature, as `featureKind` says the object
+   * numbers them; black, no feature, for an object without any.
+   */
+  private featureMaterialFor(object: Object3D): PickMaterial {
+    let material = this.featureMaterials.get(object);
+    if (material) return material;
+    material = this.flatMaterial(object);
+    material.color.setRGB(0, 0, 0);
+    const kind = featureKind(object);
+    if (kind) {
+      const source = FEATURE_SOURCE[kind];
+      material.onBeforeCompile = (shader) => {
+        const declared = kind === 'batch' ? 'attribute float _batchid;\n' : '';
+        shader.vertexShader =
+          `${declared}flat varying float nmFeature;\n${shader.vertexShader}`.replace(
+            '#include <project_vertex>',
+            `#include <project_vertex>\n\tnmFeature = ${source};`,
+          );
+        shader.fragmentShader = `flat varying float nmFeature;\n${shader.fragmentShader}`.replace(
+          '#include <premultiplied_alpha_fragment>',
+          FEATURE_FRAGMENT,
+        );
+      };
+      material.customProgramCacheKey = () => `nightmesh-feature-${kind}`;
+    }
+    this.featureMaterials.set(object, material);
     return material;
   }
 

@@ -5,6 +5,7 @@ import { fileResourceOpener } from '../../src/extension/model/fileResources';
 import { loadMessages } from '../../src/extension/model/load';
 import { fileSource } from '../../src/extension/model/sources';
 import { gltfFile } from '../../src/extension/model/tileGltf';
+import { readTileTables } from '../../src/extension/model/tileTables';
 import { readTile } from '../../src/extension/model/tiles';
 import { validationMessage } from '../../src/extension/model/validation';
 import { runValidator } from '../../src/extension/model/validator';
@@ -24,6 +25,12 @@ const ORIGIN = 'http://webview.test';
 
 /** A tile as the host reads it, with its bytes in base64 to cross into the page. */
 type TileAnswer = { data: string } | { problem: string };
+/** A tile's tables as the page gets them: bytes as base64. */
+interface TablesAnswer {
+  format: 'b3dm' | 'i3dm' | 'pnts';
+  feature: { data: string; json: number };
+  batch: { data: string; json: number };
+}
 const FIXTURES = resolve('test/fixtures');
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -106,15 +113,33 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
             : { type: 'tile', id, problem: answer.problem };
         window.dispatchEvent(new MessageEvent('message', { data }));
       };
+      // A tile's tables, as the host reads them from the file shown.
+      const answerTables = async (id: number, part: string | undefined) => {
+        const read = (
+          window as unknown as {
+            __readTables(part: string | undefined): Promise<TablesAnswer | null>;
+          }
+        ).__readTables;
+        const answer = await read(part);
+        const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const tables = answer && {
+          format: answer.format,
+          feature: { bytes: bytes(answer.feature.data), json: answer.feature.json },
+          batch: { bytes: bytes(answer.batch.data), json: answer.batch.json },
+        };
+        const data = { type: 'tileTables', id, tables: tables ?? undefined };
+        window.dispatchEvent(new MessageEvent('message', { data }));
+      };
       Object.assign(window, {
         __sent: sent,
         __applyTheme: applyTheme,
         acquireVsCodeApi: () => {
           let state: unknown;
           return {
-            postMessage: (message: { type: string; id?: number; path?: string }) => {
+            postMessage: (message: { type: string; id?: number; path?: string; part?: string }) => {
               sent.push(message);
               if (message.type === 'tile') void answerTile(message.id!, message.path!);
+              if (message.type === 'tileTables') void answerTables(message.id!, message.part);
             },
             getState: () => state,
             setState: (value: unknown) => void (state = value),
@@ -141,6 +166,25 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
     const tile = await readTile(path, fixtureOpener(), loadTexts(english));
     return 'data' in tile ? { data: Buffer.from(tile.data).toString('base64') } : tile;
   });
+  /** The fixture shown last, whose tables a click on a feature asks for. */
+  let shown: string | undefined;
+  await page.exposeFunction('__readTables', async (part?: string): Promise<TablesAnswer | null> => {
+    if (!shown) return null;
+    const source = await fileSource(join(FIXTURES, shown));
+    try {
+      const tables = await readTileTables(source, part);
+      const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
+      return tables
+        ? {
+            format: tables.format,
+            feature: { data: base64(tables.feature.bytes), json: tables.feature.json },
+            batch: { data: base64(tables.batch.bytes), json: tables.batch.json },
+          }
+        : null;
+    } finally {
+      await source.close();
+    }
+  });
   await page.goto(`${ORIGIN}/index.html`);
   await page.waitForFunction(() =>
     (window as unknown as { __sent: { type: string }[] }).__sent.some((m) => m.type === 'ready'),
@@ -166,6 +210,7 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
      * fixtures folder stands in for the workspace, so resources can't reach outside it.
      */
     async open(fixture: string, { reload = false } = {}) {
+      shown = fixture;
       if (!reload) await this.post(this.openMessage(fixture));
       // Cleared here, so waiting for it below waits for this load and not the one before.
       await page.evaluate(() => {

@@ -15,6 +15,7 @@ import type {
   StandardView,
   StructureMessage,
   TileMessage,
+  TileTablesBytes,
   TilesetMessage,
   ViewerStrings,
   ViewStrings,
@@ -42,6 +43,8 @@ type SceneModule = typeof import('./scene');
 type View = InstanceType<SceneModule['ModelView']>;
 type Measurement = import('./scene/ruler').Measurement;
 type ViewChange = import('./scene/modelView').ViewChange;
+type PickedFeature = import('./scene/modelView').PickedFeature;
+type TileTables = import('./scene/features').TileTables;
 
 /** A model on its way from the host: its JSON, and its parts as they arrive. */
 interface Arrival {
@@ -112,6 +115,14 @@ const tileRequests = new Map<
   { resolve: (data: Uint8Array) => void; reject: (error: Error) => void }
 >();
 let lastTileRequest = 0;
+/** Tile tables asked of the host and not yet answered, by request. */
+const tablesRequests = new Map<number, (tables: TileTablesBytes | undefined) => void>();
+/** The tables of the tile file shown, by part of a composite ('' for the file itself). */
+let fileTables = new Map<string, Promise<TileTables | undefined>>();
+/** Counts clicks for features: an answer for an earlier click is dropped. */
+let featureClick = 0;
+/** The node a composite draws one of its tiles under, named for the tile: `i3dm 3/1`. */
+const COMPOSITE_PART = /^(?:b3dm|i3dm) (\d+(?:\/\d+)*)$/;
 /** What couldn't be had of the tileset shown, in sentences for the user. */
 const tileProblems = new Set<string>();
 
@@ -128,6 +139,8 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       open(message);
       break;
     case 'structure':
+      // The file may have changed: its tables are read again when a feature is clicked.
+      fileTables = new Map();
       receiveStructure(message);
       break;
     case 'progress':
@@ -156,6 +169,10 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       break;
     case 'tile':
       answerTile(message);
+      break;
+    case 'tileTables':
+      tablesRequests.get(message.id)?.(message.tables);
+      tablesRequests.delete(message.id);
       break;
     case 'part':
       receivePart(message.loadId, message.key, ownBuffer(message.data));
@@ -776,6 +793,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
         if (said) shell.announce(said);
         if (frame) created.frameSelection();
       },
+      featurePicked: (picked) => void showFeature(picked),
       animation: (state) =>
         animationBar?.update(state && { ...state, names: structure?.animationNames() ?? [] }),
       measured: (size, selection) =>
@@ -811,6 +829,10 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   created.setChangeColors(changeColors());
   created.setChanges(comparedNodes);
   created.setHelpers(helpersShown());
+  // A click on a tile file's model also finds the feature there, from the tile's tables.
+  const format = opened?.format;
+  created.pickFeatures =
+    format === 'b3dm' || format === 'i3dm' || format === 'pnts' || format === 'cmpt';
   if (units) created.setGridUnit(UNIT_METRES[units.unit]);
   created.select(selectedKey);
   return created;
@@ -953,6 +975,42 @@ function refreshTiles(): void {
     tilesRefresh = undefined;
     tilesetView?.refresh();
   }, 250);
+}
+
+/** Shows the feature clicked in the view in the inspector, once its tile's tables are read. */
+async function showFeature(picked: PickedFeature | undefined): Promise<void> {
+  const click = ++featureClick;
+  if (!picked) return;
+  let tables = picked.tables;
+  if (!tables) {
+    // A composite's tiles are each under a node named for the tile's kind and place: `b3dm 3/1`.
+    const name = picked.node === undefined ? undefined : structure?.nodeName(picked.node);
+    const part = opened?.format === 'cmpt' ? COMPOSITE_PART.exec(name ?? '')?.[1] : '';
+    if (part === undefined) return;
+    if (!fileTables.has(part)) fileTables.set(part, requestTables(part));
+    tables = await fileTables.get(part);
+  }
+  // The tables' readers load with the first feature clicked.
+  const { featureOf } = await import('./scene/features');
+  const feature = tables && featureOf(tables, picked.kind, picked.index);
+  if (click === featureClick && feature) (tilesetView ?? structure)?.showFeature(feature);
+}
+
+/** The tables of the tile file shown, or of a tile in the composite shown, from the host. */
+function requestTables(part: string): Promise<TileTables | undefined> {
+  const id = ++lastTileRequest;
+  vscode.postMessage({ type: 'tileTables', id, part: part || undefined });
+  return new Promise((resolve) =>
+    tablesRequests.set(id, (bytes) => {
+      void import('./scene/features').then(({ tablesFromBytes }) => {
+        try {
+          resolve(bytes && tablesFromBytes(bytes));
+        } catch {
+          resolve(undefined);
+        }
+      });
+    }),
+  );
 }
 
 function requestTile(path: string): Promise<Uint8Array> {

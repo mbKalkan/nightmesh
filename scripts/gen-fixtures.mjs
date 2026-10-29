@@ -1668,18 +1668,31 @@ async function batchedTile() {
   });
 }
 
-/** A tile's glTF: boxes standing on the ground, each `[name, [x, z], [width, height, depth]]`. */
-async function blocks(name, color, boxes) {
+/**
+ * A tile's glTF: boxes standing on the ground, each `[name, [x, z], [width, height, depth]]`.
+ * `batched` gives each box a mesh of its own whose `_BATCHID` is the box's place in the list.
+ */
+async function blocks(name, color, boxes, { batched = false } = {}) {
   const doc = newDocument();
   const material = doc.createMaterial(name).setBaseColorFactor([...color, 1]);
   const box = mesh(doc, 'Box', boxGeometry(1), material);
-  const nodes = boxes.map(([label, [x, z], [width, height, depth]]) =>
-    doc
+  const nodes = boxes.map(([label, [x, z], [width, height, depth]], index) => {
+    let drawn = box;
+    if (batched) {
+      const geometry = boxGeometry(1);
+      const batchIds = new Uint16Array(geometry.positions.length / 3).fill(index);
+      const primitive = meshPrimitive(doc, geometry, material).setAttribute(
+        '_BATCHID',
+        accessor(doc, 'SCALAR', batchIds),
+      );
+      drawn = doc.createMesh(label).addPrimitive(primitive);
+    }
+    return doc
       .createNode(label)
-      .setMesh(box)
+      .setMesh(drawn)
       .setTranslation([x, height / 2, z])
-      .setScale([width, height, depth]),
-  );
+      .setScale([width, height, depth]);
+  });
   scene(doc, name, ...nodes);
   return io.writeBinary(doc);
 }
@@ -1764,7 +1777,13 @@ async function writeTilesets() {
           ['north-east ground', [25, -25], [50, 0.5, 50]],
           ['north-east tower', [25, -25], [16, 48, 16]],
         ],
+        { batched: true },
       ),
+      // The tower and its ground are features, clicked in the tileset like any other tile's.
+      {
+        featureTable: { BATCH_LENGTH: 2 },
+        batchTable: { name: ['North-east square', 'North-east tower'], floors: [0, 16] },
+      },
     ),
   );
   write(
