@@ -1,3 +1,5 @@
+import type { Feature } from '../scene/features';
+import { featureSection, withFeature } from './feature';
 import type {
   CompareTarget,
   DiffSide,
@@ -17,7 +19,7 @@ import type { SidePanel } from '../panel';
 import type { Shell } from '../shell';
 import { compare, COLLECTIONS, type ChangeKind, type Comparison } from './compare';
 import { COLLECTION_KINDS, CompareView } from './compareView';
-import { inspect, type InspectContext } from './details';
+import { inspect, type InspectContext, type Section } from './details';
 import { referenceOf, type Reference } from './reference';
 import { fill, Formatter } from './format';
 import { GltfModel } from './gltf';
@@ -83,6 +85,8 @@ export class StructureView {
   private imageBytes: readonly (number | null)[] | undefined;
   private readonly panel: SidePanel;
   private readonly format: Formatter;
+  /** The feature clicked in the view, shown above the selection's details until it changes. */
+  private feature: Section | undefined;
   private context: InspectContext | undefined;
   /** Who uses accessors, bufferViews and images: read when first asked for. */
   private usage: ModelUsage | undefined;
@@ -497,14 +501,22 @@ export class StructureView {
     return inspection && `${inspection.title}, ${inspection.kind}`;
   }
 
+  /** Shows a 3D Tiles feature clicked in the view above what is selected; none clears it. */
+  showFeature(feature: Feature | undefined): void {
+    this.feature = feature && featureSection(feature, this.strings.structure.tile, this.format);
+    this.render(true);
+  }
+
   private show(key: EntryKey, sameEntry = false): void {
     if (!this.context) return;
+    if (!sameEntry || key !== this.selected) this.feature = undefined;
     this.selected = key;
     this.render(sameEntry);
     this.events.selected(key);
   }
 
   private render(sameEntry: boolean): void {
-    if (this.context) this.inspector.show(inspect(this.context, this.selected), sameEntry);
+    if (!this.context) return;
+    this.inspector.show(withFeature(inspect(this.context, this.selected), this.feature), sameEntry);
   }
 }

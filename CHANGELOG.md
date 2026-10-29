@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it too, are drawn together as one model, each where it says, under a node of its own in the
   scene tree. The model's details list the tiles the composite holds; the notice above the view
   names those not drawn (point clouds, and models that can't be read).
+- **Feature properties**: click a building, an instance or a point of a 3D Tiles tile, in a
+  tileset or in a `.b3dm`, `.i3dm`, `.pnts` or `.cmpt` file opened on its own, and the inspector
+  shows that feature first: its batch id among the tile's features and every property the batch
+  table gives it, from its JSON or its binary body (vectors on one line), with the properties of
+  each class of the batch table hierarchy it belongs to. Instances and points that name their
+  feature by `BATCH_ID` show that feature.
 - **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
   model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 

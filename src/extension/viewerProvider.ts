@@ -6,6 +6,7 @@ import type {
   ModelFormat,
   Preferences,
   WebviewToHostMessage,
+  TileTablesBytes,
 } from '../shared/protocol';
 import { composeReference } from '../shared/reference';
 import { DiffPairs, type DiffMember } from './diffPairs';
@@ -18,6 +19,7 @@ import { sniff } from './model/container';
 import { isI3dm } from './model/i3dm';
 import { isB3dm } from './model/tileFile';
 import { gltfFile, type GltfFile } from './model/tileGltf';
+import { readTileTables } from './model/tileTables';
 import { fileResourceOpener } from './model/fileResources';
 import { loadMessages, type ResourceOpener } from './model/load';
 import { looksLike } from './model/mesh/parse';
@@ -249,6 +251,10 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           void readTile(message.path, tileOpener, loadTexts(vscode.l10n.t)).then((tile) => {
             if (!disposed) void post({ type: 'tile', id: message.id, ...tile });
           });
+        } else if (message.type === 'tileTables') {
+          void tileTables(uri, format, message.part).then((tables) => {
+            if (!disposed) void post({ type: 'tileTables', id: message.id, tables });
+          });
         } else if (message.type === 'camera') {
           this.diffs.camera(member, message.camera);
         } else if (message.type === 'summary') {
@@ -399,6 +405,23 @@ function readFailure(loadId: number, reload: boolean): HostToWebviewMessage {
     message: vscode.l10n.t("The file couldn't be read."),
     details: [],
   };
+}
+
+/** The feature and batch tables of a tile file, or of a tile inside a composite. */
+async function tileTables(
+  uri: vscode.Uri,
+  format: ModelFormat,
+  part: string | undefined,
+): Promise<TileTablesBytes | undefined> {
+  let source: ByteSource | undefined;
+  try {
+    source = await openSource(uri, format);
+    return await readTileTables(source, part);
+  } catch {
+    return undefined;
+  } finally {
+    await source?.close();
+  }
 }
 
 /** Local files are read in place; other schemes (Git, remote file systems) only as a whole. */

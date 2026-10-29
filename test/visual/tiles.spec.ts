@@ -160,6 +160,13 @@ test('selects the tile clicked in the view, the tileset that holds it for an ext
     box.y + (sumY / count) * (box.height / pixels.height),
   );
   await expect(selectedRow(page)).toContainText('east/tileset.json');
+  // The tower is a feature of its tile, which the inspector shows from the tile's batch table.
+  const feature = page.locator('.nm-section', {
+    has: page.locator('.nm-section-title', { hasText: /^Feature$/ }),
+  });
+  await expect(feature.locator('dt')).toContainText(['Batch ID', 'name', 'floors']);
+  await expect(feature.locator('dd')).toContainText(['1of 2', 'North-east tower', '16']);
+  await page.screenshot({ path: `${SCREENS}/feature-tileset-dark.png` });
   // Empty space selects the tileset.
   await page.mouse.click(box.x + 8, box.y + 8);
   await expect(selectedRow(page)).toContainText('tiles/tileset.json');
@@ -296,6 +303,40 @@ for (const [fixture, theme] of [
       `Size of the model: width (X), height (Y) and depth (Z): ${size}`,
     );
     await page.screenshot({ path: `${SCREENS}/i3dm-${fixture.replace('.', '-')}-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}
+
+for (const [fixture, theme, expected] of [
+  ['batched.b3dm', 'dark', ['name', 'year', 'height']],
+  ['instanced.i3dm', 'light', ['name']],
+  ['points.pnts', 'dark', ['intensity']],
+  ['composite.cmpt', 'light', ['name']],
+] as [string, ThemeName, string[]][]) {
+  test(`shows the feature clicked in ${fixture}, from the tile's tables, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open(`tiles/${fixture}`);
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    const feature = page.locator('.nm-section', {
+      has: page.locator('.nm-section-title', { hasText: /^Feature$/ }),
+    });
+    // Somewhere near the middle of the view there is a feature to click.
+    const view = (await page.locator('.nm-viewport').boundingBox())!;
+    const spots = [0.5, 0.45, 0.55, 0.4, 0.6].flatMap((y) =>
+      [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65].map((x) => [x, y]),
+    );
+    for (const [x, y] of spots) {
+      await page.mouse.click(view.x + view.width * x, view.y + view.height * y);
+      if (await feature.isVisible({ timeout: 500 }).catch(() => false)) break;
+    }
+    await expect(feature).toBeVisible();
+    const labels = feature.locator('dt');
+    await expect(labels.first()).toHaveText('Batch ID');
+    await expect(labels).toContainText(expected);
+    await expect(feature.locator('dd').first()).toContainText(/^\d+of [\d,]+$/);
+    await page.screenshot({ path: `${SCREENS}/feature-${fixture.replace('.', '-')}-${theme}.png` });
     expect(viewer.problems).toEqual([]);
   });
 }

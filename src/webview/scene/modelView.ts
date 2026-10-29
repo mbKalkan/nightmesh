@@ -32,6 +32,7 @@ import {
   type Texture,
   type WebGLRenderTarget,
 } from 'three';
+import type { BatchTable, FeatureTable } from '3d-tiles-renderer/core';
 import type { TilesRenderer } from '3d-tiles-renderer/three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -39,7 +40,8 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
-import { Picker, type PickRegion, type SurfacePoint } from './picking';
+import type { TileTables } from './features';
+import { Picker, type FeatureKind, type PickRegion, type SurfacePoint } from './picking';
 import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
 import {
@@ -73,12 +75,29 @@ export interface Decoders {
   ktx2?: KTX2Loader;
 }
 
+/**
+ * A clicked feature and where its tile's tables are: on the tile the tileset loaded, or in the
+ * file shown, under its top `node`.
+ */
+export interface PickedFeature {
+  kind: FeatureKind;
+  index: number;
+  tables?: TileTables;
+  /** The top node the feature's model is under, in the file shown. */
+  node?: number;
+}
+
 export interface ViewEvents {
   /**
    * A click on the model picked what is drawn there, by its structure key (`node:3`, or a 3D
    * Tiles `tile:0/2`), or empty space; `frame` on double-click.
    */
   picked(key: string | undefined, frame: boolean): void;
+  /**
+   * After a click, the 3D Tiles feature drawn there, or none: in a tileset, and in tile files
+   * once `pickFeatures` is set.
+   */
+  featurePicked(feature: PickedFeature | undefined): void;
   /**
    * The size, in metres along X, Y and Z, of what is selected, or of the whole model when the
    * selection draws nothing; undefined when there is nothing drawn at all.
@@ -167,6 +186,8 @@ export class ModelView {
   private changesBoxed = true;
   /** Whether clicks place the ends of a measurement rather than select. */
   private measuring = false;
+  /** Clicks also find the feature under the pointer: the file shown is a 3D Tiles tile. */
+  pickFeatures = false;
   /** The measurement last told, to tell only changes. */
   private ruledAs: string | undefined;
   private snapTimer: ReturnType<typeof setTimeout> | undefined;
@@ -942,7 +963,10 @@ export class ModelView {
       if (moved > CLICK_SLOP) return;
       if (event.button === 2) this.events.menu(this.pickAt(event), event.clientX, event.clientY);
       else if (this.measuring) this.placeEnd(event);
-      else this.events.picked(this.pickAt(event), false);
+      else {
+        this.events.picked(this.pickAt(event), false);
+        if (this.tiles || this.pickFeatures) this.events.featurePicked(this.featureAt(event));
+      }
     });
     this.canvas.addEventListener('dblclick', (event) => {
       if (!this.measuring) this.events.picked(this.pickAt(event), true);
@@ -982,6 +1006,35 @@ export class ModelView {
       region,
       Math.max(1, Math.round(SNAP_RADIUS * scale)),
     );
+  }
+
+  /**
+   * The 3D Tiles feature under the pointer, with where its tables are: on the tile a tileset
+   * loaded, which the renderer's loaders give its tables; else in the file shown, with the top
+   * node its model is under (a composite names it for the tile: `b3dm 2`).
+   */
+  private featureAt(event: MouseEvent): PickedFeature | undefined {
+    if (!this.model) return undefined;
+    const hit = this.picker.feature(
+      this.renderer,
+      this.scene,
+      this.viewpoint.camera,
+      this.model,
+      this.overlays(),
+      this.regionAt(event),
+    );
+    if (!hit) return undefined;
+    const { kind, index } = hit;
+    let top: number | undefined;
+    for (let above: Object3D | null = hit.object; above; above = above.parent) {
+      const loaded = above as Object3D &
+        Partial<{ batchTable: BatchTable; featureTable: FeatureTable }>;
+      if (loaded.batchTable && loaded.featureTable) {
+        return { kind, index, tables: { batch: loaded.batchTable, feature: loaded.featureTable } };
+      }
+      top = this.index?.node(above) ?? top;
+    }
+    return this.tiles ? undefined : { kind, index, node: top };
   }
 
   /** What is drawn under the pointer, if anything: a node, or a tileset's tile. */
