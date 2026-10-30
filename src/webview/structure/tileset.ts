@@ -4,6 +4,21 @@ import type { TileContentKind, TileState, TilesetStrings } from '../../shared/pr
 import { fill, type Formatter } from './format';
 import type { Inspection, Row, Section } from './details';
 import type { EntryKey, OutlineEntry } from './outline';
+import {
+  entitySection,
+  featurePropertiesSection,
+  schemaSection,
+  statisticsSection,
+} from './metadataSections';
+import {
+  readEntity,
+  readGroups,
+  readSchema,
+  readStatistics,
+  type ClassStatistics,
+  type MetadataEntity,
+  type MetadataSchema,
+} from './tilesetMetadata';
 
 /** Tiles in a tileset's own JSON past which the rest aren't listed: nothing real has them. */
 const MAX_TILES = 1_000_000;
@@ -23,7 +38,8 @@ export interface TileInfo {
   refine?: 'ADD' | 'REPLACE';
   /** The refinement is the parent's: the tile says none of its own. */
   inherited: boolean;
-  contents: { uri: string; kind: TileContentKind }[];
+  contents: TileContent[];
+  metadata?: MetadataEntity;
   volume?: TileVolume;
   transform?: number[];
   requestVolume: boolean;
@@ -33,6 +49,14 @@ export interface TileInfo {
     availableLevels?: number;
     subtrees?: string;
   };
+}
+
+export interface TileContent {
+  uri: string;
+  kind: TileContentKind;
+  metadata?: MetadataEntity;
+  /** The metadata group it is in: its index in 1.1, its ID in 1.0. */
+  group?: string;
 }
 
 /** What the renderer has of a tile, and of the whole tileset, at the moment. */
@@ -48,6 +72,12 @@ const isObject = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const num = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const LEGACY = '3DTILES_metadata';
+/** 1.0's extension for what 1.1 writes on the tileset, a tile or a content itself. */
+const legacy = (json: Json): Json | undefined => {
+  const extension = isObject(json.extensions) ? json.extensions[LEGACY] : undefined;
+  return isObject(extension) ? extension : undefined;
+};
 const numbers = (value: unknown, length: number) =>
   Array.isArray(value) && value.length === length && value.every((n) => num(n) !== undefined)
     ? (value as number[])
@@ -79,8 +109,16 @@ export class TilesetModel {
   readonly extensionsUsed: string[];
   readonly extensionsRequired: string[];
   readonly depth: number = 0;
+  /** The metadata schema: written in the tileset, or read by the host from its own file. */
+  readonly schema?: MetadataSchema;
+  readonly schemaUri?: string;
+  readonly metadata?: MetadataEntity;
+  readonly groups: Map<string, MetadataEntity>;
+  readonly statistics: ClassStatistics[];
+  /** 1.0's ranges of the tiles' batch table properties, by name. */
+  readonly featureProperties: { name: string; minimum?: number; maximum?: number }[];
 
-  constructor(json: string) {
+  constructor(json: string, schema?: object) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(json);
@@ -98,6 +136,18 @@ export class TilesetModel {
       Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
     this.extensionsUsed = names(tileset.extensionsUsed);
     this.extensionsRequired = names(tileset.extensionsRequired);
+    const metadata = legacy(tileset) ?? tileset;
+    this.schemaUri = typeof metadata.schemaUri === 'string' ? metadata.schemaUri : undefined;
+    this.schema = readSchema(metadata.schema ?? schema);
+    this.metadata = readEntity(metadata === tileset ? tileset.metadata : metadata.tileset);
+    this.groups = readGroups(metadata.groups);
+    this.statistics = readStatistics(metadata.statistics);
+    this.featureProperties = (
+      isObject(tileset.properties) ? Object.entries(tileset.properties) : []
+    )
+      .filter((entry): entry is [string, Json] => isObject(entry[1]))
+      .slice(0, 1000)
+      .map(([name, range]) => ({ name, minimum: num(range.minimum), maximum: num(range.maximum) }));
     if (!isObject(tileset.root)) return;
     // Walked without recursion: a deep tree mustn't run out of stack.
     const stack: { json: Json; path: string; parent?: TileInfo }[] = [
@@ -140,11 +190,34 @@ const byIndex = (a: string, b: string) =>
 
 function readTile(json: Json, path: string, parent: TileInfo | undefined): TileInfo {
   const refine = json.refine === 'ADD' || json.refine === 'REPLACE' ? json.refine : undefined;
-  const contents = [json.content, ...(Array.isArray(json.contents) ? json.contents : [])]
+  const multiple = isObject(json.extensions)
+    ? json.extensions['3DTILES_multiple_contents']
+    : undefined;
+  const list = (value: unknown) => (Array.isArray(value) ? (value as unknown[]) : []);
+  const contents = [
+    json.content,
+    ...list(json.contents),
+    // Its early drafts named the list `content`.
+    ...list(isObject(multiple) ? (multiple.contents ?? multiple.content) : undefined),
+  ]
     .filter(isObject)
-    .map((content) => (typeof content.uri === 'string' ? content.uri : content.url))
-    .filter((uri): uri is string => typeof uri === 'string')
-    .map((uri) => ({ uri, kind: contentKind(uri) }));
+    .flatMap((content): TileContent[] => {
+      const uri = typeof content.uri === 'string' ? content.uri : content.url;
+      if (typeof uri !== 'string') return [];
+      const old = legacy(content);
+      const group = old ? old.group : content.group;
+      return [
+        {
+          uri,
+          kind: contentKind(uri),
+          metadata: readEntity(old ?? content.metadata),
+          group:
+            typeof group === 'string' || (typeof group === 'number' && Number.isInteger(group))
+              ? String(group)
+              : undefined,
+        },
+      ];
+    });
   const implicit = isObject(json.implicitTiling) ? json.implicitTiling : undefined;
   const subtrees = implicit && isObject(implicit.subtrees) ? implicit.subtrees.uri : undefined;
   return {
@@ -156,6 +229,7 @@ function readTile(json: Json, path: string, parent: TileInfo | undefined): TileI
     refine: refine ?? parent?.refine,
     inherited: refine === undefined && parent?.refine !== undefined,
     contents,
+    metadata: readEntity(legacy(json) ?? json.metadata),
     volume: volumeOf(json.boundingVolume),
     transform: numbers(json.transform, 16),
     requestVolume: isObject(json.viewerRequestVolume),
@@ -266,6 +340,17 @@ function inspectModel(context: TilesetContext): Inspection {
         [labels.extensionsRequired, model.extensionsRequired.join(', ') || undefined],
       ]),
     },
+    ...(model.metadata
+      ? [
+          entitySection(
+            strings.metadata.section,
+            model.metadata,
+            model.schema,
+            strings.metadata,
+            format,
+          ),
+        ]
+      : []),
     {
       title: strings.sections.tiles,
       rows: rows([
@@ -289,6 +374,14 @@ function inspectModel(context: TilesetContext): Inspection {
         [labels.memory, format.bytes(stats.bytes)],
       ]),
     });
+  }
+  const words = strings.metadata;
+  if (model.featureProperties.length > 0)
+    sections.push(featurePropertiesSection(model.featureProperties, words, format));
+  if (model.statistics.length > 0)
+    sections.push(statisticsSection(model.statistics, words, format));
+  if (model.schema || model.schemaUri !== undefined || model.groups.size > 0) {
+    sections.push(schemaSection(model.schema, model.schemaUri, model.groups.size, words, format));
   }
   return { title: context.fileName, kind: strings.tileset, sections };
 }
@@ -318,15 +411,36 @@ function inspectTile(context: TilesetContext, tile: TileInfo): Inspection {
   }
   if (tile.requestVolume) tileRows.push({ label: labels.requestVolume, text: labels.yes });
   sections.push({ title: strings.sections.tile, rows: tileRows });
+  const { model } = context;
+  const words = strings.metadata;
+  if (tile.metadata) {
+    sections.push(entitySection(words.section, tile.metadata, model.schema, words, format));
+  }
 
   if (tile.contents.length > 0) {
     sections.push({
       title: strings.sections.content,
-      rows: tile.contents.flatMap((content) => [
+      rows: tile.contents.flatMap((content): Row[] => [
         { label: '', text: content.uri, mono: true, wide: true },
         { label: labels.volumeType, text: strings.contents[content.kind] },
+        ...(content.group === undefined
+          ? []
+          : [{ label: words.groupLabel, text: content.group, mono: true }]),
       ]),
     });
+  }
+  // Each content's metadata, then the groups they are in, each group once.
+  const several = tile.contents.length > 1;
+  for (const content of tile.contents) {
+    if (!content.metadata) continue;
+    const title = several ? fill(words.contentOf, content.uri) : words.content;
+    sections.push(entitySection(title, content.metadata, model.schema, words, format));
+  }
+  for (const id of new Set(tile.contents.map((content) => content.group))) {
+    const group = id === undefined ? undefined : model.groups.get(id);
+    if (group) {
+      sections.push(entitySection(fill(words.group, id!), group, model.schema, words, format));
+    }
   }
 
   if (tile.volume) sections.push(volumeSection(tile.volume, tile.transform, context));

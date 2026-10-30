@@ -1,0 +1,93 @@
+{
+  "id": "district",
+  "name": "District",
+  "version": "1.0.0",
+  "enums": {
+    "landUse": {
+      "values": [
+        {
+          "name": "Residential",
+          "value": 0
+        },
+        {
+          "name": "Commercial",
+          "value": 1
+        },
+        {
+          "name": "Park",
+          "value": 2
+        }
+      ]
+    }
+  },
+  "classes": {
+    "district": {
+      "name": "District",
+      "properties": {
+        "name": {
+          "type": "STRING"
+        },
+        "founded": {
+          "type": "SCALAR",
+          "componentType": "UINT16"
+        },
+        "tags": {
+          "type": "STRING",
+          "array": true
+        }
+      }
+    },
+    "quarter": {
+      "name": "Quarter",
+      "properties": {
+        "landUse": {
+          "type": "ENUM",
+          "enumType": "landUse"
+        },
+        "coverage": {
+          "type": "SCALAR",
+          "componentType": "UINT8",
+          "normalized": true,
+          "scale": 100
+        },
+        "height": {
+          "type": "SCALAR",
+          "componentType": "FLOAT32",
+          "semantic": "TILE_MAXIMUM_HEIGHT"
+        },
+        "trees": {
+          "type": "SCALAR",
+          "componentType": "UINT16",
+          "noData": 65535,
+          "default": 0
+        },
+        "surveyed": {
+          "type": "BOOLEAN",
+          "default": false
+        }
+      }
+    },
+    "building": {
+      "properties": {
+        "floors": {
+          "type": "SCALAR",
+          "componentType": "UINT8"
+        },
+        "architect": {
+          "type": "STRING"
+        }
+      }
+    },
+    "zone": {
+      "properties": {
+        "label": {
+          "type": "STRING"
+        },
+        "color": {
+          "type": "VEC3",
+          "componentType": "UINT8"
+        }
+      }
+    }
+  }
+}

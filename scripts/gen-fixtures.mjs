@@ -2128,6 +2128,116 @@ async function writeTilesets() {
       },
     }),
   );
+  // 3D Tiles 1.1 metadata (D-058): the schema in a file of its own; the tileset's, the
+  // quarters' and their contents' entities, two groups, statistics.
+  write(
+    'tiles/metadata-schema.json',
+    json({
+      id: 'district',
+      name: 'District',
+      version: '1.0.0',
+      enums: {
+        landUse: {
+          values: [
+            { name: 'Residential', value: 0 },
+            { name: 'Commercial', value: 1 },
+            { name: 'Park', value: 2 },
+          ],
+        },
+      },
+      classes: {
+        district: {
+          name: 'District',
+          properties: {
+            name: { type: 'STRING' },
+            founded: { type: 'SCALAR', componentType: 'UINT16' },
+            tags: { type: 'STRING', array: true },
+          },
+        },
+        quarter: {
+          name: 'Quarter',
+          properties: {
+            landUse: { type: 'ENUM', enumType: 'landUse' },
+            // Percent, as a byte: 255 is 100 %.
+            coverage: { type: 'SCALAR', componentType: 'UINT8', normalized: true, scale: 100 },
+            height: { type: 'SCALAR', componentType: 'FLOAT32', semantic: 'TILE_MAXIMUM_HEIGHT' },
+            trees: { type: 'SCALAR', componentType: 'UINT16', noData: 65535, default: 0 },
+            surveyed: { type: 'BOOLEAN', default: false },
+          },
+        },
+        building: {
+          properties: {
+            floors: { type: 'SCALAR', componentType: 'UINT8' },
+            architect: { type: 'STRING' },
+          },
+        },
+        zone: {
+          properties: {
+            label: { type: 'STRING' },
+            color: { type: 'VEC3', componentType: 'UINT8' },
+          },
+        },
+      },
+    }),
+  );
+  const land = ['Residential', 'Commercial', 'Park'];
+  write(
+    'tiles/metadata.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      schemaUri: 'metadata-schema.json',
+      metadata: {
+        class: 'district',
+        properties: { name: 'Old town', founded: 1453, tags: ['historic', 'coastal'] },
+      },
+      groups: [
+        { class: 'zone', properties: { label: 'West', color: [64, 64, 255] } },
+        { class: 'zone', properties: { label: 'East', color: [255, 128, 0] } },
+      ],
+      statistics: {
+        classes: {
+          quarter: {
+            count: 3,
+            properties: {
+              height: { min: 12, max: 30, mean: 20 },
+              landUse: { occurrences: { Residential: 1, Commercial: 1, Park: 1 } },
+            },
+          },
+        },
+      },
+      geometricError: 200,
+      root: {
+        transform: eastNorthUp(41.0082, 28.9784),
+        boundingVolume: boxVolume([0, 0], 100, 50),
+        geometricError: 20,
+        refine: 'REPLACE',
+        content: { uri: 'district.b3dm' },
+        children: quarters.map(([name, center, , height], i) => ({
+          boundingVolume: boxVolume(center, 50, height),
+          geometricError: 0,
+          metadata: {
+            class: 'quarter',
+            properties: {
+              landUse: land[i],
+              coverage: [255, 191, 64][i],
+              height,
+              // The south-east quarter's trees weren't counted.
+              trees: [120, 45, 65535][i],
+              ...(i === 0 ? { surveyed: true } : {}),
+            },
+          },
+          content: {
+            uri: `${name}.b3dm`,
+            group: center[0] < 0 ? 0 : 1,
+            metadata: {
+              class: 'building',
+              properties: { floors: Math.round(height / 3), architect: `Studio ${i + 1}` },
+            },
+          },
+        })),
+      },
+    }),
+  );
 }
 
 /** The triangle as .gltf JSON with its one buffer pointing at `uri`. */

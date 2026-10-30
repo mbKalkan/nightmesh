@@ -24,6 +24,7 @@ import { readCmpt } from './cmpt';
 import { instancedGltf, readI3dm, rtcPlacement, translation, viewFrame } from './i3dm';
 import { mergeGltfs, type MergePart } from './merge';
 import { readB3dm } from './tileFile';
+import { readJsonObject } from './jsonResource';
 import { tilesetMessage } from './tiles';
 
 /** Why a resource the model refers to isn't there. */
@@ -114,7 +115,7 @@ export async function* loadMessages(
   const resources = new Resources(openResource, options.texts);
   try {
     if (options.format === 'tileset') {
-      yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' });
+      yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' }, resources);
     } else if (options.format && isMeshFormat(options.format)) {
       yield* meshMessages(source, options.format, resources, options);
     } else if (options.format === 'b3dm' || options.format === 'i3dm') {
@@ -578,9 +579,6 @@ async function* drawMessages(
   yield* partMessages(plan.parts, loadId);
 }
 
-/** The largest metadata schema read from a file of its own: schemas are a few kilobytes. */
-const SCHEMA_BYTES = 16 * 1024 * 1024;
-
 type WithMetadata = Gltf & {
   extensions?: { EXT_structural_metadata?: { schema?: unknown; schemaUri?: unknown } };
 };
@@ -594,18 +592,9 @@ async function withSchema(json: WithMetadata, resources: Resources): Promise<Wit
   const metadata = json.extensions?.EXT_structural_metadata;
   const uri = metadata?.schemaUri;
   if (!metadata || metadata.schema !== undefined || typeof uri !== 'string') return json;
-  const data = await resources.data(uri);
-  let schema: unknown;
-  if (data) {
-    try {
-      if (data.available > SCHEMA_BYTES) throw new RangeError();
-      schema = JSON.parse(new TextDecoder().decode(await data.source.read(0, data.available)));
-    } catch {
-      resources.problem(uri, 'unreadable', resourceName(uri));
-    }
-  }
+  const schema = await readJsonObject(uri, resources);
   const extensions = { ...json.extensions };
-  if (schema && typeof schema === 'object') {
+  if (schema) {
     const { schemaUri: _, ...rest } = metadata;
     extensions.EXT_structural_metadata = { ...rest, schema };
     return { ...json, extensions };

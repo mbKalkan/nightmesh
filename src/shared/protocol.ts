@@ -463,6 +463,41 @@ export type TileContentKind =
 /** Where a tile is in the renderer: its content loading, loaded or failed, or none asked for. */
 export type TileState = 'unloaded' | 'queued' | 'loading' | 'parsing' | 'loaded' | 'failed';
 
+/** Words for a tileset's metadata (D-058): its schema, entities and statistics. */
+export interface TilesetMetadataStrings {
+  /** The section of the tileset's or a tile's own metadata. */
+  section: string;
+  schema: string;
+  statisticsTitle: string;
+  featureProperties: string;
+  content: string;
+  /** A content's, when the tile has several: `Content metadata ({0})`. */
+  contentOf: string;
+  /** A group's section: `Group {0}`. */
+  group: string;
+  groupLabel: string;
+  className: string;
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  file: string;
+  classes: string;
+  enums: string;
+  groups: string;
+  /** How many entities of a class there are: `{0} entities`. */
+  entities: string;
+  /** Notes after a value the class gave, not the entity. */
+  defaultValue: string;
+  noData: string;
+  /** `{0} to {1}` */
+  range: string;
+  statistics: Record<
+    'min' | 'max' | 'mean' | 'median' | 'standardDeviation' | 'variance' | 'sum',
+    string
+  >;
+}
+
 /** Words for a 3D Tiles tileset's tree and inspector (D-046). */
 export interface TilesetStrings {
   /** The tree, as screen readers name it. */
@@ -527,6 +562,7 @@ export interface TilesetStrings {
   };
   volumes: Record<'box' | 'region' | 'sphere', string>;
   contents: Record<TileContentKind, string>;
+  metadata: TilesetMetadataStrings;
   states: Record<TileState, string>;
   /** Screen-space error, in pixels: `{0} px`. */
   pixels: string;
@@ -832,6 +868,10 @@ export interface TilesetMessage {
   url: string;
   json: string;
   fileSize: number;
+  /** The metadata schema, when the tileset gives it as a file of its own (D-058). */
+  schema?: object;
+  /** What couldn't be read, in sentences: a schema file. */
+  notices?: string[];
 }
 
 /** The bytes of a tile the webview asked for, or why it can't have them, in a sentence. */

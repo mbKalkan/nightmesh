@@ -50,7 +50,7 @@ export function featureSection(
 }
 
 /** A value as the inspector shows it: numbers in the locale, text as it is, the rest as JSON. */
-function valueRow(value: unknown, format: Formatter): Pick<Row, 'text' | 'mono' | 'json'> {
+export function valueRow(value: unknown, format: Formatter): Pick<Row, 'text' | 'mono' | 'json'> {
   if (typeof value === 'number') return { text: format.value(value), mono: true };
   if (typeof value === 'string') return { text: cut(value) };
   if (typeof value === 'boolean' || value === null || value === undefined) {
