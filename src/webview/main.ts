@@ -230,7 +230,8 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     }
     case 'copyReference': {
       const key = message.atPointer ? (menuKey ?? selectedKey) : selectedKey;
-      vscode.postMessage({ type: 'reference', ...structure?.reference(key, message.details) });
+      const panels = tilesetView ?? structure;
+      vscode.postMessage({ type: 'reference', ...panels?.reference(key, message.details) });
       break;
     }
   }
@@ -388,7 +389,7 @@ async function saveScreenshot(): Promise<void> {
 
 /** Hands a report on the model to the host to save, as Markdown or JSON. */
 function saveReport(): void {
-  const report = structure?.report();
+  const report = (tilesetView ?? structure)?.report();
   if (report) vscode.postMessage({ type: 'save', what: 'report', ...report });
 }
 
@@ -512,8 +513,7 @@ function open(message: OpenMessage): void {
     const text = strings!.export;
     return [
       ...(shownView ? [{ label: text.screenshot, run: () => void saveScreenshot() }] : []),
-      // A tileset has no report of its own yet.
-      ...(structure ? [{ label: text.report, run: saveReport }] : []),
+      ...(structure || tilesetView ? [{ label: text.report, run: saveReport }] : []),
     ];
   });
   shadingOptions ??= new MenuButton(
@@ -955,18 +955,19 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
     if (message.loadId !== latestLoad) return;
     tileProblems.clear();
     for (const notice of message.notices ?? []) tileProblems.add(notice);
-    const tiles = createTiles(message.url, message.json, requestTile, decoders);
-    tiles.addEventListener('load-error', ({ tile, url, error }) => {
+    const damaged = (url: string, error: unknown) => {
       if (error instanceof TileProblem) return;
-      const { pathname } = new URL(String(url ?? tile?.content?.uri), 'nightmesh-tiles://tileset');
+      const { pathname } = new URL(url, 'nightmesh-tiles://tileset');
       const name = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
       showTileProblem(fill(text.tileDamaged, name));
-    });
+    };
+    const tiles = createTiles(message.url, message.json, requestTile, decoders, damaged);
+    tiles.addEventListener('load-error', ({ tile, url, error }) =>
+      damaged(String(url ?? tile?.content?.uri), error),
+    );
     target.showTiles(tiles, message.reload && hasModel);
     target.select(selectedKey);
     tilesetView?.setLive(target.tilesLive());
-    // Shading modes replace materials, which tiles that come and go would leave behind.
-    shell.shadingButton.hidden = true;
     hasModel = true;
     shell.hideError();
     shell.setState('shown');

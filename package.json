@@ -231,11 +231,11 @@
       "commandPalette": [
         {
           "command": "nightmesh.copyReference",
-          "when": "activeCustomEditorId == nightmesh.viewer"
+          "when": "activeCustomEditorId =~ /^nightmesh\\.(viewer|tileset)$/"
         },
         {
           "command": "nightmesh.copyReferenceWithDetails",
-          "when": "activeCustomEditorId == nightmesh.viewer"
+          "when": "activeCustomEditorId =~ /^nightmesh\\.(viewer|tileset)$/"
         },
         {
           "command": "nightmesh.showJson",
@@ -247,18 +247,18 @@
         },
         {
           "command": "nightmesh.saveReport",
-          "when": "activeCustomEditorId == nightmesh.viewer"
+          "when": "activeCustomEditorId =~ /^nightmesh\\.(viewer|tileset)$/"
         }
       ],
       "webview/context": [
         {
           "command": "nightmesh.copyReference",
-          "when": "webviewId == 'nightmesh.viewer'",
+          "when": "webviewId == 'nightmesh.viewer' || webviewId == 'nightmesh.tileset'",
           "group": "9_cutcopypaste@1"
         },
         {
           "command": "nightmesh.copyReferenceWithDetails",
-          "when": "webviewId == 'nightmesh.viewer'",
+          "when": "webviewId == 'nightmesh.viewer' || webviewId == 'nightmesh.tileset'",
           "group": "9_cutcopypaste@2"
         },
         {

@@ -2239,6 +2239,37 @@ async function writeTilesets() {
     }),
   );
   await implicitTileset();
+  // Several contents in one tile: 3D Tiles 1.1's `contents` at the root, and 1.0's extension
+  // below it, with one content that can't be read.
+  write(
+    'tiles/multiple.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      extensionsUsed: ['3DTILES_multiple_contents'],
+      geometricError: 100,
+      root: {
+        boundingVolume: boxVolume([0, 0], 100, 50),
+        geometricError: 20,
+        refine: 'ADD',
+        contents: [{ uri: 'south-west.b3dm' }, { uri: 'north-west.b3dm' }],
+        children: [
+          {
+            boundingVolume: boxVolume([25, 0], 50, 50),
+            geometricError: 0,
+            extensions: {
+              '3DTILES_multiple_contents': {
+                contents: [
+                  { uri: 'south-east.b3dm' },
+                  { uri: 'east/tower.b3dm' },
+                  { uri: 'damaged.b3dm' },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    }),
+  );
 }
 
 /**
@@ -2276,39 +2307,111 @@ async function implicitTileset() {
         [`Tower ${x} ${y}`, [east, -north], [16, 10 + 8 * i, 16]],
       ]),
     );
+    const leaf = {
+      tileAvailability: { constant: 1 },
+      contentAvailability: [{ constant: 1 }],
+      childSubtreeAvailability: { constant: 0 },
+    };
+    write(`tiles/implicit/subtrees/1/${x}/${y}.subtree`, subtree(leaf));
+    write(`tiles/implicit/subtrees/1/${x}/${y}.json`, json(leaf));
+  }
+  const top = {
+    tileAvailability: { constant: 1 },
+    contentAvailability: [{ constant: 1 }],
+    childSubtreeAvailability: { constant: 1 },
+  };
+  write('tiles/implicit/subtrees/0/0/0.subtree', subtree(top));
+  write('tiles/implicit/subtrees/0/0/0.json', json(top));
+  const tiling = (subtrees) => ({
+    subdivisionScheme: 'QUADTREE',
+    subtreeLevels: 1,
+    availableLevels: 2,
+    subtrees: { uri: subtrees },
+  });
+  const square = {
+    boundingVolume: boxVolume([0, 0], 100, 40),
+    geometricError: 50,
+    refine: 'REPLACE',
+  };
+  // The same tiles, from binary subtrees and from JSON ones.
+  for (const [name, kind] of [
+    ['tileset', 'subtree'],
+    ['json-subtrees', 'json'],
+  ]) {
     write(
-      `tiles/implicit/subtrees/1/${x}/${y}.subtree`,
+      `tiles/implicit/${name}.json`,
+      json({
+        asset: { version: '1.1', generator: GENERATOR },
+        geometricError: 100,
+        root: {
+          ...square,
+          content: { uri: 'content/{level}/{x}/{y}.glb' },
+          implicitTiling: tiling(`subtrees/{level}/{x}/{y}.${kind}`),
+        },
+      }),
+    );
+  }
+  // As 3D Tiles 1.0 wrote implicit tiling: an extension, with the deepest level.
+  const { availableLevels, ...rest } = tiling('subtrees/{level}/{x}/{y}.subtree');
+  write(
+    'tiles/implicit/legacy.json',
+    json({
+      asset: { version: '1.0', generator: GENERATOR },
+      extensionsUsed: ['3DTILES_implicit_tiling'],
+      extensionsRequired: ['3DTILES_implicit_tiling'],
+      geometricError: 100,
+      root: {
+        ...square,
+        content: { uri: 'content/{level}/{x}/{y}.glb' },
+        extensions: {
+          '3DTILES_implicit_tiling': { ...rest, maximumLevel: availableLevels - 1 },
+        },
+      },
+    }),
+  );
+  // Two contents for each tile, the second only where x equals y: a white post on the root and
+  // on two quarters. Each subtree says which of its tile's contents are there.
+  for (const dir of ['posts', 'several'].flatMap((top) =>
+    ['0/0', '1/0', '1/1'].map((at) => `${top}/${at}`),
+  )) {
+    mkdirSync(join(OUT, 'tiles', 'implicit', dir), { recursive: true });
+  }
+  for (const [level, x, y] of [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 1],
+  ]) {
+    const [east, north] = level === 0 ? [0, 0] : [-25 + 50 * x, -25 + 50 * y];
+    write(
+      `tiles/implicit/posts/${level}/${x}/${y}.glb`,
+      await blocks('Post', [0.95, 0.95, 0.95], [['Post', [east + 12, -north + 12], [4, 36, 4]]]),
+    );
+  }
+  for (const [level, x, y] of [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [1, 0, 1],
+    [1, 1, 1],
+  ]) {
+    write(
+      `tiles/implicit/several/${level}/${x}/${y}.subtree`,
       subtree({
         tileAvailability: { constant: 1 },
-        contentAvailability: [{ constant: 1 }],
-        childSubtreeAvailability: { constant: 0 },
+        contentAvailability: [{ constant: 1 }, { constant: x === y ? 1 : 0 }],
+        childSubtreeAvailability: { constant: level === 0 ? 1 : 0 },
       }),
     );
   }
   write(
-    'tiles/implicit/subtrees/0/0/0.subtree',
-    subtree({
-      tileAvailability: { constant: 1 },
-      contentAvailability: [{ constant: 1 }],
-      childSubtreeAvailability: { constant: 1 },
-    }),
-  );
-  write(
-    'tiles/implicit/tileset.json',
+    'tiles/implicit/several.json',
     json({
       asset: { version: '1.1', generator: GENERATOR },
       geometricError: 100,
       root: {
-        boundingVolume: boxVolume([0, 0], 100, 40),
-        geometricError: 50,
-        refine: 'REPLACE',
-        content: { uri: 'content/{level}/{x}/{y}.glb' },
-        implicitTiling: {
-          subdivisionScheme: 'QUADTREE',
-          subtreeLevels: 1,
-          availableLevels: 2,
-          subtrees: { uri: 'subtrees/{level}/{x}/{y}.subtree' },
-        },
+        ...square,
+        contents: [{ uri: 'content/{level}/{x}/{y}.glb' }, { uri: 'posts/{level}/{x}/{y}.glb' }],
+        implicitTiling: tiling('several/{level}/{x}/{y}.subtree'),
       },
     }),
   );

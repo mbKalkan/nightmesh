@@ -212,25 +212,90 @@ test('lists the tiles of an external tileset once it is read', async ({ page }) 
   expect(viewer.problems).toEqual([]);
 });
 
-test('lists the tiles of implicit tiling as its subtrees are read', async ({ page }) => {
-  const viewer = await openViewer(page, 'dark');
-  await viewer.open('tiles/implicit/tileset.json');
-  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
-  // The root subtree, its tile, the four quarters' subtrees and their tiles.
-  await settle(page, viewer, 10);
-  expect(await requested(viewer)).toContain('/_/tiles/implicit/subtrees/1/1/0.subtree');
-  const tree = page.locator('.nm-tree');
-  await expect(tree).toContainText('content/0/0/0.glb');
-  await page.locator('.nm-tree-row', { hasText: 'content/0/0/0.glb' }).click();
-  await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/0');
-  const implicit = page.locator('.nm-section', {
-    has: page.locator('.nm-section-title', { hasText: /^Implicit tiling$/ }),
+for (const [name, kind] of [
+  ['tileset', 'subtree'],
+  ['json-subtrees', 'json'],
+  ['legacy', 'subtree'],
+]) {
+  test(`lists the tiles of implicit tiling as its subtrees are read, ${name}`, async ({ page }) => {
+    const viewer = await openViewer(page, 'dark');
+    await viewer.open(`tiles/implicit/${name}.json`);
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    // The root subtree, its tile, the four quarters' subtrees and their tiles.
+    await settle(page, viewer, 10);
+    expect(await requested(viewer)).toContain(`/_/tiles/implicit/subtrees/1/1/0.${kind}`);
+    await expect(page.locator('.nm-notice')).toBeHidden();
+    await expect(page.locator('.nm-inspector-content')).toContainText('Tiles drawn4');
+    const tree = page.locator('.nm-tree');
+    await expect(tree).toContainText('content/0/0/0.glb');
+    await page.locator('.nm-tree-row', { hasText: 'content/0/0/0.glb' }).click();
+    await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/0');
+    const implicit = page.locator('.nm-section', {
+      has: page.locator('.nm-section-title', { hasText: /^Implicit tiling$/ }),
+    });
+    await expect(implicit.locator('dd')).toContainText(['0', '0, 0']);
+    await page.keyboard.press('ArrowRight');
+    await expect(tree).toContainText(`subtrees/1/1/0.${kind}`);
+    await page.screenshot({ path: `${SCREENS}/tiles-implicit-${name}-dark.png` });
+    expect(viewer.problems).toEqual([]);
   });
-  await expect(implicit.locator('dd')).toContainText(['0', '0, 0']);
-  await page.keyboard.press('ArrowRight');
-  await expect(tree).toContainText('subtrees/1/1/0.subtree');
-  await page.screenshot({ path: `${SCREENS}/tiles-implicit-dark.png` });
+}
+
+test('draws the contents of implicit tiling available at each tile', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/implicit/several.json');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  // Five subtrees, five squares and the three posts where x equals y.
+  await settle(page, viewer, 13);
+  const asked = await requested(viewer);
+  expect(asked.filter((path) => path.includes('/posts/'))).toEqual([
+    '/_/tiles/implicit/posts/0/0/0.glb',
+    '/_/tiles/implicit/posts/1/0/0.glb',
+    '/_/tiles/implicit/posts/1/1/1.glb',
+  ]);
+  await expect(page.locator('.nm-notice')).toBeHidden();
+  await expect(page.locator('.nm-tree')).toContainText('content/0/0/0.glb +1');
+  const pixels = await pixelsOf(page, '.nm-canvas');
+  let white = 0;
+  for (let y = 0; y < pixels.height; y += 2) {
+    for (let x = 0; x < pixels.width; x += 2) {
+      if (pixels.at(x, y).every((channel) => channel > 200)) white++;
+    }
+  }
+  expect(white).toBeGreaterThan(20);
+  await page.screenshot({ path: `${SCREENS}/tiles-implicit-several-dark.png` });
   expect(viewer.problems).toEqual([]);
+});
+
+test('draws the several contents of a tile together, and says which could not be read', async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/multiple.json');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  await settle(page, viewer, 5);
+  await expect
+    .poll(async () => page.locator('.nm-notice li').allInnerTexts())
+    .toEqual(["damaged.b3dm isn't a tile Nightmesh can draw, or it is damaged."]);
+  await expect(page.locator('.nm-tree-row .nm-tree-label')).toHaveText([
+    'tiles/multiple.json',
+    'south-west.b3dm +1',
+    'south-east.b3dm +2',
+  ]);
+  await expect(page.locator('.nm-inspector-content')).toContainText('Tiles drawn2');
+  // The root's blue quarter, from 1.1's `contents`; the child's yellow tower, from 1.0's extension.
+  const pixels = await pixelsOf(page, '.nm-canvas');
+  let [blue, yellow] = [0, 0];
+  for (let y = 0; y < pixels.height; y += 2) {
+    for (let x = 0; x < pixels.width; x += 2) {
+      const [r, g, b] = pixels.at(x, y);
+      if (b > r * 1.6 && b > g * 1.1 && b > 80) blue++;
+      if (r > b * 1.6 && g > b * 1.6 && g > r * 0.75 && r > 80) yellow++;
+    }
+  }
+  expect(blue).toBeGreaterThan(50);
+  expect(yellow).toBeGreaterThan(50);
+  await page.screenshot({ path: `${SCREENS}/tiles-multiple-dark.png` });
 });
 
 test('says which tiles could not be had, and draws the rest', async ({ page }) => {

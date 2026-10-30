@@ -575,6 +575,7 @@ export class ModelView {
     this.model = tiles.group;
     this.index = undefined;
     this.scene.add(tiles.group);
+    this.shading.attach(tiles.group);
     this.ruler.clear();
     this.cameras = [];
     this.cameraIndex = -1;
@@ -593,10 +594,13 @@ export class ModelView {
     tiles.addEventListener('needs-update', redraw);
     tiles.addEventListener('load-model', ({ scene, tile }) => {
       prepareForUpload(scene);
+      this.shading.add(scene);
       this.tilePaths.set(scene, pathOf(tile as RendererTile));
       redraw();
       changed();
     });
+    // Before the renderer disposes the tile's own materials, which the tile gets back first.
+    tiles.addEventListener('dispose-model', ({ scene }) => this.shading.remove(scene));
     for (const type of ['dispose-model', 'tile-visibility-change', 'load-error'] as const) {
       tiles.addEventListener(type, changed);
     }

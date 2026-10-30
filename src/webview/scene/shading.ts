@@ -28,6 +28,8 @@ export class Shading {
   private mode: ShadingMode = 'lit';
   private wireframeShown = false;
   private model: Object3D | undefined;
+  /** Parts added after the model, a tileset's tiles: out of it while the renderer hides them. */
+  private readonly parts = new Set<Object3D>();
   /** Each mesh's own materials, while another mode shows. */
   private readonly originals = new Map<Mesh, Material | Material[]>();
   private readonly unlit = new Map<Material, MeshBasicMaterial>();
@@ -56,16 +58,52 @@ export class Shading {
   attach(model: Object3D): void {
     this.detach();
     this.model = model;
-    model.traverse((object) => {
+    this.add(model);
+  }
+
+  /**
+   * Draws `part`, just put under the model, the way the shading is set: a tileset's tile as it
+   * comes. Its meshes go into the wireframe, and their materials are replaced as the mode says.
+   */
+  add(part: Object3D): void {
+    if (!this.model) return;
+    if (part !== this.model) this.parts.add(part);
+    part.traverse((object) => {
       if (hasWireframe(object as Mesh)) object.layers.enable(WIREFRAME_LAYER);
     });
-    this.apply();
+    this.applyTo(part);
+  }
+
+  /**
+   * Gives `part` back its own materials before it is disposed, a tileset's tile as it goes, and
+   * frees what was made for them.
+   */
+  remove(part: Object3D): void {
+    this.parts.delete(part);
+    part.traverse((object) => {
+      const mesh = object as Mesh;
+      const original = this.originals.get(mesh);
+      if (original) {
+        mesh.material = original;
+        this.originals.delete(mesh);
+      }
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (!material) continue;
+        if (this.offset.delete(material)) unpush(material);
+        const unlit = this.unlit.get(material);
+        if (!unlit) continue;
+        this.offset.delete(unlit);
+        unlit.dispose();
+        this.unlit.delete(material);
+      }
+    });
   }
 
   /** Gives the model back its own materials, before it is disposed or lost. */
   detach(): void {
     this.restore();
     this.model = undefined;
+    this.parts.clear();
     for (const material of [...this.unlit.values(), ...this.normals.values()]) material.dispose();
     this.unlit.clear();
     this.normals.clear();
@@ -103,12 +141,17 @@ export class Shading {
 
   private apply(): void {
     this.restore();
-    const model = this.model;
-    if (!model) return;
-    model.traverse((object) => {
+    if (!this.model) return;
+    this.applyTo(this.model);
+    for (const part of this.parts) this.applyTo(part);
+  }
+
+  private applyTo(root: Object3D): void {
+    root.traverse((object) => {
       const mesh = object as Mesh;
       if (!mesh.isMesh) return;
-      if (this.mode !== 'lit') {
+      // A part under the model is met twice: its own materials are kept once.
+      if (this.mode !== 'lit' && !this.originals.has(mesh)) {
         this.originals.set(mesh, mesh.material);
         mesh.material = Array.isArray(mesh.material)
           ? mesh.material.map((material) => this.replace(material, mesh))
@@ -125,11 +168,7 @@ export class Shading {
   private restore(): void {
     for (const [mesh, material] of this.originals) mesh.material = material;
     this.originals.clear();
-    for (const material of this.offset) {
-      material.polygonOffset = false;
-      material.polygonOffsetFactor = 0;
-      material.polygonOffsetUnits = 0;
-    }
+    for (const material of this.offset) unpush(material);
     this.offset.clear();
   }
 
@@ -181,6 +220,12 @@ export class Shading {
     material.polygonOffsetUnits = 1;
     this.offset.add(material);
   }
+}
+
+function unpush(material: Material): void {
+  material.polygonOffset = false;
+  material.polygonOffsetFactor = 0;
+  material.polygonOffsetUnits = 0;
 }
 
 /**

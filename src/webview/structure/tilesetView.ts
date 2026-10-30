@@ -15,7 +15,9 @@ import {
   type TilesLive,
   type TilesetContext,
 } from './tileset';
+import type { Reference } from './reference';
 import { StructureTree } from './tree';
+import { tilesetReference, tilesetReport } from './tilesetReport';
 
 export interface TilesetEvents {
   /** The selection changed: in the tree, or from the 3D view. */
@@ -43,7 +45,7 @@ export class TilesetView {
   constructor(
     shell: Shell,
     private readonly strings: ViewerStrings,
-    locale: string,
+    private readonly locale: string,
     private readonly events: TilesetEvents,
   ) {
     this.format = new Formatter(locale);
@@ -141,6 +143,19 @@ export class TilesetView {
     }
     this.tree.select(key, tileAncestors(this.context.model, key));
     this.show(key);
+  }
+
+  /**
+   * A reference to `key` for a chat with an AI assistant or a note: the tile and where the JSON
+   * has it, and with `details` what the inspector says about it.
+   */
+  reference(key: EntryKey, details: boolean): Reference | undefined {
+    return this.context && tilesetReference(this.context, key, this.locale, details);
+  }
+
+  /** A report on the tileset, in Markdown and JSON, from what the panels show. */
+  report(): { markdown: string; json: string } | undefined {
+    return this.context && tilesetReport(this.context, this.strings);
   }
 
   /** An entry as screen readers say it: its name, then what it is. */

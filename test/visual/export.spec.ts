@@ -80,3 +80,27 @@ test('says when there is nothing to take a picture of', async ({ page }) => {
     .poll(async () => (await viewer.sent()).find((message) => message.type === 'save'))
     .toEqual({ type: 'save', what: 'screenshot' });
 });
+
+test('saves a report on a tileset, and refers to its tiles', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/tileset.json');
+  await menu(page).click();
+  await item(page, 'Save Report…').click();
+  const saved = (await viewer.sent()).find((message) => message.type === 'save') as unknown as {
+    what: string;
+    markdown: string;
+    json: string;
+  };
+  expect(saved.what).toBe('report');
+  writeFileSync(`${SCREENS}/report-tileset.md`, saved.markdown);
+  expect(saved.markdown).toMatch(/^# tiles\/tileset\.json\n/);
+  expect(saved.markdown).toContain('| `0/3` | east/tileset.json | 0 | REPLACE |');
+  expect(JSON.parse(saved.json).tiles.tiles).toBe(5);
+
+  await page.locator('.nm-tree-row', { hasText: 'north-west.b3dm' }).click();
+  await viewer.post({ type: 'copyReference', details: false, atPointer: false });
+  await expect
+    .poll(async () => (await viewer.sent()).find((message) => message.type === 'reference'))
+    .toMatchObject({ location: 'tile 0/1 "north-west.b3dm" (root.children[1])' });
+  expect(viewer.problems).toEqual([]);
+});

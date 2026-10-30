@@ -1,0 +1,46 @@
+{
+  "asset": {
+    "version": "1.0",
+    "generator": "Nightmesh fixture generator"
+  },
+  "extensionsUsed": [
+    "3DTILES_implicit_tiling"
+  ],
+  "extensionsRequired": [
+    "3DTILES_implicit_tiling"
+  ],
+  "geometricError": 100,
+  "root": {
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        20,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        20
+      ]
+    },
+    "geometricError": 50,
+    "refine": "REPLACE",
+    "content": {
+      "uri": "content/{level}/{x}/{y}.glb"
+    },
+    "extensions": {
+      "3DTILES_implicit_tiling": {
+        "subdivisionScheme": "QUADTREE",
+        "subtreeLevels": 1,
+        "subtrees": {
+          "uri": "subtrees/{level}/{x}/{y}.subtree"
+        },
+        "maximumLevel": 1
+      }
+    }
+  }
+}

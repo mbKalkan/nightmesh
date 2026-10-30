@@ -90,7 +90,7 @@ function locationOf(context: InspectContext, key: EntryKey, locale: string): str
  * The inspector's sections, each a title and its rows as `- label: value`; with `places`, links
  * say where the glTF JSON has what they name.
  */
-function detailsOf(inspection: Inspection, places: boolean): string {
+export function detailsOf(inspection: Inspection, places: boolean): string {
   return inspection.sections
     .filter((section) => section.rows.length > 0)
     .map((section) =>
