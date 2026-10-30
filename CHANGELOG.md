@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-30
+
+3D Tiles: tilesets and their tiles, with their metadata. Nightmesh is no longer a preview.
+
 ### Added
 
 - **3D Tiles tilesets** open in Nightmesh: right-click a `tileset.json` (or any tileset's JSON)
@@ -88,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **No longer a preview**: with 3D Tiles, every format planned for Nightmesh opens, and the
+  Marketplace and Open VSX listings drop their preview label.
 - **Models open faster**: the 3D view made its lighting anew for every file, which takes most of
   a second of GPU work on some machines. It is now made once and kept, so every viewer after the
   first starts drawing about 0.6 s sooner (measured on Windows: 740 ms to 75–105 ms).
@@ -302,7 +308,8 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mbKalkan/nightmesh/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mbKalkan/nightmesh/compare/v0.1.0...v0.2.0

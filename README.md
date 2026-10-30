@@ -9,18 +9,17 @@
 [![CI](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/mbKalkan/nightmesh/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**View, inspect, compare and measure glTF, GLB, OBJ, STL and PLY 3D models in VS Code, in your
-dark theme.**
+**View, inspect, compare and measure glTF, GLB, OBJ, STL and PLY 3D models and 3D Tiles in
+VS Code, in your dark theme.**
 
 Nightmesh is a fast, offline, view-only viewer for 3D models: glTF (`.glb`, and `.gltf` with
-its `.bin` files and textures), OBJ with its materials and textures, STL and PLY. It shows the
+its `.bin` files and textures), OBJ with its materials and textures, STL and PLY, and 3D Tiles
+tilesets with their tiles (`.b3dm`, `.i3dm`, `.pnts`, `.cmpt`). It shows the
 model in a 3D view that follows your color theme, and next to it what the file holds: its node
 tree, meshes, materials, textures and animations, how many triangles it draws and how big it
 is. A glTF's structure is there as soon as the file opens, before the geometry has loaded, even
 for files of hundreds of megabytes. It compares two versions of a model side by side, as Source
 Control shows them, and measures distances on it.
-
-> **Preview.** glTF, GLB, OBJ, STL and PLY open today. 3D Tiles comes next, before 1.0.
 
 ![Nightmesh opening a concept car: the structure shows while the model loads, a door picked in the view is selected in the tree and described in the inspector, the paint changes to another variant, a wireframe is drawn over it, and the statistics count the scene](docs/images/demo.gif)
 
@@ -30,8 +29,8 @@ Control shows them, and measures distances on it.
   from the file's JSON. You can find your way around a large model while its geometry is still
   loading, and also in a model that can't be drawn.
 - **One viewer for the files you have.** glTF from game engines and the web, STL from CAD and
-  3D printing, OBJ and PLY from modelling tools, scanners and photogrammetry, with the same
-  tools for all of them.
+  3D printing, OBJ and PLY from modelling tools, scanners and photogrammetry, 3D Tiles from
+  geospatial pipelines, with the same tools for all of them.
 - **Inspect, not just look.** Click a part to see which node it is, where it sits in the
   hierarchy, its transform, mesh, materials and size. Follow the links from a mesh to its
   materials and textures, and count what the scene puts on the GPU.
@@ -89,6 +88,29 @@ Control shows them, and measures distances on it.
   naming vertices the file lacks, a file cut short.
 
 ![A Mars 2020 rover wheel from an STL file, set to inches from the View menu: its size in inches in the corner, its format and facets in the inspector, and the mesh check saying it is watertight and holds 13.88 cubic inches](docs/images/stl-dark.png)
+
+### 3D Tiles
+
+- **Tilesets** open from a `tileset.json`: right-click it and choose **Open With… › Nightmesh
+  3D Tiles**. The tiles the camera needs load as it moves, the nearer ones in more detail, read
+  from disk by the extension, never from the network. A tileset placed on the globe is shown at
+  the origin, upright, seen from the south.
+- 3D Tiles 1.0 and 1.1: external tilesets, implicit tiling (quadtrees and octrees, binary and
+  JSON subtrees), tiles with several contents, and Batched (b3dm), Instanced (i3dm), Point Cloud
+  (pnts), Composite (cmpt) and glTF tiles, with Draco, meshopt and KTX2 compression.
+- The **tile tree** lists the tiles as soon as the tileset opens, and those of external tilesets
+  and implicit tiling as they are read. The inspector gives a tile's geometric error,
+  refinement, contents, bounding volume and implicit tiling, and whether the view has it loaded
+  and drawn; the tileset's counts what is loaded, drawn and on its way, and the memory it takes.
+  The selected tile's volume is boxed in the view, and a click on the model selects its tile.
+- **Metadata**: click a building or a point and the inspector shows that feature's properties,
+  from the tile's batch table or the glTF's `EXT_mesh_features` and `EXT_structural_metadata`.
+  The tileset's, its tiles', contents' and groups' metadata show with their class, read as the
+  schema says, implicit tiles' from their subtrees too.
+- A `.b3dm`, `.i3dm`, `.pnts` or `.cmpt` file opens on its own, with the glTF tools for the model
+  it holds and what the tile says around it: its header, feature and batch tables.
+
+![A 3D Tiles tileset of a district: its tiles in the tree, a quarter selected and boxed in the view, and the inspector giving the tile's metadata, its content's and the group it belongs to](docs/images/tiles-dark.png)
 
 ### Structure and inspector
 
@@ -194,7 +216,9 @@ Control shows them, and measures distances on it.
    [Open VSX](https://open-vsx.org/extension/MBKDevStudio/nightmesh). Or search for "Nightmesh"
    in the Extensions view.
 2. Open a `.glb`, `.gltf`, `.obj`, `.stl` or `.ply` file. Nightmesh is the default viewer for
-   these files.
+   these files, and for 3D Tiles' `.b3dm`, `.i3dm`, `.pnts` and `.cmpt`. A tileset is a JSON
+   file, which VS Code opens as text: right-click it and choose **Open With… › Nightmesh 3D
+   Tiles**.
 
 If another extension also opens these files, right-click the file and choose
 **Open With… › Nightmesh**, then **Configure default editor**. Or add this to your settings:
@@ -235,8 +259,11 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
 
 ## Limitations
 
-- Nightmesh opens glTF 2.0, OBJ, STL and PLY. Other formats, such as FBX, USD, STEP and
-  3D Tiles, don't open.
+- Nightmesh opens glTF 2.0, OBJ, STL, PLY and 3D Tiles. Other formats, such as FBX, USD and
+  STEP, don't open.
+- In 3D Tiles, vector, voxel and Gaussian splat contents, and terrain, aren't drawn; metadata
+  semantics are shown but don't change how tiles are drawn. Tiles are read from the tileset's
+  workspace folder: never from the network.
 - The Validation and Size tabs and Show glTF JSON are for glTF files.
 - OBJ's free-form curves and surfaces aren't drawn, and textures in formats browsers can't show,
   such as TGA, are left out; Nightmesh says so.
