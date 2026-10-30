@@ -18,6 +18,7 @@ import {
   type OrthographicCamera,
   type PerspectiveCamera,
   type SkinnedMesh,
+  type Texture,
   type WebGLRenderer,
 } from 'three';
 
@@ -53,6 +54,41 @@ export interface FeatureHit {
 }
 
 export type FeatureKind = 'batch' | 'instance' | 'point';
+
+/**
+ * Something read of the surface drawn under the pointer, for EXT_mesh_features and
+ * EXT_structural_metadata: a vertex attribute's value, the number of the vertex, or the texel of
+ * a texture there. Probes of the same `key` read the same thing.
+ */
+export type Probe =
+  | { key: string; attribute: string }
+  | { key: string; vertex: true }
+  | { key: string; texture: Texture; texCoord: number };
+
+/** What each probe read where an object is drawn under the pointer: four bytes, by key. */
+export interface ProbeHit {
+  object: Object3D;
+  bytes: Map<string, Uint8Array>;
+}
+
+/** The number an attribute or vertex probe read, or undefined where it read none. */
+export function probedNumber(bytes: Uint8Array | undefined): number | undefined {
+  const value = bytes ? bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) : 0;
+  return value === 0 ? undefined : value - 1;
+}
+
+/** Names a shader can declare as an attribute: glTF's are free text. */
+const ATTRIBUTE_NAME = /^(?!gl_)(?!.*__)[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Writes the texel of `nmTexture` under each fragment, as it is stored: the texture coordinate
+ * wraps, and picks the texel it falls in, as EXT_mesh_features and EXT_structural_metadata read
+ * them.
+ */
+const TEXEL_FRAGMENT = `#include <premultiplied_alpha_fragment>
+	ivec2 nmSize = textureSize(nmTexture, 0);
+	ivec2 nmTexel = clamp(ivec2(fract(nmUv) * vec2(nmSize)), ivec2(0), nmSize - 1);
+	gl_FragColor = texelFetch(nmTexture, nmTexel, 0);`;
 
 /** How an object's features are numbered: by attribute, instance or point; none for others. */
 export function featureKind(object: Object3D): FeatureKind | undefined {
@@ -110,6 +146,7 @@ export class Picker {
   private readonly distanceMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly depthMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly featureMaterials = new WeakMap<Object3D, PickMaterial>();
+  private readonly probeMaterials = new WeakMap<Object3D, Map<string, PickMaterial>>();
   private readonly vertexMaterials: PointsMaterial[] = [];
   private readonly made: PickMaterial[] = [];
   /** Where vertices near the pointer are drawn, as floats, and how many pixels across. */
@@ -201,6 +238,35 @@ export class Picker {
     const pixels = this.pixels;
     const value = pixels[offset] | (pixels[offset + 1] << 8) | (pixels[offset + 2] << 16);
     return value === 0 ? undefined : { object: picked.object, kind, index: value - 1 };
+  }
+
+  /**
+   * What the probes `probesOf` gives for the object drawn at the pixel of `region` (or the
+   * nearest pixel with something on it) read there: the scene drawn once more for each, that
+   * object writing what its probe reads, the others only hiding it where they are in front.
+   */
+  probe(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: Camera,
+    model: Object3D,
+    hidden: readonly Object3D[],
+    region: PickRegion,
+    probesOf: (object: Object3D) => readonly Probe[] | undefined,
+  ): ProbeHit | undefined {
+    const picked = this.pickPixel(renderer, scene, camera, model, hidden, region);
+    const probes = picked && probesOf(picked.object);
+    if (!picked || !probes?.length) return undefined;
+    const offset = (picked.row * SIZE + picked.column) * 4;
+    const bytes = new Map<string, Uint8Array>();
+    for (const probe of probes) {
+      if (bytes.has(probe.key)) continue;
+      this.draw(renderer, scene, camera, model, hidden, region, (object) =>
+        object === picked.object ? this.probeMaterialFor(object, probe) : this.materialFor(object),
+      );
+      bytes.set(probe.key, this.pixels.slice(offset, offset + 4));
+    }
+    return { object: picked.object, bytes };
   }
 
   /**
@@ -497,6 +563,58 @@ export class Picker {
       material.customProgramCacheKey = () => `nightmesh-feature-${kind}`;
     }
     this.featureMaterials.set(object, material);
+    return material;
+  }
+
+  /**
+   * A material that writes what `probe` reads of an object: an attribute's value or the vertex's
+   * number plus one in three bytes, from the triangle's last vertex as a feature is numbered for
+   * all of it; or the texel of a texture, as it is stored. Black for an attribute a shader can't
+   * name.
+   */
+  private probeMaterialFor(object: Object3D, probe: Probe): PickMaterial {
+    let made = this.probeMaterials.get(object);
+    if (!made) this.probeMaterials.set(object, (made = new Map()));
+    let material = made.get(probe.key);
+    if (material) return material;
+    material = this.flatMaterial(object);
+    material.color.setRGB(0, 0, 0);
+    made.set(probe.key, material);
+    if ('texture' in probe) {
+      const uv = probe.texCoord === 0 ? 'uv' : `uv${probe.texCoord}`;
+      const texture = { value: probe.texture };
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.nmTexture = texture;
+        const declared = probe.texCoord === 0 ? '' : `attribute vec2 ${uv};\n`;
+        shader.vertexShader = `${declared}varying vec2 nmUv;\n${shader.vertexShader}`.replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>\n\tnmUv = ${uv};`,
+        );
+        shader.fragmentShader =
+          `uniform sampler2D nmTexture;\nvarying vec2 nmUv;\n${shader.fragmentShader}`.replace(
+            '#include <premultiplied_alpha_fragment>',
+            TEXEL_FRAGMENT,
+          );
+      };
+      material.customProgramCacheKey = () => `nightmesh-texel-${uv}`;
+      return material;
+    }
+    const attribute = 'attribute' in probe ? probe.attribute : undefined;
+    if (attribute !== undefined && !ATTRIBUTE_NAME.test(attribute)) return material;
+    const source = attribute ?? 'float(gl_VertexID)';
+    material.onBeforeCompile = (shader) => {
+      const declared = attribute ? `attribute float ${attribute};\n` : '';
+      shader.vertexShader =
+        `${declared}flat varying float nmFeature;\n${shader.vertexShader}`.replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>\n\tnmFeature = ${source};`,
+        );
+      shader.fragmentShader = `flat varying float nmFeature;\n${shader.fragmentShader}`.replace(
+        '#include <premultiplied_alpha_fragment>',
+        FEATURE_FRAGMENT,
+      );
+    };
+    material.customProgramCacheKey = () => `nightmesh-probe-${attribute ?? 'vertex'}`;
     return material;
   }
 

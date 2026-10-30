@@ -1,5 +1,6 @@
-// The inspector's section for a 3D Tiles feature clicked in the view: its batch id and what the
-// tile's batch table says about it.
+// The inspector's sections for a point clicked in the view: the 3D Tiles feature there, by its
+// batch id and what the tile's batch table says about it; or what a glTF primitive's
+// EXT_mesh_features and EXT_structural_metadata say there.
 import type { TileFileStrings } from '../../shared/protocol';
 import type { Feature } from '../scene/features';
 import type { Inspection, Row, Section } from './details';
@@ -17,19 +18,35 @@ export function featureSection(
   words: TileFileStrings,
   format: Formatter,
 ): Section {
-  const rows: Row[] = [
-    {
-      label: words.featureId,
+  const rows: Row[] = [];
+  const idLabel = {
+    batch: words.featureId,
+    feature: words.featureIdSet,
+    vertex: words.vertex,
+    point: words.point,
+    texture: undefined,
+  }[feature.source];
+  if (idLabel && feature.id !== undefined) {
+    rows.push({
+      label: idLabel,
       text: String(feature.id),
       mono: true,
-      note: fill(words.featureOf, format.count(feature.count)),
-    },
-  ];
+      note: feature.count ? fill(words.featureOf, format.count(feature.count)) : undefined,
+    });
+  }
+  if (feature.className) rows.push({ label: words.metadataClass, text: feature.className });
   for (const property of feature.properties.slice(0, PROPERTY_LIMIT)) {
     const note = property.className ? fill(words.featureClass, property.className) : undefined;
     rows.push({ label: property.name, ...valueRow(property.value, format), note });
   }
-  return { title: words.feature, rows };
+  const title = {
+    batch: words.feature,
+    feature: feature.label ? fill(words.featureNamed, feature.label) : words.feature,
+    texture: words.textureProperties,
+    vertex: words.vertexProperties,
+    point: words.pointProperties,
+  }[feature.source];
+  return { title, rows };
 }
 
 /** A value as the inspector shows it: numbers in the locale, text as it is, the rest as JSON. */
@@ -48,18 +65,27 @@ function valueRow(value: unknown, format: Formatter): Pick<Row, 'text' | 'mono' 
       ? (value as number[])
       : undefined;
   if (numbers) return { text: format.vector(numbers), mono: true };
+  // Short lists of words and flags too: metadata arrays of strings, booleans and enums.
+  if (
+    Array.isArray(value) &&
+    value.length <= VECTOR_LIMIT &&
+    value.every((item) => typeof item === 'string' || typeof item === 'boolean')
+  ) {
+    const items = value.map((item) => (typeof item === 'string' ? JSON.stringify(item) : item));
+    return { text: cut(`[${items.join(', ')}]`), mono: true };
+  }
   return { json: cut(JSON.stringify(value, null, 2)) };
 }
 
 const cut = (text: string): string =>
   text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT)}…` : text;
 
-/** An inspection with the clicked feature's section first, when there is one. */
+/** An inspection with the clicked feature's sections first, when there are any. */
 export function withFeature(
   inspection: Inspection | undefined,
-  feature: Section | undefined,
+  features: readonly Section[] | undefined,
 ): Inspection | undefined {
-  return inspection && feature
-    ? { ...inspection, sections: [feature, ...inspection.sections] }
+  return inspection && features?.length
+    ? { ...inspection, sections: [...features, ...inspection.sections] }
     : inspection;
 }

@@ -1,9 +1,19 @@
 // A clicked feature of a 3D Tiles tile, read from the tile's feature and batch tables with the
-// 3D Tiles renderer's own readers: binary properties and the batch table hierarchy included.
+// 3D Tiles renderer's own readers: binary properties and the batch table hierarchy included. Also
+// what a glTF primitive's EXT_mesh_features and EXT_structural_metadata say at the point clicked.
 import { BatchTable } from '3d-tiles-renderer/src/core/renderer/utilities/BatchTable.js';
 import { FeatureTable } from '3d-tiles-renderer/src/core/renderer/utilities/FeatureTable.js';
+import type { BufferGeometry, Mesh, Points } from 'three';
 import type { TileTablesBytes } from '../../shared/protocol';
-import type { FeatureKind } from './picking';
+import { probedNumber, type FeatureKind, type Probe, type ProbeHit } from './picking';
+import {
+  featureProbe,
+  propertyProbe,
+  surfaceMetadata,
+  VERTEX,
+  type FeatureIdSet,
+  type MetadataProperty,
+} from './surface';
 
 /** A tile's tables, as the renderer's loaders attach them to a tile they load. */
 export interface TileTables {
@@ -11,12 +21,21 @@ export interface TileTables {
   batch: BatchTable;
 }
 
-/** A feature and what the batch table says about it, property by property. */
+/**
+ * What the metadata says about a point clicked, property by property: a feature of a batch table
+ * (`batch`, by batch id) or of a primitive's feature ID set (`feature`), the texels of a property
+ * texture (`texture`), or the vertex or point of property attributes.
+ */
 export interface Feature {
-  /** Its batch id, which numbers the batch table's rows. */
-  id: number;
-  /** How many features the tile has. */
-  count: number;
+  source: 'batch' | 'feature' | 'texture' | 'vertex' | 'point';
+  /** Its number: the batch id or feature ID, or the vertex's. */
+  id?: number;
+  /** How many features, vertices or points there are. */
+  count?: number;
+  /** A feature ID set's label, or its number when a primitive has several. */
+  label?: string;
+  /** The metadata class the properties are of. */
+  className?: string;
   properties: FeatureProperty[];
 }
 
@@ -105,7 +124,7 @@ export function featureOf(
       }
     }
   }
-  return { id, count: total, properties };
+  return { source: 'batch', id, count: total, properties };
 }
 
 /** Components of each value of a binary property, by its type. */
@@ -149,4 +168,206 @@ function batchId(table: FeatureTable, kind: FeatureKind, index: number): number 
   } catch {
     return undefined;
   }
+}
+
+/** The renderer's reading of a property, on the properties of its property sets. */
+interface ReadableProperty extends MetadataProperty {
+  valueLength: number;
+  default: unknown;
+  shapeToProperty(target: unknown): unknown;
+  readDataFromBuffer(buffer: ArrayLike<unknown>, index: number, target: unknown): unknown;
+  adjustValueScaleOffset(target: unknown): unknown;
+  resolveEnumsToStrings(target: unknown): unknown;
+  resolveNoData(target: unknown): unknown;
+  resolveDefault(target: unknown): unknown;
+}
+
+/**
+ * What a primitive's EXT_mesh_features and EXT_structural_metadata say at the point the picker
+ * probed: each feature ID set's feature, with its property table row; each property texture's
+ * values; the property attributes of the vertex or point.
+ */
+export function surfaceFeatures(hit: ProbeHit): Feature[] {
+  const surface = surfaceMetadata(hit.object);
+  if (!surface) return [];
+  const { features, metadata } = surface;
+  const result: Feature[] = [];
+  const sets = features?.featureIds ?? [];
+  sets.forEach((set, index) => {
+    const id = featureId(set, featureProbe(set, features!.textures), hit.bytes);
+    if (id === undefined) return;
+    const label = set.label ?? (sets.length > 1 ? String(index + 1) : undefined);
+    const feature: Feature = {
+      source: 'feature',
+      id,
+      count: set.featureCount,
+      label,
+      properties: [],
+    };
+    const tableIndex = set.propertyTable;
+    const table = tableIndex === null ? undefined : metadata?.tableAccessors[tableIndex];
+    if (table && tableIndex !== null && id < (table.count ?? 0)) {
+      try {
+        const row = metadata!.getPropertyTableData(tableIndex, id);
+        feature.className = table.definition.class;
+        feature.properties = Object.entries(row).map(([name, value]) => ({
+          name,
+          value: plain(value),
+        }));
+      } catch {
+        // A table the renderer can't read leaves the feature without its properties.
+      }
+    }
+    result.push(feature);
+  });
+  for (const set of metadata?.textureAccessors ?? []) {
+    const properties: FeatureProperty[] = [];
+    for (const [name, property] of readable(set.properties)) {
+      const given = name in set.definition.properties;
+      const texel = given ? hit.bytes.get(propertyProbe(set, property)?.key ?? '') : undefined;
+      const value = given ? texel && texelValue(property, texel) : defaultValue(property);
+      if (value !== undefined) properties.push({ name, value: plain(value) });
+    }
+    if (properties.length > 0) {
+      result.push({ source: 'texture', className: set.definition.class, properties });
+    }
+  }
+  const vertex = probedNumber(hit.bytes.get(VERTEX.key));
+  const geometry = (hit.object as Partial<Mesh>).geometry;
+  if (vertex !== undefined && geometry && metadata?.attributeAccessors.length) {
+    const count = geometry.getAttribute('position')?.count;
+    const source = (hit.object as Partial<Points>).isPoints ? 'point' : 'vertex';
+    for (const set of metadata.attributeAccessors) {
+      const properties: FeatureProperty[] = [];
+      for (const [name, property] of readable(set.properties)) {
+        const given = name in set.definition.properties;
+        const value = given ? attributeValue(property, geometry, vertex) : defaultValue(property);
+        if (value !== undefined) properties.push({ name, value: plain(value) });
+      }
+      result.push({ source, id: vertex, count, className: set.definition.class, properties });
+    }
+  }
+  return result;
+}
+
+const readable = (properties: Record<string, MetadataProperty>) =>
+  Object.entries(properties) as [string, ReadableProperty][];
+
+/** A feature ID set's feature at the point, unless it is the set's null feature ID. */
+function featureId(
+  set: FeatureIdSet,
+  probe: Probe | undefined,
+  bytes: Map<string, Uint8Array>,
+): number | undefined {
+  const read = probe && bytes.get(probe.key);
+  if (!read) return undefined;
+  // A texture's channels hold the ID's bytes, low byte first.
+  const id = set.texture
+    ? set.texture.channels.reduce((sum, channel, i) => sum + (read[channel] ?? 0) * 256 ** i, 0)
+    : probedNumber(read);
+  return id === undefined || id === set.nullFeatureId ? undefined : id;
+}
+
+/** A property's value from the texel it is stored in, as the renderer reads it. */
+function texelValue(property: ReadableProperty, texel: Uint8Array): unknown {
+  const Typed = typedArray(property.componentType);
+  if (!Typed) return undefined;
+  try {
+    const read = new Typed(property.valueLength * (property.count || 1));
+    const bytes = new Uint8Array(read.buffer);
+    (property.channels ?? [0]).forEach((channel, i) => {
+      if (i < bytes.length) bytes[i] = texel[channel] ?? 0;
+    });
+    const shaped = property.shapeToProperty(null);
+    const value = Array.isArray(shaped)
+      ? shaped.map((element, i) => property.readDataFromBuffer(read, i, element))
+      : property.readDataFromBuffer(read, 0, shaped);
+    return finish(property, value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A property's value at a vertex, from its attribute. Matrices are read here: the renderer's
+ * reader of them never ends.
+ */
+function attributeValue(property: ReadableProperty, geometry: BufferGeometry, vertex: number) {
+  try {
+    const name = property.attribute?.toLowerCase();
+    const attribute = name ? geometry.getAttribute(name) : undefined;
+    if (!attribute?.array || vertex >= attribute.count) return undefined;
+    const components = Array.from({ length: attribute.itemSize }, (_, i) =>
+      attribute.getComponent(vertex, i),
+    );
+    const { type } = property;
+    if (type.startsWith('MAT') || type.startsWith('VEC')) {
+      const shaped = property.shapeToProperty(null) as { fromArray(array: number[]): unknown };
+      return finish(property, shaped.fromArray(components));
+    }
+    return type === 'SCALAR' || type === 'ENUM' ? finish(property, components[0]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A property the set doesn't give: its class's default, if it has one. */
+function defaultValue(property: ReadableProperty): unknown {
+  if (property.default === null || property.default === undefined) return undefined;
+  try {
+    return property.resolveDefault(property.shapeToProperty(null));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Offset and scale, enum names and no-data values, as the renderer applies them. */
+function finish(property: ReadableProperty, value: unknown): unknown {
+  return property.resolveNoData(
+    property.resolveEnumsToStrings(property.adjustValueScaleOffset(value)),
+  );
+}
+
+function typedArray(componentType: string | null) {
+  switch (componentType) {
+    case 'INT8':
+      return Int8Array;
+    case 'UINT8':
+      return Uint8Array;
+    case 'INT16':
+      return Int16Array;
+    case 'UINT16':
+      return Uint16Array;
+    case 'INT32':
+      return Int32Array;
+    case 'UINT32':
+      return Uint32Array;
+    case 'INT64':
+      return BigInt64Array;
+    case 'UINT64':
+      return BigUint64Array;
+    case 'FLOAT32':
+      return Float32Array;
+    case 'FLOAT64':
+      return Float64Array;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * A value as the inspector shows it: vectors and matrices as their numbers, 64-bit integers as
+ * numbers while they are exact, else as text.
+ */
+function plain(value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(value)
+      : value.toString();
+  }
+  if (Array.isArray(value)) return value.map(plain);
+  if (!value || typeof value !== 'object') return value;
+  const math = value as { toArray?(): number[]; elements?: ArrayLike<number> };
+  if (typeof math.toArray === 'function') return math.toArray();
+  return math.elements ? Array.from(math.elements) : value;
 }
