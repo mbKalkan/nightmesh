@@ -70,7 +70,7 @@ export class TilesetView {
   setTileset(message: TilesetMessage, fileName: string): void {
     if (message.reload && message.json === this.json) return;
     const keep = message.reload && this.context !== undefined;
-    const model = new TilesetModel(message.json);
+    const model = new TilesetModel(message.json, message.schema);
     this.context = {
       model,
       fileName,

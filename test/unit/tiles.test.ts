@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileResourceOpener } from '../../src/extension/model/fileResources';
+import { Resources } from '../../src/extension/model/load';
 import { readTile, tilesetMessage, tilesetPlace } from '../../src/extension/model/tiles';
 import { memorySource } from '../../src/extension/model/sources';
 import { loadTexts, type Translate } from '../../src/extension/texts';
@@ -64,6 +65,33 @@ describe('tilesetMessage', () => {
     expect(await open('')).toMatchObject({ message: 'The file is empty.' });
     const pointer = `version https://git-lfs.github.com/spec/v1\noid sha256:${'0'.repeat(64)}\n`;
     expect(await open(pointer)).toMatchObject({ message: texts.lfsPointer });
+  });
+
+  it("brings a metadata schema written in a file of its own, or says why it can't", async () => {
+    const tiles = fileResourceOpener('/fixtures/tiles', '/fixtures', (path) =>
+      join(FIXTURES, path.slice('/fixtures'.length)),
+    );
+    const send = (json: string) => {
+      const resources = new Resources(tiles, texts);
+      return tilesetMessage(
+        memorySource(new TextEncoder().encode(json)),
+        { loadId: 1, reload: false, texts, path: 'tileset.json' },
+        resources,
+      );
+    };
+    const message = await send(readFileSync(join(FIXTURES, 'tiles/metadata.json'), 'utf8'));
+    expect(message).toMatchObject({ type: 'tileset', schema: { id: 'district' } });
+    expect(message).not.toHaveProperty('notices');
+    // 1.0 names it in its extension.
+    const missing = await send(
+      JSON.stringify({
+        asset: { version: '1.0' },
+        extensions: { '3DTILES_metadata': { schemaUri: 'nowhere.json' } },
+        root: {},
+      }),
+    );
+    expect(missing).not.toHaveProperty('schema');
+    expect(missing).toMatchObject({ notices: [expect.stringContaining('nowhere.json')] });
   });
 });
 

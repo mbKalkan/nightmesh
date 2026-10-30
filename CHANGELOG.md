@@ -62,6 +62,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vertex or point. Strings, enums, booleans, vectors, matrices, arrays and 64-bit integers are
   shown, with offset, scale and no-data values applied. A schema given as a file of its own is
   read next to the model.
+- **Tileset, tile and content metadata (3D Tiles 1.1)**: the inspector shows the metadata a
+  tileset gives itself, its tiles, their contents and the groups contents belong to, each with its
+  class and values as the schema says to read them: enums by name, normalized integers, offset
+  and scale, and the class's default for a value not given or marked as no data. The tileset also
+  shows its schema (ID, name, version, classes, enums, groups), its metadata statistics, and the
+  value ranges of its tiles' feature properties. A schema in a file of its own is read next to
+  the tileset. 3D Tiles 1.0 tilesets with `3DTILES_metadata` and `3DTILES_multiple_contents` are
+  read the same way.
 - **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
   model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 

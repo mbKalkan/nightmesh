@@ -950,6 +950,7 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
     const { createTiles } = await import('./scene/tiles');
     if (message.loadId !== latestLoad) return;
     tileProblems.clear();
+    for (const notice of message.notices ?? []) tileProblems.add(notice);
     const tiles = createTiles(message.url, message.json, requestTile, decoders);
     tiles.addEventListener('load-error', ({ tile, url, error }) => {
       if (error instanceof TileProblem) return;
@@ -965,7 +966,7 @@ async function receiveTileset(message: TilesetMessage): Promise<void> {
     hasModel = true;
     shell.hideError();
     shell.setState('shown');
-    shell.setNotices(text.partialTitle, []);
+    shell.setNotices(text.partialTitle, [...tileProblems]);
   } catch (error) {
     if (message.loadId !== latestLoad) return;
     console.warn(error);

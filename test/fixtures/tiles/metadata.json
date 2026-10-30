@@ -1,0 +1,225 @@
+{
+  "asset": {
+    "version": "1.1",
+    "generator": "Nightmesh fixture generator"
+  },
+  "schemaUri": "metadata-schema.json",
+  "metadata": {
+    "class": "district",
+    "properties": {
+      "name": "Old town",
+      "founded": 1453,
+      "tags": [
+        "historic",
+        "coastal"
+      ]
+    }
+  },
+  "groups": [
+    {
+      "class": "zone",
+      "properties": {
+        "label": "West",
+        "color": [
+          64,
+          64,
+          255
+        ]
+      }
+    },
+    {
+      "class": "zone",
+      "properties": {
+        "label": "East",
+        "color": [
+          255,
+          128,
+          0
+        ]
+      }
+    }
+  ],
+  "statistics": {
+    "classes": {
+      "quarter": {
+        "count": 3,
+        "properties": {
+          "height": {
+            "min": 12,
+            "max": 30,
+            "mean": 20
+          },
+          "landUse": {
+            "occurrences": {
+              "Residential": 1,
+              "Commercial": 1,
+              "Park": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "geometricError": 200,
+  "root": {
+    "transform": [
+      -0.48448,
+      0.874802,
+      0,
+      0,
+      -0.574017,
+      -0.3179,
+      0.754616,
+      0,
+      0.66014,
+      0.365596,
+      0.656167,
+      0,
+      4216541.975965,
+      2335189.800481,
+      4163110.428698,
+      1
+    ],
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        25,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        25
+      ]
+    },
+    "geometricError": 20,
+    "refine": "REPLACE",
+    "content": {
+      "uri": "district.b3dm"
+    },
+    "children": [
+      {
+        "boundingVolume": {
+          "box": [
+            -25,
+            -25,
+            9,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            9
+          ]
+        },
+        "geometricError": 0,
+        "metadata": {
+          "class": "quarter",
+          "properties": {
+            "landUse": "Residential",
+            "coverage": 255,
+            "height": 18,
+            "trees": 120,
+            "surveyed": true
+          }
+        },
+        "content": {
+          "uri": "south-west.b3dm",
+          "group": 0,
+          "metadata": {
+            "class": "building",
+            "properties": {
+              "floors": 6,
+              "architect": "Studio 1"
+            }
+          }
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            -25,
+            25,
+            15,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            15
+          ]
+        },
+        "geometricError": 0,
+        "metadata": {
+          "class": "quarter",
+          "properties": {
+            "landUse": "Commercial",
+            "coverage": 191,
+            "height": 30,
+            "trees": 45
+          }
+        },
+        "content": {
+          "uri": "north-west.b3dm",
+          "group": 0,
+          "metadata": {
+            "class": "building",
+            "properties": {
+              "floors": 10,
+              "architect": "Studio 2"
+            }
+          }
+        }
+      },
+      {
+        "boundingVolume": {
+          "box": [
+            25,
+            -25,
+            6,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            6
+          ]
+        },
+        "geometricError": 0,
+        "metadata": {
+          "class": "quarter",
+          "properties": {
+            "landUse": "Park",
+            "coverage": 64,
+            "height": 12,
+            "trees": 65535
+          }
+        },
+        "content": {
+          "uri": "south-east.b3dm",
+          "group": 1,
+          "metadata": {
+            "class": "building",
+            "properties": {
+              "floors": 4,
+              "architect": "Studio 3"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

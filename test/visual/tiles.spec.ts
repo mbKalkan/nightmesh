@@ -131,6 +131,36 @@ test('lists the tiles at once, and says what each is and how the view has it', a
   expect(viewer.problems).toEqual([]);
 });
 
+for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`shows the tileset's, a tile's and a content's metadata, ${theme} theme`, async ({
+    page,
+  }) => {
+    const viewer = await openViewer(page, theme);
+    await viewer.open('tiles/metadata.json');
+    await settle(page, viewer, 4);
+    const inspector = page.locator('.nm-inspector-content');
+    // The schema is a file of its own, which the host reads and sends along.
+    await expect(inspector).toContainText('nameOld town');
+    await expect(inspector).toContainText('Schema filemetadata-schema.json');
+    await expect(inspector).toContainText('Classesdistrict, quarter, building, zone');
+    await page.locator('.nm-inspector-content').screenshot({
+      path: `${SCREENS}/tiles-metadata-${theme}.png`,
+    });
+
+    await page.locator('.nm-tree-row', { hasText: 'south-east.b3dm' }).click();
+    await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/2');
+    await expect(inspector).toContainText('landUsePark');
+    await expect(inspector).toContainText('trees0no data');
+    await expect(inspector).toContainText('architectStudio 3');
+    await expect(inspector).toContainText('Group 1');
+    await expect(inspector).toContainText('labelEast');
+    await page.locator('.nm-inspector-content').screenshot({
+      path: `${SCREENS}/tiles-metadata-tile-${theme}.png`,
+    });
+    expect(viewer.problems).toEqual([]);
+  });
+}
+
 test('selects the tile clicked in the view, the tileset that holds it for an external one', async ({
   page,
 }) => {
