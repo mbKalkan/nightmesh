@@ -108,3 +108,17 @@ test('an STL, set to inches from the View menu, with what the file says', async 
   await page.screenshot({ path: `${IMAGES}/stl-dark.png` });
   expect(viewer.problems).toEqual([]);
 });
+
+test('a 3D Tiles tileset, a quarter selected with its metadata', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  // The fixtures' district, its quarters with 3D Tiles 1.1 metadata.
+  await viewer.open('tiles/metadata.json');
+  await expect
+    .poll(async () => (await viewer.sent()).filter((message) => message.type === 'tile').length)
+    .toBe(4);
+  await row(page, 'north-west.b3dm').click();
+  await expect(page.locator('.nm-inspector-content')).toContainText('Content metadata');
+  await settle(page);
+  await page.screenshot({ path: `${IMAGES}/tiles-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
