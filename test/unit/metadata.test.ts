@@ -167,6 +167,60 @@ describe('surfaceFeatures', () => {
     ]);
   });
 
+  it("reads a row's other properties when one is a number its enum doesn't name", () => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array(9), 3));
+    const mesh = new Mesh(geometry);
+    const texture = new DataTexture(new Uint8Array(4), 1, 1);
+    mesh.userData.meshFeatures = new MeshFeatures(geometry, [texture], {
+      featureIds: [{ featureCount: 2, texture: { index: 0, channels: [0] }, propertyTable: 0 }],
+    });
+    mesh.userData.structuralMetadata = new StructuralMetadata(
+      {
+        schema: {
+          enums: {
+            zone: {
+              valueType: 'UINT8',
+              values: [
+                { name: 'park', value: 0 },
+                { name: 'plaza', value: 1 },
+              ],
+            },
+          },
+          classes: {
+            parcel: {
+              properties: {
+                area: { type: 'SCALAR', componentType: 'UINT16' },
+                zone: { type: 'ENUM', enumType: 'zone' },
+              },
+            },
+          },
+        },
+        propertyTables: [
+          { class: 'parcel', count: 2, properties: { area: { values: 0 }, zone: { values: 1 } } },
+        ],
+      },
+      [],
+      [new Uint16Array([100, 200]).buffer, new Uint8Array([1, 7]).buffer],
+    );
+    const at = (id: number): ProbeHit => ({
+      object: mesh,
+      bytes: new Map([['texel:0:0', new Uint8Array([id, 0, 0, 255])]]),
+    });
+    expect(surfaceFeatures(at(0))[0]).toMatchObject({
+      className: 'parcel',
+      properties: [
+        { name: 'area', value: 100 },
+        { name: 'zone', value: 'plaza' },
+      ],
+    });
+    expect(surfaceFeatures(at(1))[0]).toMatchObject({
+      id: 1,
+      className: 'parcel',
+      properties: [{ name: 'area', value: 200 }],
+    });
+  });
+
   it('reads nothing of an object without feature IDs or metadata', () => {
     expect(surfaceProbes(new Mesh(new BufferGeometry()))).toBeUndefined();
   });

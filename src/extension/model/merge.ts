@@ -28,7 +28,14 @@ const ARRAYS = [
   'textures',
 ] as const;
 
-type Offsets = Record<(typeof ARRAYS)[number] | 'lights' | 'variants', number>;
+/** EXT_structural_metadata's arrays at the root, which primitives and feature ID sets refer to. */
+const METADATA_ARRAYS = ['propertyTables', 'propertyTextures', 'propertyAttributes'] as const;
+const METADATA = 'EXT_structural_metadata';
+
+type Offsets = Record<
+  (typeof ARRAYS)[number] | (typeof METADATA_ARRAYS)[number] | 'lights' | 'variants',
+  number
+>;
 
 const isObject = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -73,6 +80,9 @@ function shiftModel(json: Json, o: Offsets): void {
     shift(node, 'camera', o.cameras);
     shift(extension(node, 'KHR_lights_punctual'), 'light', o.lights);
     shiftAll(extension(node, 'EXT_mesh_gpu_instancing'), 'attributes', o.accessors);
+    for (const set of list(extension(node, 'EXT_instance_features')?.featureIds)) {
+      shift(set, 'propertyTable', o.propertyTables);
+    }
   }
   for (const mesh of list(json.meshes)) {
     for (const primitive of list(mesh.primitives)) {
@@ -87,6 +97,27 @@ function shiftModel(json: Json, o: Offsets): void {
         shift(mapping, 'material', o.materials);
         shiftAll(mapping, 'variants', o.variants);
       }
+      for (const set of list(extension(primitive, 'EXT_mesh_features')?.featureIds)) {
+        if (isObject(set.texture)) shift(set.texture, 'index', o.textures);
+        shift(set, 'propertyTable', o.propertyTables);
+      }
+      const metadata = extension(primitive, METADATA);
+      shiftAll(metadata, 'propertyTextures', o.propertyTextures);
+      shiftAll(metadata, 'propertyAttributes', o.propertyAttributes);
+    }
+  }
+  const root = extension(json, METADATA);
+  for (const table of list(root?.propertyTables)) {
+    for (const property of Object.values(isObject(table.properties) ? table.properties : {})) {
+      if (!isObject(property)) continue;
+      for (const key of ['values', 'arrayOffsets', 'stringOffsets']) {
+        shift(property, key, o.bufferViews);
+      }
+    }
+  }
+  for (const texture of list(root?.propertyTextures)) {
+    for (const property of Object.values(isObject(texture.properties) ? texture.properties : {})) {
+      if (isObject(property)) shift(property, 'index', o.textures);
     }
   }
   for (const accessor of list(json.accessors)) {
@@ -125,9 +156,67 @@ function shiftModel(json: Json, o: Offsets): void {
   }
 }
 
+/** The one metadata schema of the merged models: the classes and enums of each, by name. */
+class Schema {
+  private id: unknown;
+  // Without a prototype, so that a name such as `__proto__` is a name like any other.
+  private readonly classes: Json = Object.create(null) as Json;
+  private readonly enums: Json = Object.create(null) as Json;
+  private added = false;
+
+  /** Adds a model's schema; false when there is none, or a name in it is taken by another. */
+  add(schema: unknown): boolean {
+    if (!isObject(schema)) return false;
+    const kinds = [
+      [this.classes, isObject(schema.classes) ? schema.classes : {}],
+      [this.enums, isObject(schema.enums) ? schema.enums : {}],
+    ] as const;
+    const taken = kinds.some(([into, items]) =>
+      Object.entries(items).some(
+        ([name, item]) =>
+          Object.hasOwn(into, name) && JSON.stringify(into[name]) !== JSON.stringify(item),
+      ),
+    );
+    if (taken) return false;
+    for (const [into, items] of kinds) Object.assign(into, items);
+    this.id ??= schema.id;
+    this.added = true;
+    return true;
+  }
+
+  /** The schema, when a model had one. */
+  get json(): Json | undefined {
+    if (!this.added) return undefined;
+    const json: Json = { id: typeof this.id === 'string' ? this.id : 'schema' };
+    if (Object.keys(this.classes).length > 0) json.classes = { ...this.classes };
+    if (Object.keys(this.enums).length > 0) json.enums = { ...this.enums };
+    return json;
+  }
+}
+
+/** Leaves a model's metadata out: its tables and what refers to them. */
+function withoutMetadata(json: Json): void {
+  if (isObject(json.extensions)) delete json.extensions[METADATA];
+  for (const mesh of list(json.meshes)) {
+    for (const primitive of list(mesh.primitives)) {
+      if (isObject(primitive.extensions)) delete primitive.extensions[METADATA];
+      for (const set of list(extension(primitive, 'EXT_mesh_features')?.featureIds)) {
+        delete set.propertyTable;
+      }
+    }
+  }
+  for (const node of list(json.nodes)) {
+    for (const set of list(extension(node, 'EXT_instance_features')?.featureIds)) {
+      delete set.propertyTable;
+    }
+  }
+}
+
 /**
  * One glTF holding every part: a scene with a node for each part, named for it, over the part's
- * default scene. Root extensions other than lights and material variants are left out.
+ * default scene. Root extensions other than lights, material variants and metadata are left
+ * out. Metadata needs its schema in the JSON (load.ts `withSchema`); a model whose schema names a
+ * class or enum another model's already has as something else is drawn without its metadata.
  */
 export function mergeGltfs(parts: readonly MergePart[]): {
   json: Gltf;
@@ -140,15 +229,22 @@ export function mergeGltfs(parts: readonly MergePart[]): {
   const lights: Json[] = [];
   const variants: Json[] = [];
   const holders: Json[] = [];
+  const schema = new Schema();
+  const metadata = Object.fromEntries(METADATA_ARRAYS.map((name) => [name, [] as Json[]]));
 
   for (const part of parts) {
     const json = structuredClone(part.json) as Json;
-    const offsets = Object.fromEntries(
-      ARRAYS.map((name) => [name, ((merged[name] as unknown[]) ?? []).length]),
-    ) as Offsets;
+    if (!schema.add(extension(json, METADATA)?.schema)) withoutMetadata(json);
+    const offsets = Object.fromEntries([
+      ...ARRAYS.map((name) => [name, ((merged[name] as unknown[]) ?? []).length]),
+      ...METADATA_ARRAYS.map((name) => [name, metadata[name].length]),
+    ]) as Offsets;
     offsets.lights = lights.length;
     offsets.variants = variants.length;
     shiftModel(json, offsets);
+    for (const name of METADATA_ARRAYS) {
+      metadata[name].push(...list(extension(json, METADATA)?.[name]));
+    }
     for (const name of ARRAYS) {
       const items = Array.isArray(json[name]) ? (json[name] as unknown[]) : [];
       merged[name] = [...((merged[name] as unknown[]) ?? []), ...items];
@@ -178,6 +274,20 @@ export function mergeGltfs(parts: readonly MergePart[]): {
   const extensions: Json = {};
   if (lights.length > 0) extensions.KHR_lights_punctual = { lights };
   if (variants.length > 0) extensions.KHR_materials_variants = { variants };
+  if (schema.json) {
+    extensions[METADATA] = {
+      schema: schema.json,
+      ...Object.fromEntries(
+        METADATA_ARRAYS.filter((name) => metadata[name].length > 0).map((name) => [
+          name,
+          metadata[name],
+        ]),
+      ),
+    };
+  } else {
+    used.delete(METADATA);
+    required.delete(METADATA);
+  }
   if (Object.keys(extensions).length > 0) merged.extensions = extensions;
   if (used.size > 0) merged.extensionsUsed = [...used];
   if (required.size > 0) merged.extensionsRequired = [...required];

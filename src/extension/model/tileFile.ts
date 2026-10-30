@@ -2,6 +2,7 @@
 // after them a GLB, which is shown as any other GLB is.
 import type { TileFacts } from '../../shared/protocol';
 import { withoutByteOrderMark } from './container';
+import type { Gltf } from './plan';
 import { sliceSource, type ByteSource } from './sources';
 
 export type B3dm =
@@ -141,3 +142,25 @@ export const count = (value: unknown): number =>
 
 export const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The glTF of a b3dm tile to draw, with its features' batch ids named as 3D Tiles 1.0 names them,
+ * `_BATCHID`: tiles from before it name them `BATCHID`, which CesiumJS still reads.
+ */
+export function withBatchIds(json: Gltf): Gltf {
+  const renamed = structuredClone(json);
+  let found = false;
+  for (const mesh of renamed.meshes ?? []) {
+    for (const primitive of mesh.primitives ?? []) {
+      const draco = primitive.extensions?.KHR_draco_mesh_compression as
+        { attributes?: Record<string, number> } | undefined;
+      for (const attributes of [primitive.attributes, draco?.attributes]) {
+        if (attributes?.BATCHID === undefined || attributes._BATCHID !== undefined) continue;
+        attributes._BATCHID = attributes.BATCHID;
+        delete attributes.BATCHID;
+        found = true;
+      }
+    }
+  }
+  return found ? renamed : json;
+}

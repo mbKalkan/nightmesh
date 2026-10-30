@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fileSource } from '../../src/extension/model/sources';
+import { fileSource, memorySource } from '../../src/extension/model/sources';
 import { readTileTables } from '../../src/extension/model/tileTables';
 import type { TileTablesBytes } from '../../src/shared/protocol';
 import { featureOf, tablesFromBytes } from '../../src/webview/scene/features';
@@ -88,6 +89,27 @@ describe('tile tables', () => {
     } finally {
       await source.close();
     }
+  });
+
+  it('reads the features of a b3dm tile from before 3D Tiles 1.0, whose header counts them', async () => {
+    const batch = new TextEncoder().encode('{"name":["Mill","Barn"]}');
+    const glb = readFileSync('test/fixtures/triangle.glb');
+    // Magic, version, byte length, batch length, batch table length; no feature table.
+    const bytes = new Uint8Array(20 + batch.length + glb.length);
+    bytes.set(new TextEncoder().encode('b3dm'));
+    const view = new DataView(bytes.buffer);
+    [1, bytes.length, 2, batch.length].forEach((word, i) => view.setUint32(4 + 4 * i, word, true));
+    bytes.set(batch, 20);
+    bytes.set(glb, 20 + batch.length);
+
+    const sent = await readTileTables(memorySource(bytes));
+    expect(sent).toMatchObject({ format: 'b3dm', batchLength: 2 });
+    expect(featureOf(tablesFromBytes(sent!), 'batch', 1)).toEqual({
+      source: 'batch',
+      id: 1,
+      count: 2,
+      properties: [{ name: 'name', value: 'Barn' }],
+    });
   });
 
   it('maps instances and points to the features their BATCH_ID names', () => {

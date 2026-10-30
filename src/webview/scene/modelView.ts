@@ -39,6 +39,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF, GLTFLoaderPlugin, GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { disposeObject, disposeObjectBuffers } from './dispose';
 import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
 import type { TileTables } from './features';
@@ -600,7 +601,11 @@ export class ModelView {
       changed();
     });
     // Before the renderer disposes the tile's own materials, which the tile gets back first.
-    tiles.addEventListener('dispose-model', ({ scene }) => this.shading.remove(scene));
+    tiles.addEventListener('dispose-model', ({ scene }) => {
+      this.shading.remove(scene);
+      // The renderer frees the tile's geometry and materials, not its instances.
+      disposeObjectBuffers(scene);
+    });
     for (const type of ['dispose-model', 'tile-visibility-change', 'load-error'] as const) {
       tiles.addEventListener(type, changed);
     }
@@ -1251,24 +1256,8 @@ function prepareForUpload(model: Object3D): void {
   });
 }
 
-function disposeObject(root: Object3D): void {
-  root.traverse((object) => {
-    const { geometry, material } = object as Partial<Mesh>;
-    geometry?.dispose();
-    const variants = (object.userData.variantMaterials as VariantMaterials | undefined)?.values();
-    for (const item of [material, ...(variants ?? [])].flat()) if (item) disposeMaterial(item);
-  });
-}
-
 function sameNames(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((name, index) => name === b[index]);
-}
-
-function disposeMaterial(material: Material): void {
-  for (const value of Object.values(material)) {
-    if ((value as Texture | null)?.isTexture) (value as Texture).dispose();
-  }
-  material.dispose();
 }
 
 /**

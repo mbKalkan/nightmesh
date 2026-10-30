@@ -51,7 +51,8 @@ export async function readCmpt(source: ByteSource): Promise<Cmpt> {
       facts.tiles.push({ path, format, bytes: length });
       if (format === 'cmpt' && depth < MAX_DEPTH && length >= HEADER) {
         await walk(at, at + length, `${path}/`, depth + 1);
-      } else if (format !== 'cmpt') {
+      } else {
+        // A composite too deep or too short to read is a tile like the others, named if not drawn.
         tiles.push({ path, format, source: sliceSource(source, at, length) });
       }
       at += length;

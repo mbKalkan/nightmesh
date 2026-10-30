@@ -13,6 +13,8 @@ const MAX_ENTRIES = 10_000;
 export interface MetadataEntity {
   className?: string;
   properties: Json;
+  /** Offsets and scales a property table gives its columns, in place of the class's. */
+  transforms?: Record<string, Pick<SchemaProperty, 'offset' | 'scale'>>;
 }
 
 export interface SchemaProperty {
@@ -144,7 +146,8 @@ export function entityValues(
   if (!definition) return given.map(([name, value]) => ({ name, value }));
   const values: MetadataValue[] = [];
   for (const [name, property] of definition.properties) {
-    const value = valueOf(entity.properties[name], property, schema!);
+    const transform = entity.transforms?.[name];
+    const value = valueOf(entity.properties[name], { ...property, ...transform }, schema!);
     if (value) values.push({ name, ...value, semantic: property.semantic });
   }
   for (const [name, value] of given) {

@@ -87,14 +87,24 @@ export function tableRow(
   const type = schema?.classes.get(className);
   if (!type || row < 0 || row >= count) return { className, properties: {} };
   const properties: Json = {};
+  const transforms: NonNullable<MetadataEntity['transforms']> = {};
   const columns = isObject(definition.properties) ? definition.properties : {};
   for (const [name, column] of Object.entries(columns)) {
     const property = type.properties.get(name);
     if (!property || !isObject(column)) continue;
     const value = readValue(tables, column, property, schema!, row);
     if (value !== undefined) properties[name] = value;
+    const { offset, scale } = column;
+    if (offset !== undefined || scale !== undefined) {
+      transforms[name] = {
+        ...(offset !== undefined && { offset }),
+        ...(scale !== undefined && { scale }),
+      };
+    }
   }
-  return { className, properties };
+  return Object.keys(transforms).length > 0
+    ? { className, properties, transforms }
+    : { className, properties };
 }
 
 function readValue(

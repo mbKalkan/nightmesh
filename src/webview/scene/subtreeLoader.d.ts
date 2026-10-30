@@ -9,6 +9,7 @@ declare module '3d-tiles-renderer/src/core/plugins/SUBTREELoader.js' {
     rootTile: Record<string, unknown>;
     parseBuffer(buffer: ArrayBuffer): { subtreeJson: Record<string, unknown> };
     markActiveBufferViews(json: Record<string, unknown>, headers: unknown[]): void;
+    requestActiveBuffers(buffers: unknown[], internalBuffer: unknown): Promise<unknown>;
     parseActiveBufferViews(headers: unknown[], buffers: unknown): Record<number, Uint8Array>;
     expandSubtree(subtreeRoot: { children: object[] }, subtree: unknown): void;
     deriveChildTile(

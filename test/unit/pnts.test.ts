@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MeshFormatError, type MeshPart } from '../../src/extension/model/mesh/geometry';
 import { decodePoints } from '../../src/extension/model/mesh/draco';
 import { readPnts as readWithout } from '../../src/extension/model/mesh/pnts';
+import { withMemory } from './memory';
 
 const readPnts = (bytes: Uint8Array) => readWithout(bytes, decodePoints);
 const fixture = (name: string) => new Uint8Array(readFileSync(`test/fixtures/${name}`));
@@ -176,5 +177,19 @@ describe('readPnts', () => {
     ).toEqual([]);
     await expect(readPnts(fixture('tiles/batched.b3dm'))).rejects.toThrow(MeshFormatError);
     await expect(readPnts(tile({}).fill(0, 4, 8))).rejects.toThrow(MeshFormatError);
+  });
+
+  it('makes no room for points a damaged count says are there, but are not', async () => {
+    const points = 100_000_000;
+    const body = new Uint8Array(16);
+    for (const table of [
+      { POINTS_LENGTH: points },
+      { POINTS_LENGTH: points, POSITION: { byteOffset: 0 } },
+      { POINTS_LENGTH: points, POSITION_QUANTIZED: { byteOffset: 0 } },
+    ]) {
+      const mesh = await withMemory(64 * 1024 * 1024, () => readPnts(tile(table, body)));
+      expect(mesh.facts).toMatchObject({ points });
+      expect(mesh.objects).toEqual([]);
+    }
   });
 });

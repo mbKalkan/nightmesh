@@ -36,4 +36,31 @@ describe('readCmpt', () => {
     if (!('tiles' in cut)) throw new Error(JSON.stringify(cut));
     expect(cut.tiles.map((tile) => tile.format)).toEqual(['b3dm']);
   });
+
+  it("names a composite it doesn't read among the tiles, which then say it isn't drawn", async () => {
+    const composite = (...tiles: Uint8Array[]) => {
+      const length = 16 + tiles.reduce((sum, tile) => sum + tile.length, 0);
+      const bytes = new Uint8Array(length);
+      const view = new DataView(bytes.buffer);
+      bytes.set(new TextEncoder().encode('cmpt'));
+      view.setUint32(4, 1, true);
+      view.setUint32(8, length, true);
+      view.setUint32(12, tiles.length, true);
+      tiles.reduce((at, tile) => (bytes.set(tile, at), at + tile.length), 16);
+      return bytes;
+    };
+    // Ten inside one another, in one more: eight inside are read, the ninth isn't.
+    let deep = fixture('tiles/batched.b3dm');
+    for (let i = 0; i < 10; i++) deep = composite(deep);
+    // Too short to hold even a composite's header.
+    const short = composite().subarray(0, 12);
+    new DataView(short.buffer).setUint32(8, 12, true);
+
+    const result = await readCmpt(memorySource(composite(deep, short)));
+    if (!('tiles' in result)) throw new Error(JSON.stringify(result));
+    expect(result.tiles.map(({ path, format }) => `${path} ${format}`)).toEqual([
+      `${'1/'.repeat(8)}1 cmpt`,
+      '2 cmpt',
+    ]);
+  });
 });

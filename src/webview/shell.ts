@@ -172,6 +172,12 @@ export class Shell {
       }
       this.showPanels();
     });
+    // A viewer given its structure while out of sight decides once it is shown.
+    new ResizeObserver(() => {
+      if (!this.panelsAvailable || this.narrowed !== undefined) return;
+      this.narrowed = this.tooNarrow();
+      if (this.narrowed !== undefined) this.showPanels();
+    }).observe(this.center.parentElement!);
   }
 
   setDocument(fileName: string, format: ModelFormat, strings: ViewerStrings): void {

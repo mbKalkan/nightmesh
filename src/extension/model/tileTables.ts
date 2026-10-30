@@ -28,11 +28,13 @@ export async function readTileTables(
   const head = await source.read(0, Math.min(PNTS_HEADER, source.size));
   const magic = new TextDecoder('latin1').decode(head.subarray(0, 4));
   let layout: { header: number; feature: TableSize; batch: TableSize } | undefined;
+  let batchLength: number | undefined;
   if (magic === 'b3dm' || magic === 'i3dm') {
     const tile = magic === 'b3dm' ? await readB3dm(source) : await readI3dm(source);
     if ('failure' in tile) return undefined;
     const { header, featureTable, batchTable } = tile.facts;
     layout = { header, feature: featureTable, batch: batchTable };
+    if (header < 28) batchLength = tile.facts.batchLength;
   } else if (magic === 'pnts' && head.length === PNTS_HEADER) {
     const view = new DataView(head.buffer, head.byteOffset, head.byteLength);
     const [json, binary, batchJson, batchBinary] = [12, 16, 20, 24].map((at) =>
@@ -55,6 +57,7 @@ export async function readTileTables(
     format: magic as TileTablesBytes['format'],
     feature: { bytes: await source.read(header, featureBytes), json: feature.json },
     batch: { bytes: await source.read(header + featureBytes, batchBytes), json: batch.json },
+    ...(batchLength !== undefined && { batchLength }),
   };
 }
 

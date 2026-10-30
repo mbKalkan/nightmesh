@@ -1,5 +1,7 @@
 import {
   DoubleSide,
+  type BufferGeometry,
+  type InstancedMesh,
   type Line,
   type LineBasicMaterial,
   type Material,
@@ -42,6 +44,8 @@ export function parseModel(
   loader.register(variantsPlugin);
   loader.register(nodeVisibilityPlugin);
   if (readFromMesh) loader.register(meshFormatsPlugin);
+  // Before the plugins that read primitives' extensions, which find instanced ones through it.
+  loader.register(instancedAssociationsPlugin);
   for (const plugin of decoders.plugins ?? []) loader.register(plugin);
   return loader.parseAsync(json, '');
 }
@@ -99,6 +103,38 @@ function meshFormatsPlugin(parser: GLTFParser) {
  * KHR_node_visibility: a node it hides is not drawn, nor anything below it, lights included. It
  * stays in the scene, so it can still be selected and outlined.
  */
+/**
+ * The loader draws a node's instances (EXT_mesh_gpu_instancing, as tiles are drawn) with meshes
+ * of its own, which it maps to the node but not to the glTF primitive, as it does the meshes
+ * they stand for: they are mapped as those, by the geometry they share, so that what reads a
+ * primitive's extensions (feature IDs, metadata) finds theirs.
+ */
+function instancedAssociationsPlugin(parser: GLTFParser) {
+  return {
+    name: 'nightmesh_instanced_associations',
+    // Without waiting: the plugins after this one read the map as soon as they are called.
+    afterRoot: async (gltf: GLTF) => {
+      const primitives = new Map<BufferGeometry, { meshes?: number; primitives?: number }>();
+      for (const [object, association] of parser.associations) {
+        const geometry = (object as Partial<Mesh>).geometry;
+        if (geometry && association.primitives !== undefined) primitives.set(geometry, association);
+      }
+      gltf.scene.traverse((object) => {
+        const instanced = object as InstancedMesh;
+        if (!instanced.isInstancedMesh) return;
+        const own = parser.associations.get(object);
+        const primitive = primitives.get(instanced.geometry);
+        if (!primitive || own?.primitives !== undefined) return;
+        parser.associations.set(object, {
+          ...own,
+          meshes: primitive.meshes,
+          primitives: primitive.primitives,
+        });
+      });
+    },
+  };
+}
+
 function nodeVisibilityPlugin(parser: GLTFParser) {
   return {
     name: 'KHR_node_visibility',

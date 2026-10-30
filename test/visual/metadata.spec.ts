@@ -19,10 +19,16 @@ const section = (page: Page, title: string) =>
  * Clicks the pixel of the color `matches` nearest to the middle of where it shows: one whose
  * neighbours have it too, so not an edge.
  */
-async function clickColor(page: Page, matches: (rgb: number[]) => boolean): Promise<void> {
+async function clickColor(
+  page: Page,
+  matches: (rgb: number[]) => boolean,
+  /** Where to look, by the share of the canvas's width: `[0, 0.5]` is its left half. */
+  across: [number, number] = [0, 1],
+): Promise<void> {
   const pixels = await pixelsOf(page, '.nm-canvas');
   const canvas = (await page.locator('.nm-canvas').boundingBox())!;
-  const hit = (x: number, y: number) => matches(pixels.at(x, y));
+  const [left, right] = across.map((share) => share * pixels.width);
+  const hit = (x: number, y: number) => x >= left && x < right && matches(pixels.at(x, y));
   let [sumX, sumY, count] = [0, 0, 0];
   for (let y = 2; y < pixels.height - 2; y += 2) {
     for (let x = 2; x < pixels.width - 2; x += 2) {
@@ -99,3 +105,33 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
     await page.screenshot({ path: `${SCREENS}/metadata-ground-${theme}.png` });
   });
 }
+
+test("draws the tiles of a composite with their metadata, and reads each tile's", async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  // The same model twice, the second east of the first.
+  await viewer.open('tiles/features.cmpt');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  await expect(page.locator('.nm-error')).toBeHidden();
+  await expect(page.locator('.nm-notice')).toBeHidden();
+  await page.screenshot({ path: `${SCREENS}/metadata-composite.png` });
+  for (const half of [
+    [0, 0.5],
+    [0.5, 1],
+  ] as [number, number][]) {
+    await clickColor(page, red, half);
+    await expect(section(page, 'Feature (building)').locator('dd')).toContainText([
+      '0of 2',
+      'building',
+      'Town hall',
+    ]);
+    await clickColor(page, magenta, half);
+    await expect(section(page, 'Texture properties').locator('dd')).toHaveText([
+      'parcel',
+      '0.8',
+      'plaza',
+    ]);
+  }
+  expect(viewer.problems).toEqual([]);
+});
