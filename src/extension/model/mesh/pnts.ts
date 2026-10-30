@@ -238,6 +238,14 @@ function readPositions(
   origin: Origin,
   decoded: DecodedPoints['POSITION'],
 ): Float32Array | undefined {
+  // Found before room is made for the points: a damaged count can't ask for more than is there.
+  const plain = decoded ? undefined : body.locate(table.POSITION, points, 3, ['FLOAT']);
+  const quantized = body.locate(table.POSITION_QUANTIZED, points, 3, ['UNSIGNED_SHORT']);
+  const offset = body.global(table.QUANTIZED_VOLUME_OFFSET, 'FLOAT', 3);
+  const scale = body.global(table.QUANTIZED_VOLUME_SCALE, 'FLOAT', 3);
+  const volume = quantized && offset && scale && { at: quantized.at, offset, scale };
+  if (!decoded && !plain && !volume) return undefined;
+
   const positions = new Float32Array(points * 3);
   const put = (index: number, x: number, y: number, z: number) => {
     origin.decide(x, y, z);
@@ -247,27 +255,21 @@ function readPositions(
   };
   if (decoded) {
     for (let i = 0; i < points; i++) put(i, decoded[i * 3], decoded[i * 3 + 1], decoded[i * 3 + 2]);
-    return positions;
-  }
-  const plain = body.locate(table.POSITION, points, 3, ['FLOAT']);
-  if (plain) {
+  } else if (plain) {
     for (let i = 0, at = plain.at; i < points; i++, at += 12) {
       put(i, body.float(at), body.float(at + 4), body.float(at + 8));
     }
-    return positions;
-  }
-  const quantized = body.locate(table.POSITION_QUANTIZED, points, 3, ['UNSIGNED_SHORT']);
-  const offset = body.global(table.QUANTIZED_VOLUME_OFFSET, 'FLOAT', 3);
-  const scale = body.global(table.QUANTIZED_VOLUME_SCALE, 'FLOAT', 3);
-  if (!quantized || !offset || !scale) return undefined;
-  const [sx, sy, sz] = scale.map((value) => value / 65535);
-  for (let i = 0, at = quantized.at; i < points; i++, at += 6) {
-    put(
-      i,
-      offset[0] + body.uint16(at) * sx,
-      offset[1] + body.uint16(at + 2) * sy,
-      offset[2] + body.uint16(at + 4) * sz,
-    );
+  } else if (volume) {
+    const [ox, oy, oz] = volume.offset;
+    const [sx, sy, sz] = volume.scale.map((value) => value / 65535);
+    for (let i = 0, at = volume.at; i < points; i++, at += 6) {
+      put(
+        i,
+        ox + body.uint16(at) * sx,
+        oy + body.uint16(at + 2) * sy,
+        oz + body.uint16(at + 4) * sz,
+      );
+    }
   }
   return positions;
 }

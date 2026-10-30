@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A Composite (cmpt) tile whose models have metadata (`EXT_structural_metadata`) wasn't drawn at
+  all. Its models' metadata is now merged, and a click on a feature in any of its tiles shows
+  that tile's properties.
+- Clicking a feature of a model drawn with instances (i3dm and Composite tiles, b3dm tiles on the
+  globe, glTF `EXT_mesh_gpu_instancing`) now shows its feature IDs and metadata
+  (`EXT_mesh_features`, `EXT_structural_metadata`).
+- A model whose metadata has no schema, or metadata the viewer can't read, is drawn without it
+  instead of not at all.
+- Clicking a feature of a b3dm tile from before 3D Tiles 1.0 (20- or 24-byte header, `BATCHID`)
+  shows its properties.
+- A property table row with an enum value its enum doesn't name shows its other properties.
+- The offset and scale an implicit subtree's property table gives a column are applied, in place
+  of the class's.
+- An implicit subtree whose metadata buffer is missing still shows its tiles.
+- A damaged pnts or i3dm tile whose count is far above what the file holds no longer asks for
+  gigabytes of memory.
+- A composite nested more than eight deep is named among the tiles that aren't drawn.
+- A narrow viewer, such as each side of a comparison, that got its model while out of sight now
+  opens with the structure closed once it is shown.
+- Instances' GPU memory is freed when tiles leave the view or the model is replaced.
+
 ## [0.5.0] - 2026-10-30
 
 3D Tiles: tilesets and their tiles, with their metadata. Nightmesh is no longer a preview.

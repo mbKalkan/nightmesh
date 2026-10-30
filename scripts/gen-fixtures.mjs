@@ -2595,6 +2595,10 @@ await writeGlb('ktx2.glb', await compressedTextures());
 {
   const { json, bin } = featuresModel();
   write('features.glb', glb(json, bin));
+  // The same model twice in a composite, the second 8 m east: their metadata is merged as one.
+  const east = { featureTable: { BATCH_LENGTH: 0, RTC_CENTER: [8, 0, 0] } };
+  mkdirSync(join(OUT, 'tiles'), { recursive: true });
+  write('tiles/features.cmpt', cmpt(b3dm(glb(json, bin)), b3dm(glb(json, bin), east)));
   write('features-points.gltf', Buffer.from(`${JSON.stringify(featuresPoints(), null, 2)}\n`));
   write('features-schema.json', Buffer.from(`${JSON.stringify(POINT_SCHEMA, null, 2)}\n`));
 }

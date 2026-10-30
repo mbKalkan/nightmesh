@@ -894,6 +894,8 @@ export interface TileTablesBytes {
   format: 'b3dm' | 'i3dm' | 'pnts';
   feature: { bytes: Uint8Array; json: number };
   batch: { bytes: Uint8Array; json: number };
+  /** The batch length a b3dm header from before 3D Tiles 1.0 gives: it has no feature table. */
+  batchLength?: number;
 }
 
 /** The tables of the tile the webview asked for; none when it has none or can't be read. */

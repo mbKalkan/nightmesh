@@ -199,6 +199,23 @@ test('opens a narrow viewer, as each side of a comparison is, with the structure
   expect(viewer.problems).toEqual([]);
 });
 
+test('decides a narrow viewer once it is shown, when its structure came while out of sight', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 760 });
+  const viewer = await openViewer(page, 'dark', PANELS_ONLY);
+  // A tab in the background: no width to decide on yet.
+  await page.evaluate(() => (document.body.style.display = 'none'));
+  await viewer.post(viewer.openMessage('scene.glb'));
+  for (const message of await viewer.messages('scene.glb')) await viewer.post(message);
+  await page.waitForSelector('.nm-viewport[data-state]', { state: 'attached' });
+  await page.evaluate(() => (document.body.style.display = ''));
+  await expect(page.locator('.nm-panel-right')).toBeVisible();
+  await expect(page.locator('.nm-panel-left')).toBeHidden();
+  await expect(page.locator('[data-panel="structure"]')).toHaveAttribute('aria-pressed', 'false');
+  expect(viewer.problems).toEqual([]);
+});
+
 test('keeps what is open and selected when the file changes', async ({ page }) => {
   const viewer = await openViewer(page, 'dark', PANELS_ONLY);
   await viewer.open('scene.glb');

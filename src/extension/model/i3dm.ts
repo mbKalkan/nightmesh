@@ -172,6 +172,10 @@ export function instanceMatrices(
 
   const uniform = locate(body, table.SCALE, length, 'FLOAT', 1);
   const nonUniform = locate(body, table.SCALE_NON_UNIFORM, length, 'FLOAT', 3);
+  // Checked before room is made for the matrices: a damaged count can't ask for more than is there.
+  if (plain === undefined && (quantized === undefined || !volumeOffset || !volumeScale)) {
+    return new Float64Array();
+  }
   const matrices = new Float64Array(length * 16);
   for (let i = 0; i < length; i++) {
     const place = position(i);

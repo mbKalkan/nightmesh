@@ -48,11 +48,15 @@ export interface PropertyTextureSet extends PropertySet {
   data: (Texture | null)[];
 }
 
+export interface PropertyTableSet extends PropertySet {
+  /** A property's value in a row, as the renderer reads it. */
+  getPropertyValue(name: string, id: number): unknown;
+}
+
 export interface StructuralMetadata {
-  tableAccessors: PropertySet[];
+  tableAccessors: PropertyTableSet[];
   textureAccessors: PropertyTextureSet[];
   attributeAccessors: PropertySet[];
-  getPropertyTableData(table: number, id: number): Record<string, unknown>;
 }
 
 export interface SurfaceMetadata {

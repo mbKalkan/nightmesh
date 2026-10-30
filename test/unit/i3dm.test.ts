@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readGlbLayout } from '../../src/extension/model/container';
-import { instancedGltf, readI3dm } from '../../src/extension/model/i3dm';
+import { instanceMatrices, instancedGltf, readI3dm } from '../../src/extension/model/i3dm';
 import type { Gltf } from '../../src/extension/model/plan';
 import { memorySource } from '../../src/extension/model/sources';
+import { withMemory } from './memory';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(`test/fixtures/${name}`));
 
@@ -100,6 +101,21 @@ describe('instancedGltf', () => {
       expect(dot).toBeCloseTo(1, 3);
     });
     for (const scale of s) expect(scale).toEqual([2, 1, 1]);
+  });
+
+  it('makes no room for instances a damaged count says are there, but are not', async () => {
+    const length = 1 << 24;
+    const body = new Uint8Array(16);
+    for (const table of [
+      { INSTANCES_LENGTH: length },
+      { INSTANCES_LENGTH: length, POSITION: { byteOffset: 0 } },
+      { INSTANCES_LENGTH: length, POSITION_QUANTIZED: { byteOffset: 0 } },
+    ]) {
+      const matrices = await withMemory(64 * 1024 * 1024, () =>
+        instanceMatrices(table, body, length),
+      );
+      expect(matrices).toHaveLength(0);
+    }
   });
 
   it('draws nothing more when there are no instances or nothing to instance', () => {

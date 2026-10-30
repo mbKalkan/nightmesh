@@ -15,6 +15,7 @@ import { watchFile } from './fileWatcher';
 import { gitSibling, readGitBlob } from './gitBlob';
 import { JsonDocuments } from './jsonDocuments';
 import { lfsObjectId } from './gitObject';
+import { isCmpt } from './model/cmpt';
 import { sniff } from './model/container';
 import { isI3dm } from './model/i3dm';
 import { isB3dm } from './model/tileFile';
@@ -424,6 +425,9 @@ async function tileTables(
   }
 }
 
+/** Whether the start of a file is a tile of the format, by its magic. */
+const TILE_MAGIC = { b3dm: isB3dm, i3dm: isI3dm, cmpt: isCmpt };
+
 /** Local files are read in place; other schemes (Git, remote file systems) only as a whole. */
 async function openSource(uri: vscode.Uri, format: ModelFormat): Promise<ByteSource> {
   if (uri.scheme === 'file') return fileSource(uri.fsPath);
@@ -436,11 +440,9 @@ async function openSource(uri: vscode.Uri, format: ModelFormat): Promise<ByteSou
         sniff(data) === 'lfsPointer' ||
         (isMeshFormat(format)
           ? looksLike(format, data.subarray(0, 64 * 1024), data.length) !== 'yes'
-          : format === 'b3dm'
-            ? !isB3dm(data)
-            : format === 'i3dm'
-              ? !isI3dm(data)
-              : sniff(data) === 'unknown'),
+          : format in TILE_MAGIC
+            ? !TILE_MAGIC[format as keyof typeof TILE_MAGIC](data)
+            : sniff(data) === 'unknown'),
     ),
   );
 }

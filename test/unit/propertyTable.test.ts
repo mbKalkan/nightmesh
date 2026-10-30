@@ -46,6 +46,38 @@ describe('a property table row', () => {
     });
   });
 
+  it("scales and offsets a column's values as the table says, in place of the class", () => {
+    const sensor = readSchema({
+      classes: {
+        sensor: {
+          properties: {
+            reading: { type: 'SCALAR', componentType: 'FLOAT32', offset: 1, scale: 2 },
+            level: { type: 'SCALAR', componentType: 'FLOAT32', offset: 1, scale: 2 },
+          },
+        },
+      },
+    });
+    const row = tableRow(
+      {
+        tables: [
+          {
+            class: 'sensor',
+            count: 1,
+            properties: { reading: { values: 0, offset: 10, scale: 0.5 }, level: { values: 0 } },
+          },
+        ],
+        views: { 0: new Uint8Array(new Float32Array([4]).buffer) },
+      },
+      0,
+      0,
+      sensor,
+    )!;
+    expect(entityValues(row, sensor).map(({ name, value }) => [name, value])).toEqual([
+      ['reading', 12],
+      ['level', 9],
+    ]);
+  });
+
   it('gives nothing past the table, and only the class without a schema', () => {
     expect(tableRow(tables(), 0, 5, schema)).toEqual({ className: 'area', properties: {} });
     expect(tableRow(tables(), 0, 1, undefined)).toEqual({ className: 'area', properties: {} });

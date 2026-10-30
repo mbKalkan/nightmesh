@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readGlbLayout } from '../../src/extension/model/container';
 import { memorySource } from '../../src/extension/model/sources';
-import { readB3dm } from '../../src/extension/model/tileFile';
+import type { Gltf } from '../../src/extension/model/plan';
+import { readB3dm, withBatchIds } from '../../src/extension/model/tileFile';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(`test/fixtures/${name}`));
 
@@ -88,5 +89,39 @@ describe('readB3dm', () => {
   it('keeps going past tables it cannot parse', async () => {
     const { facts } = await read(tile([1, 0, 8, 0, 0, 0], 'not json'));
     expect(facts).toMatchObject({ batchLength: 0, properties: [] });
+  });
+});
+
+describe('withBatchIds', () => {
+  it("names the batch ids of tiles from before 3D Tiles 1.0 as 1.0 does, in what's drawn", () => {
+    const json = {
+      meshes: [
+        {
+          primitives: [
+            { attributes: { POSITION: 0, BATCHID: 1 } },
+            {
+              attributes: { POSITION: 0, BATCHID: 2 },
+              extensions: {
+                KHR_draco_mesh_compression: { attributes: { POSITION: 0, BATCHID: 1 } },
+              },
+            },
+            { attributes: { POSITION: 0, BATCHID: 1, _BATCHID: 3 } },
+          ],
+        },
+      ],
+    } as unknown as Gltf;
+    const before = JSON.stringify(json);
+    expect(withBatchIds(json).meshes![0].primitives).toEqual([
+      { attributes: { POSITION: 0, _BATCHID: 1 } },
+      {
+        attributes: { POSITION: 0, _BATCHID: 2 },
+        extensions: { KHR_draco_mesh_compression: { attributes: { POSITION: 0, _BATCHID: 1 } } },
+      },
+      // Named both ways: 1.0's is read.
+      { attributes: { POSITION: 0, BATCHID: 1, _BATCHID: 3 } },
+    ]);
+    expect(JSON.stringify(json)).toBe(before);
+    const current = { meshes: [{ primitives: [{ attributes: { _BATCHID: 1 } }] }] } as Gltf;
+    expect(withBatchIds(current)).toBe(current);
   });
 });

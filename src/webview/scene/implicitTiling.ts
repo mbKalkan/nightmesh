@@ -99,11 +99,13 @@ export interface TableRow {
  * where its subtree's property tables have its metadata and its contents'; on the subtree's
  * first tile, the subtree's own metadata.
  */
-class ContentsSubtreeLoader extends SUBTREELoader {
+export class ContentsSubtreeLoader extends SUBTREELoader {
   private json: Json = {};
   private tables: PropertyTables | undefined;
   /** How many bits are set before each, by bitstream, counted as far as asked. */
   private readonly ranks = new Map<unknown, number[]>();
+  /** The buffers and views read for the property tables alone, which the tiles don't need. */
+  private readonly forTables = new Set<{ isActive: boolean }>();
 
   /**
    * The subtree's JSON as the renderer reads it: 1.0's contents' availability, which
@@ -137,10 +139,27 @@ class ContentsSubtreeLoader extends SUBTREELoader {
         for (const key of ['values', 'arrayOffsets', 'stringOffsets']) {
           const header = typeof column[key] === 'number' ? headers[column[key]] : undefined;
           if (!header) continue;
+          if (!header.isActive) this.forTables.add(header);
+          if (!header.bufferHeader.isActive) this.forTables.add(header.bufferHeader);
           header.isActive = true;
           header.bufferHeader.isActive = true;
         }
       }
+    }
+  }
+
+  /** A buffer only the property tables need that can't be read leaves out the metadata, not the tiles. */
+  override async requestActiveBuffers(
+    buffers: unknown[],
+    internalBuffer: unknown,
+  ): Promise<unknown> {
+    try {
+      return await super.requestActiveBuffers(buffers, internalBuffer);
+    } catch (error) {
+      if (this.forTables.size === 0) throw error;
+      for (const header of this.forTables) header.isActive = false;
+      this.forTables.clear();
+      return super.requestActiveBuffers(buffers, internalBuffer);
     }
   }
 

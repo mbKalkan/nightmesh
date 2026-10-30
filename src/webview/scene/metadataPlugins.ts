@@ -7,7 +7,25 @@ import type { GLTFLoaderPlugin, GLTFParser } from 'three/examples/jsm/loaders/GL
 
 type Plugin = new (parser: GLTFParser) => GLTFLoaderPlugin;
 
+/**
+ * The plugin, made to leave its metadata out when it can't read it: it reads the file's metadata
+ * as it is, and would otherwise fail the whole model on a damaged table or index.
+ */
+export function forgiving(plugin: GLTFLoaderPlugin): GLTFLoaderPlugin {
+  const afterRoot = plugin.afterRoot?.bind(plugin);
+  if (afterRoot) {
+    plugin.afterRoot = async (result) => {
+      try {
+        await afterRoot(result);
+      } catch {
+        // The model is drawn; what it says of its features isn't shown.
+      }
+    };
+  }
+  return plugin;
+}
+
 export const metadataPlugins: ((parser: GLTFParser) => GLTFLoaderPlugin)[] = [
-  (parser) => new (GLTFMeshFeaturesExtension as unknown as Plugin)(parser),
-  (parser) => new (GLTFStructuralMetadataExtension as unknown as Plugin)(parser),
+  (parser) => forgiving(new (GLTFMeshFeaturesExtension as unknown as Plugin)(parser)),
+  (parser) => forgiving(new (GLTFStructuralMetadataExtension as unknown as Plugin)(parser)),
 ];

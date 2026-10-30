@@ -192,6 +192,74 @@ describe('loadMessages', () => {
     expect(instances.nodes).toHaveLength(4);
   });
 
+  it("draws a composite's tiles with their metadata as one, the loader's way", async () => {
+    const messages = await loadAll('tiles/features.cmpt', 'cmpt');
+    const model = messages.find((message) => message.type === 'model');
+    if (model?.type !== 'model') throw new Error('not drawn');
+    expect(model.notices).toEqual([]);
+    expect(model.extensions).toContain('EXT_structural_metadata');
+    const json = JSON.parse(model.json);
+    const metadata = json.extensions.EXT_structural_metadata;
+    expect(Object.keys(metadata.schema.classes)).toEqual(['building', 'parcel']);
+    expect(metadata.propertyTables.map((table: { class: string }) => table.class)).toEqual([
+      'building',
+      'building',
+    ]);
+    // The second tile's features read its own tables and textures.
+    const textures = json.textures.length / 2;
+    const second = json.meshes.slice(json.meshes.length / 2);
+    expect(
+      second.map(
+        (mesh: { primitives: { extensions: unknown }[] }) => mesh.primitives[0].extensions,
+      ),
+    ).toEqual([
+      {
+        EXT_mesh_features: {
+          featureIds: [
+            expect.objectContaining({ attribute: 0, propertyTable: 1 }),
+            expect.objectContaining({ label: 'vertex' }),
+          ],
+        },
+      },
+      {
+        EXT_mesh_features: {
+          featureIds: [
+            expect.objectContaining({ texture: { index: 1 + textures, channels: [0] } }),
+          ],
+        },
+        EXT_structural_metadata: { propertyTextures: [1] },
+      },
+    ]);
+    expect(metadata.propertyTextures[1].properties.zone.index).toBe(1 + textures);
+  });
+
+  it('draws a model whose metadata has no schema, without it', async () => {
+    const glb = readFileSync(join(FIXTURES, 'features.glb'));
+    const length = glb.readUInt32LE(12);
+    const json = JSON.parse(glb.subarray(20, 20 + length).toString());
+    delete json.extensions.EXT_structural_metadata.schema;
+    const text = Buffer.from(JSON.stringify(json).padEnd(Math.ceil((length + 64) / 4) * 4));
+    const bin = glb.subarray(20 + length);
+    const header = Buffer.alloc(20);
+    header.write('glTF', 0, 'ascii');
+    header.writeUInt32LE(2, 4);
+    header.writeUInt32LE(20 + text.length + bin.length, 8);
+    header.writeUInt32LE(text.length, 12);
+    header.write('JSON', 16, 'ascii');
+    const opener = fileResourceOpener('/fixtures', '/fixtures', (path) =>
+      join(FIXTURES, path.slice('/fixtures'.length)),
+    );
+    const options = { loadId: 1, reload: false, texts: loadTexts(english), format: 'glb' as const };
+    const messages: HostToWebviewMessage[] = [];
+    const source = memorySource(Buffer.concat([header, text, bin]));
+    for await (const message of loadMessages(source, opener, options)) messages.push(message);
+    const model = messages.find((message) => message.type === 'model');
+    if (model?.type !== 'model') throw new Error('not drawn');
+    // The loader would fail the whole model on metadata it can't read.
+    expect(model.extensions).not.toContain('EXT_structural_metadata');
+    expect(JSON.parse(model.json).extensions).toEqual({});
+  });
+
   it("draws a composite's i3dm tile that names its glTF, from that glTF's folder", async () => {
     const inner = readFileSync(join(FIXTURES, 'tiles/external.i3dm'));
     const header = Buffer.alloc(16);

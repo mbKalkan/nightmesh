@@ -23,7 +23,7 @@ import { memorySource, type ByteSource } from './sources';
 import { readCmpt } from './cmpt';
 import { instancedGltf, readI3dm, rtcPlacement, translation, viewFrame } from './i3dm';
 import { mergeGltfs, type MergePart } from './merge';
-import { readB3dm } from './tileFile';
+import { isObject, readB3dm, withBatchIds } from './tileFile';
 import { readJsonObject } from './jsonResource';
 import { tilesetMessage } from './tiles';
 
@@ -224,6 +224,7 @@ async function* cmptMessages(
       continue;
     }
     const instances = instancesOf(tile) ?? translation(tile.facts.rtcCenter ?? [0, 0, 0]);
+    if (inner.format === 'b3dm') gltf.json = withBatchIds(gltf.json);
     read.push({ name, gltf, instances });
   }
   if (read.length === 0) return yield failure(options, texts.composite(skipped.join(', ')));
@@ -237,7 +238,8 @@ async function* cmptMessages(
     const buffers = await gltfBuffers(gltf, resources);
     const instanced = instancedGltf(gltf.json, instances, frame);
     if (instanced) buffers.push(memoryData(instanced.buffer));
-    parts.push({ name, json: instanced?.json ?? gltf.json, buffers });
+    // The tiles' metadata is merged with its schema, which must be in the JSON for that.
+    parts.push({ name, json: await withSchema(instanced?.json ?? gltf.json, resources), buffers });
   }
   const merged = mergeGltfs(parts);
   yield {
@@ -273,6 +275,10 @@ async function tileGltf(
   if ('failure' in gltf) return gltf;
   for (const item of [...(gltf.json.buffers ?? []), ...(gltf.json.images ?? [])]) {
     if (typeof item.uri === 'string') item.uri = rebaseUri(item.uri, tile.uri);
+  }
+  const metadata = (gltf.json as WithMetadata).extensions?.EXT_structural_metadata;
+  if (typeof metadata?.schemaUri === 'string') {
+    metadata.schemaUri = rebaseUri(metadata.schemaUri, tile.uri);
   }
   return gltf;
 }
@@ -368,10 +374,11 @@ async function* gltfMessages(
 
   const buffers = await gltfBuffers(gltf, resources);
   // A tile's glTF is drawn once for each of its instances; the panels keep the file's.
-  const instanced = instances && instancedGltf(gltf.json, instances);
+  const drawn = file.tile?.format === 'b3dm' ? withBatchIds(gltf.json) : gltf.json;
+  const instanced = instances && instancedGltf(drawn, instances);
   if (instanced) buffers.push(memoryData(instanced.buffer));
   const notices = gltf.truncated ? [texts.truncated] : [];
-  yield* drawMessages(instanced?.json ?? gltf.json, buffers, resources, options, notices);
+  yield* drawMessages(instanced?.json ?? drawn, buffers, resources, options, notices);
 }
 
 /** An i3dm tile's instances; a b3dm tile has none. */
@@ -590,15 +597,17 @@ type WithMetadata = Gltf & {
 /**
  * The JSON to draw with EXT_structural_metadata's schema in it, when the file gives it as a file
  * of its own: the webview resolves no URIs. A schema that can't be read leaves the metadata out
- * (the model is drawn all the same), and the user is told.
+ * (the model is drawn all the same), and the user is told. Metadata without any schema is left
+ * out too: the webview's loader would fail the whole model on it.
  */
 async function withSchema(json: WithMetadata, resources: Resources): Promise<WithMetadata> {
+  if (!json.extensionsUsed?.includes('EXT_structural_metadata')) return json;
   const metadata = json.extensions?.EXT_structural_metadata;
-  const uri = metadata?.schemaUri;
-  if (!metadata || metadata.schema !== undefined || typeof uri !== 'string') return json;
-  const schema = await readJsonObject(uri, resources);
+  if (isObject(metadata) && isObject(metadata.schema)) return json;
+  const uri = isObject(metadata) ? metadata.schemaUri : undefined;
+  const schema = typeof uri === 'string' ? await readJsonObject(uri, resources) : undefined;
   const extensions = { ...json.extensions };
-  if (schema) {
+  if (metadata && schema) {
     const { schemaUri: _, ...rest } = metadata;
     extensions.EXT_structural_metadata = { ...rest, schema };
     return { ...json, extensions };
@@ -607,7 +616,7 @@ async function withSchema(json: WithMetadata, resources: Resources): Promise<Wit
   return {
     ...json,
     extensions,
-    extensionsUsed: json.extensionsUsed?.filter((name) => name !== 'EXT_structural_metadata'),
+    extensionsUsed: json.extensionsUsed.filter((name) => name !== 'EXT_structural_metadata'),
   };
 }
 

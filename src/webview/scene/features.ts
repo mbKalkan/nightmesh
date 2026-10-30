@@ -49,7 +49,11 @@ export interface FeatureProperty {
 const HIERARCHY = '3DTILES_batch_table_hierarchy';
 
 /** The tables of a tile file, from the bytes the host sent. */
-export function tablesFromBytes({ feature, batch }: TileTablesBytes): TileTables {
+export function tablesFromBytes({
+  feature,
+  batch,
+  batchLength: stated,
+}: TileTablesBytes): TileTables {
   const own = (bytes: Uint8Array) =>
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   const featureTable = new FeatureTable(
@@ -62,7 +66,7 @@ export function tablesFromBytes({ feature, batch }: TileTablesBytes): TileTables
     feature: featureTable,
     batch: new BatchTable(
       own(batch.bytes),
-      batchLength(featureTable),
+      stated ?? batchLength(featureTable),
       0,
       batch.json,
       batch.bytes.length - batch.json,
@@ -206,16 +210,14 @@ export function surfaceFeatures(hit: ProbeHit): Feature[] {
     };
     const tableIndex = set.propertyTable;
     const table = tableIndex === null ? undefined : metadata?.tableAccessors[tableIndex];
-    if (table && tableIndex !== null && id < (table.count ?? 0)) {
-      try {
-        const row = metadata!.getPropertyTableData(tableIndex, id);
-        feature.className = table.definition.class;
-        feature.properties = Object.entries(row).map(([name, value]) => ({
-          name,
-          value: plain(value),
-        }));
-      } catch {
-        // A table the renderer can't read leaves the feature without its properties.
+    if (table && id < (table.count ?? 0)) {
+      feature.className = table.definition.class;
+      for (const name of Object.keys(table.properties)) {
+        try {
+          feature.properties.push({ name, value: plain(table.getPropertyValue(name, id)) });
+        } catch {
+          // A value the renderer can't read, such as a number its enum doesn't name, is left out.
+        }
       }
     }
     result.push(feature);

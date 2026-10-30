@@ -122,6 +122,123 @@ describe('mergeGltfs', () => {
     expect(json.extensionsUsed).toEqual(['KHR_lights_punctual', 'KHR_draco_mesh_compression']);
   });
 
+  it("merges the models' metadata, moving what refers to it", () => {
+    const withMetadata = (className: string, height: string) =>
+      ({
+        ...model(className),
+        extensionsUsed: ['EXT_mesh_features', 'EXT_structural_metadata'],
+        meshes: [
+          {
+            primitives: [
+              {
+                attributes: { POSITION: 0, _FEATURE_ID_0: 1 },
+                extensions: {
+                  EXT_mesh_features: {
+                    featureIds: [
+                      { featureCount: 1, attribute: 0, propertyTable: 0 },
+                      { featureCount: 1, texture: { index: 0 } },
+                    ],
+                  },
+                  EXT_structural_metadata: { propertyTextures: [0], propertyAttributes: [0] },
+                },
+              },
+            ],
+          },
+        ],
+        extensions: {
+          EXT_structural_metadata: {
+            schema: {
+              id: className,
+              classes: { [className]: { properties: { height: { type: height } } } },
+              enums: { kind: { values: [{ name: 'a', value: 0 }] } },
+            },
+            propertyTables: [
+              {
+                class: className,
+                count: 1,
+                properties: { height: { values: 0, arrayOffsets: 1, stringOffsets: 1 } },
+              },
+            ],
+            propertyTextures: [{ class: className, properties: { height: { index: 0 } } }],
+            propertyAttributes: [{ class: className, properties: { height: { attribute: '_H' } } }],
+          },
+        },
+      }) as unknown as Gltf;
+
+    const { json } = mergeGltfs([
+      { name: 'a', json: withMetadata('house', 'SCALAR'), buffers: [] },
+      { name: 'b', json: withMetadata('tree', 'SCALAR'), buffers: [] },
+      // Its class is named as the first's, but isn't the same: drawn without its metadata.
+      { name: 'c', json: withMetadata('house', 'STRING'), buffers: [] },
+    ]);
+    const merged = json as unknown as {
+      meshes: { primitives: { extensions: Record<string, unknown> }[] }[];
+      extensions: { EXT_structural_metadata: Record<string, unknown> };
+      extensionsUsed: string[];
+    };
+    const metadata = merged.extensions.EXT_structural_metadata;
+    expect(metadata.schema).toEqual({
+      id: 'house',
+      classes: {
+        house: { properties: { height: { type: 'SCALAR' } } },
+        tree: { properties: { height: { type: 'SCALAR' } } },
+      },
+      enums: { kind: { values: [{ name: 'a', value: 0 }] } },
+    });
+    expect(metadata.propertyTables).toEqual([
+      {
+        class: 'house',
+        count: 1,
+        properties: { height: { values: 0, arrayOffsets: 1, stringOffsets: 1 } },
+      },
+      {
+        class: 'tree',
+        count: 1,
+        properties: { height: { values: 2, arrayOffsets: 3, stringOffsets: 3 } },
+      },
+    ]);
+    expect(metadata.propertyTextures).toEqual([
+      { class: 'house', properties: { height: { index: 0 } } },
+      { class: 'tree', properties: { height: { index: 1 } } },
+    ]);
+    expect(metadata.propertyAttributes).toHaveLength(2);
+    expect(merged.meshes[1].primitives[0].extensions).toEqual({
+      EXT_mesh_features: {
+        featureIds: [
+          { featureCount: 1, attribute: 0, propertyTable: 1 },
+          { featureCount: 1, texture: { index: 1 } },
+        ],
+      },
+      EXT_structural_metadata: { propertyTextures: [1], propertyAttributes: [1] },
+    });
+    // The third keeps its feature IDs, its texture moved; nothing refers to its tables.
+    expect(merged.meshes[2].primitives[0].extensions).toEqual({
+      EXT_mesh_features: {
+        featureIds: [
+          { featureCount: 1, attribute: 0 },
+          { featureCount: 1, texture: { index: 2 } },
+        ],
+      },
+    });
+    expect(merged.extensionsUsed).toEqual(['EXT_mesh_features', 'EXT_structural_metadata']);
+  });
+
+  it('leaves metadata out when no model has a schema the loader can read', () => {
+    const json = {
+      ...model('a'),
+      extensionsUsed: ['EXT_structural_metadata'],
+      extensionsRequired: ['EXT_structural_metadata'],
+      extensions: { EXT_structural_metadata: { schemaUri: 'schema.json', propertyTables: [] } },
+    } as unknown as Gltf;
+    const merged = mergeGltfs([{ name: 'a', json, buffers: [] }]).json as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(merged.extensions).toBeUndefined();
+    expect(merged.extensionsUsed).toBeUndefined();
+    expect(merged.extensionsRequired).toBeUndefined();
+  });
+
   it('leaves the models it was given as they were', () => {
     const json = model('a');
     const before = JSON.stringify(json);
