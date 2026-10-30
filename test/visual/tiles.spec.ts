@@ -161,16 +161,14 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
   });
 }
 
-test('selects the tile clicked in the view, the tileset that holds it for an external one', async ({
-  page,
-}) => {
+test('selects the tile clicked in the view, in an external tileset too', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('tiles/tileset.json');
   await settle(page, viewer, 6);
   await page.locator('.nm-viewport').focus();
   await page.keyboard.press('1');
   await settle(page, viewer, 6);
-  // The yellow tower is in the external tileset, which the file lists as one tile.
+  // The yellow tower is in the external tileset, whose tiles the tree lists once read.
   const pixels = await pixelsOf(page, '.nm-canvas');
   const box = (await page.locator('.nm-canvas').boundingBox())!;
   let [sumX, sumY, count] = [0, 0, 0];
@@ -189,7 +187,8 @@ test('selects the tile clicked in the view, the tileset that holds it for an ext
     box.x + (sumX / count) * (box.width / pixels.width),
     box.y + (sumY / count) * (box.height / pixels.height),
   );
-  await expect(selectedRow(page)).toContainText('east/tileset.json');
+  await expect(selectedRow(page)).toContainText('tower.b3dm');
+  await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/3/0');
   // The tower is a feature of its tile, which the inspector shows from the tile's batch table.
   const feature = page.locator('.nm-section', {
     has: page.locator('.nm-section-title', { hasText: /^Feature$/ }),
@@ -200,6 +199,38 @@ test('selects the tile clicked in the view, the tileset that holds it for an ext
   // Empty space selects the tileset.
   await page.mouse.click(box.x + 8, box.y + 8);
   await expect(selectedRow(page)).toContainText('tiles/tileset.json');
+});
+
+test('lists the tiles of an external tileset once it is read', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/tileset.json');
+  await settle(page, viewer, 6);
+  await expect(page.locator('.nm-inspector-content')).toContainText('Tiles found while loading1');
+  await page.locator('.nm-tree-row', { hasText: 'east/tileset.json' }).click();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.nm-tree-row', { hasText: 'tower.b3dm' })).toBeVisible();
+  expect(viewer.problems).toEqual([]);
+});
+
+test('lists the tiles of implicit tiling as its subtrees are read', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/implicit/tileset.json');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  // The root subtree, its tile, the four quarters' subtrees and their tiles.
+  await settle(page, viewer, 10);
+  expect(await requested(viewer)).toContain('/_/tiles/implicit/subtrees/1/1/0.subtree');
+  const tree = page.locator('.nm-tree');
+  await expect(tree).toContainText('content/0/0/0.glb');
+  await page.locator('.nm-tree-row', { hasText: 'content/0/0/0.glb' }).click();
+  await expect(page.locator('.nm-inspector-kind')).toHaveText('Tile 0/0');
+  const implicit = page.locator('.nm-section', {
+    has: page.locator('.nm-section-title', { hasText: /^Implicit tiling$/ }),
+  });
+  await expect(implicit.locator('dd')).toContainText(['0', '0, 0']);
+  await page.keyboard.press('ArrowRight');
+  await expect(tree).toContainText('subtrees/1/1/0.subtree');
+  await page.screenshot({ path: `${SCREENS}/tiles-implicit-dark.png` });
+  expect(viewer.problems).toEqual([]);
 });
 
 test('says which tiles could not be had, and draws the rest', async ({ page }) => {

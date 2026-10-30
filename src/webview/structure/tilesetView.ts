@@ -37,6 +37,8 @@ export class TilesetView {
   private context: TilesetContext | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
+  /** Tiles were found since the tree was last laid out. */
+  private treeStale = false;
 
   constructor(
     shell: Shell,
@@ -99,9 +101,31 @@ export class TilesetView {
     this.refresh();
   }
 
+  /**
+   * Lists tiles the renderer read under the tile at `path`, past those the JSON has: an external
+   * tileset's, or an implicit subtree's. The tree shows them at the next refresh.
+   */
+  addTiles(path: string, children: readonly object[]): void {
+    if (this.context?.model.addFound(path, children)) this.treeStale = true;
+  }
+
   /** Shows the selected entry again, as the renderer's tiles came or went. */
   refresh(): void {
-    if (this.context) this.inspector.show(inspectTileset(this.context, this.selected), true);
+    if (!this.context) return;
+    if (this.treeStale) {
+      this.treeStale = false;
+      const { model, fileName } = this.context;
+      this.tree.setEntries(
+        tilesetOutline(model, fileName, this.strings.tileset),
+        this.tree.expandedKeys(),
+        this.selected,
+        true,
+      );
+    }
+    this.inspector.show(
+      withFeature(inspectTileset(this.context, this.selected), this.feature),
+      true,
+    );
   }
 
   /**

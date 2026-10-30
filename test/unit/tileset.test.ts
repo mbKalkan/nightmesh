@@ -30,8 +30,10 @@ const context = (json: string, live?: TilesetContext['live']): TilesetContext =>
 
 /** An inspection's rows as `label: text`, by section. */
 const rows = (json: string, key: string, live?: TilesetContext['live']) =>
+  rowsOf(inspectTileset(context(json, live), key));
+const rowsOf = (inspection: ReturnType<typeof inspectTileset>) =>
   Object.fromEntries(
-    (inspectTileset(context(json, live), key)?.sections ?? []).map((section) => [
+    (inspection?.sections ?? []).map((section) => [
       section.title,
       section.rows.map(
         (row) => `${row.label}: ${row.text ?? row.json}${row.note ? ` (${row.note})` : ''}`,
@@ -47,7 +49,13 @@ describe('TilesetModel', () => {
     expect(model.tiles.get('0/3')?.contents).toEqual([
       { uri: 'east/tileset.json', kind: 'tileset' },
     ]);
-    expect(model.counts()).toEqual({ tiles: 5, withContent: 5, external: 1, implicit: 0 });
+    expect(model.counts()).toEqual({
+      tiles: 5,
+      withContent: 5,
+      external: 1,
+      implicit: 0,
+      found: 0,
+    });
     expect(model.depth).toBe(1);
   });
 
@@ -89,6 +97,65 @@ describe('TilesetModel', () => {
     expect(new TilesetModel(deep).depth).toBe(3000);
     expect(new TilesetModel('not json').tiles.size).toBe(0);
     expect(new TilesetModel('{"root": [1]}').tiles.size).toBe(0);
+  });
+
+  it('lists the tiles the renderer finds under one, again when it reads them again', () => {
+    const model = new TilesetModel(district);
+    // As the renderer has them: the external tileset's root, with its JSON and its own fields.
+    const external = {
+      parent: {},
+      geometricError: 0,
+      content: { uri: 'tower.b3dm' },
+      children: [{ content: { uri: 'top.b3dm' } }],
+      internal: { loadingState: 4 },
+    };
+    expect(model.addFound('0/3', [external])).toBe(true);
+    expect(model.tiles.get('0/3')?.children).toEqual(['0/3/0']);
+    expect(model.tiles.get('0/3/0')).toMatchObject({
+      found: true,
+      refine: 'REPLACE',
+      children: ['0/3/0/0'],
+      contents: [{ uri: 'tower.b3dm', kind: 'b3dm' }],
+    });
+    expect(model.counts()).toMatchObject({ tiles: 5, found: 2 });
+    expect(model.depth).toBe(1);
+    // Read again after the renderer let it go: what was there goes.
+    model.addFound('0/3', [{ content: { uri: 'other.b3dm' } }]);
+    expect(model.tiles.has('0/3/0/0')).toBe(false);
+    expect(model.tiles.get('0/3/0')?.contents[0].uri).toBe('other.b3dm');
+    expect(model.addFound('9', [])).toBe(false);
+  });
+
+  it('places implicit tiles in their tree, after the tile’s own children', () => {
+    const model = new TilesetModel(
+      JSON.stringify({
+        root: {
+          implicitTiling: { subdivisionScheme: 'OCTREE' },
+          children: [{}],
+        },
+      }),
+    );
+    const root = { implicitTiling: { subdivisionScheme: 'OCTREE' } };
+    const data = (level: number, x: number, y: number, z: number) => ({ root, level, x, y, z });
+    model.addFound('0', [
+      {},
+      {
+        implicitTilingData: data(0, 0, 0, 0),
+        children: [
+          { implicitTilingData: data(1, 1, 0, 1), content: { uri: 'c/1/1/0/1.glb' } },
+          { implicitTilingData: data(1, 0, 1, 0), content: { uri: 's/1/0/1/0.subtree' } },
+        ],
+      },
+    ]);
+    expect(model.tiles.get('0')?.children).toEqual(['0/0', '0/1']);
+    expect(model.tiles.get('0/0')?.found).toBe(false);
+    expect(model.tiles.get('0/1/0')?.coordinates).toEqual({ level: 1, x: 1, y: 0, z: 1 });
+    expect(model.tiles.get('0/1/1')?.contents[0].kind).toBe('subtree');
+    const quad = { implicitTiling: { subdivisionScheme: 'QUADTREE' } };
+    model.addFound('0/1/1', [{ implicitTilingData: { root: quad, level: 2, x: 0, y: 3, z: 0 } }]);
+    expect(model.tiles.get('0/1/1/0')?.coordinates).toEqual({ level: 2, x: 0, y: 3 });
+    const implicit = rowsOf(inspectTileset({ ...context(district), model }, 'tile:0/1/0'));
+    expect(implicit['Implicit tiling']).toEqual(['Level: 1', 'Coordinates: 1, 0, 1']);
   });
 
   it('tells content by its file', () => {

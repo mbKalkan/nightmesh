@@ -816,6 +816,10 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
       ruled: (measurement) => showMeasurement(measurement),
       lengthText: (value) => metres.metres(value),
       tilesChanged: () => refreshTiles(),
+      tilesFound: (path, children) => {
+        tilesetView?.addTiles(path, children);
+        refreshTiles();
+      },
       environment: (environment) => vscode.postMessage({ type: 'environment', environment }),
     },
     opened?.environment,

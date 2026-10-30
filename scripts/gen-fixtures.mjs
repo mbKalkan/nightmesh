@@ -2238,6 +2238,92 @@ async function writeTilesets() {
       },
     }),
   );
+  await implicitTileset();
+}
+
+/**
+ * Implicit tiling: a square whose root subtree holds only the root tile, coarse, and whose four
+ * quarters are each a subtree of their own, in detail.
+ */
+async function implicitTileset() {
+  for (const dir of ['content', 'subtrees'].flatMap((top) =>
+    ['0/0', '1/0', '1/1'].map((at) => `${top}/${at}`),
+  )) {
+    mkdirSync(join(OUT, 'tiles', 'implicit', dir), { recursive: true });
+  }
+  write(
+    'tiles/implicit/content/0/0/0.glb',
+    await blocks('Square', [0.55, 0.55, 0.55], [['Square', [0, 0], [100, 4, 100]]]),
+  );
+  const colors = [
+    [0.85, 0.45, 0.3],
+    [0.45, 0.75, 0.35],
+    [0.3, 0.6, 0.85],
+    [0.8, 0.7, 0.3],
+  ];
+  for (const [i, [x, y]] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ].entries()) {
+    // x runs east and y north; glTF's -Z is north.
+    const [east, north] = [-25 + 50 * x, -25 + 50 * y];
+    write(
+      `tiles/implicit/content/1/${x}/${y}.glb`,
+      await blocks(`Quarter ${x} ${y}`, colors[i], [
+        [`Quarter ${x} ${y}`, [east, -north], [50, 1, 50]],
+        [`Tower ${x} ${y}`, [east, -north], [16, 10 + 8 * i, 16]],
+      ]),
+    );
+    write(
+      `tiles/implicit/subtrees/1/${x}/${y}.subtree`,
+      subtree({
+        tileAvailability: { constant: 1 },
+        contentAvailability: [{ constant: 1 }],
+        childSubtreeAvailability: { constant: 0 },
+      }),
+    );
+  }
+  write(
+    'tiles/implicit/subtrees/0/0/0.subtree',
+    subtree({
+      tileAvailability: { constant: 1 },
+      contentAvailability: [{ constant: 1 }],
+      childSubtreeAvailability: { constant: 1 },
+    }),
+  );
+  write(
+    'tiles/implicit/tileset.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      geometricError: 100,
+      root: {
+        boundingVolume: boxVolume([0, 0], 100, 40),
+        geometricError: 50,
+        refine: 'REPLACE',
+        content: { uri: 'content/{level}/{x}/{y}.glb' },
+        implicitTiling: {
+          subdivisionScheme: 'QUADTREE',
+          subtreeLevels: 1,
+          availableLevels: 2,
+          subtrees: { uri: 'subtrees/{level}/{x}/{y}.subtree' },
+        },
+      },
+    }),
+  );
+}
+
+/** A binary subtree file: its header, then its JSON padded to 8 bytes; no binary chunk. */
+function subtree(value) {
+  let text = JSON.stringify(value);
+  text += ' '.repeat((8 - (text.length % 8)) % 8);
+  const header = Buffer.alloc(24);
+  header.write('subt', 0, 'ascii');
+  header.writeUInt32LE(1, 4);
+  header.writeBigUInt64LE(BigInt(text.length), 8);
+  header.writeBigUInt64LE(0n, 16);
+  return Buffer.concat([header, Buffer.from(text)]);
 }
 
 /** The triangle as .gltf JSON with its one buffer pointing at `uri`. */

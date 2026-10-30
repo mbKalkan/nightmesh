@@ -7,7 +7,7 @@ import type { TileState } from '../../shared/protocol';
 export interface RendererTile {
   parent?: RendererTile | null;
   children?: RendererTile[];
-  internal?: { loadingState?: number };
+  internal?: { loadingState?: number; hasUnrenderableContent?: boolean };
   traversal?: { visible?: boolean; inFrustum?: boolean; error?: number };
   engineData?: {
     scene?: Object3D | null;
@@ -42,6 +42,11 @@ export function pathOf(tile: RendererTile): string {
   for (let at = tile; at.parent; at = at.parent)
     indices.unshift(at.parent.children?.indexOf(at) ?? 0);
   return ['0', ...indices].join('/');
+}
+
+/** Whether a tile's content is more tiles: an external tileset, or an implicit subtree. */
+export function leadsToTiles(tile: RendererTile): boolean {
+  return tile.internal?.hasUnrenderableContent === true;
 }
 
 export function tileState(tile: RendererTile): {

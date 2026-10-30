@@ -458,7 +458,7 @@ export interface ViewerStrings {
 
 /** What a tile's content is, by its file. */
 export type TileContentKind =
-  'b3dm' | 'i3dm' | 'pnts' | 'cmpt' | 'glb' | 'gltf' | 'tileset' | 'other';
+  'b3dm' | 'i3dm' | 'pnts' | 'cmpt' | 'glb' | 'gltf' | 'tileset' | 'subtree' | 'other';
 
 /** Where a tile is in the renderer: its content loading, loaded or failed, or none asked for. */
 export type TileState = 'unloaded' | 'queued' | 'loading' | 'parsing' | 'loaded' | 'failed';
@@ -528,6 +528,8 @@ export interface TilesetStrings {
     withContent: string;
     externalTilesets: string;
     implicitRoots: string;
+    /** Tiles of external tilesets and implicit tiling, listed as the renderer reads them. */
+    found: string;
     path: string;
     refine: string;
     /** After a refinement the tile takes from above it. */
@@ -549,6 +551,9 @@ export interface TilesetStrings {
     subtreeLevels: string;
     availableLevels: string;
     subtrees: string;
+    /** An implicit tile's level and coordinates in its tree. */
+    level: string;
+    coordinates: string;
     state: string;
     drawn: string;
     screenError: string;

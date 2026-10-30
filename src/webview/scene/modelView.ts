@@ -63,7 +63,7 @@ import {
   localBox,
 } from './selection';
 import { Shading } from './shading';
-import { pathOf, tileAt, tileBox, tileState, type RendererTile } from './tileTree';
+import { leadsToTiles, pathOf, tileAt, tileBox, tileState, type RendererTile } from './tileTree';
 import type { TilesLive } from '../structure/tileset';
 import type {
   CameraState,
@@ -138,6 +138,11 @@ export interface ViewEvents {
   lengthText(metres: number): string;
   /** The tileset's tiles came, went, or were drawn or hidden: what the renderer has changed. */
   tilesChanged(): void;
+  /**
+   * The renderer read tiles the tileset's JSON doesn't list, under the tile at `path`: an external
+   * tileset's root, or an implicit subtree. `children` are that tile's, as it has them now.
+   */
+  tilesFound(path: string, children: readonly object[]): void;
   /** The view made its lighting environment, which the next views can start with. */
   environment(environment: Environment): void;
 }
@@ -595,6 +600,19 @@ export class ModelView {
     for (const type of ['dispose-model', 'tile-visibility-change', 'load-error'] as const) {
       tiles.addEventListener(type, changed);
     }
+    // Tiles that lead to more tiles, rather than drawing anything, give their children once read.
+    const leading = new Set<RendererTile>();
+    tiles.addEventListener('tile-download-start', ({ tile }) => {
+      if (leadsToTiles(tile as RendererTile)) leading.add(tile as RendererTile);
+    });
+    tiles.addEventListener('needs-update', () => {
+      for (const tile of leading) {
+        const { state } = tileState(tile);
+        if (state === 'loading' || state === 'parsing' || state === 'queued') continue;
+        leading.delete(tile);
+        if (state === 'loaded') this.events.tilesFound(pathOf(tile), tile.children ?? []);
+      }
+    });
     tiles.addEventListener('load-root-tileset', () => {
       // The box in the tileset's own frame: one along the globe's axes would be far larger.
       tiles.group.updateMatrixWorld(true);
