@@ -49,6 +49,10 @@ export interface TileInfo {
     availableLevels?: number;
     subtrees?: string;
   };
+  /** Not in the tileset's own JSON: from an external tileset or implicit tiling, as read. */
+  found: boolean;
+  /** Where an implicit tile is in its tree; `z` in an octree only. */
+  coordinates?: { level: number; x: number; y: number; z?: number };
 }
 
 export interface TileContent {
@@ -95,6 +99,8 @@ export function contentKind(uri: string): TileContentKind {
       return extension;
     case 'json':
       return 'tileset';
+    case 'subtree':
+      return 'subtree';
     default:
       return 'other';
   }
@@ -108,7 +114,7 @@ export class TilesetModel {
   readonly geometricError?: number;
   readonly extensionsUsed: string[];
   readonly extensionsRequired: string[];
-  readonly depth: number = 0;
+  private deepest = 0;
   /** The metadata schema: written in the tileset, or read by the host from its own file. */
   readonly schema?: MetadataSchema;
   readonly schemaUri?: string;
@@ -148,17 +154,52 @@ export class TilesetModel {
       .filter((entry): entry is [string, Json] => isObject(entry[1]))
       .slice(0, 1000)
       .map(([name, range]) => ({ name, minimum: num(range.minimum), maximum: num(range.maximum) }));
-    if (!isObject(tileset.root)) return;
-    // Walked without recursion: a deep tree mustn't run out of stack.
-    const stack: { json: Json; path: string; parent?: TileInfo }[] = [
-      { json: tileset.root, path: '0' },
-    ];
+    if (isObject(tileset.root)) this.walk([{ json: tileset.root, path: '0' }], false);
+  }
+
+  get root(): TileInfo | undefined {
+    return this.tiles.get('0');
+  }
+
+  /** Levels of tiles in the tileset's own JSON. */
+  get depth(): number {
+    return this.deepest;
+  }
+
+  /**
+   * Lists the tiles the renderer found under the tile at `path`: an external tileset's root, or
+   * an implicit subtree. They are its `children` past those the JSON gives it, by their index
+   * there, as the renderer's own paths are. What it had found there before goes first: read
+   * again, a subtree's tiles are new objects in the same places. False when `path` isn't known.
+   */
+  addFound(path: string, children: readonly unknown[]): boolean {
+    const parent = this.tiles.get(path);
+    if (!parent) return false;
+    const stale = parent.children.filter((child) => this.tiles.get(child)?.found);
+    for (const child of stale) this.remove(child);
+    parent.children = parent.children.filter((child) => !stale.includes(child));
+    const own = new Set(parent.children);
+    const start: { json: Json; path: string; parent: TileInfo }[] = [];
+    children.forEach((child, i) => {
+      const at = `${path}/${i}`;
+      if (!own.has(at) && isObject(child)) start.push({ json: child, path: at, parent });
+    });
+    this.walk(start.reverse(), true);
+    parent.children.sort(byIndex);
+    return true;
+  }
+
+  /** Reads the tiles on `stack`, last first, and all below them. */
+  private walk(stack: { json: Json; path: string; parent?: TileInfo }[], found: boolean): void {
+    const added: TileInfo[] = [];
+    // Without recursion: a deep tree mustn't run out of stack.
     while (stack.length > 0 && this.tiles.size < MAX_TILES) {
       const { json, path, parent } = stack.pop()!;
-      const info = readTile(json, path, parent);
+      const info = readTile(json, path, parent, found);
       this.tiles.set(path, info);
+      added.push(info);
       parent?.children.push(path);
-      this.depth = Math.max(this.depth, info.depth);
+      if (!found) this.deepest = Math.max(this.deepest, info.depth);
       const children = Array.isArray(json.children) ? json.children : [];
       for (let i = children.length - 1; i >= 0; i--) {
         if (isObject(children[i]))
@@ -166,29 +207,52 @@ export class TilesetModel {
       }
     }
     // Pushed in reverse to come off in order; children were added as they came off.
-    for (const tile of this.tiles.values()) tile.children.sort(byIndex);
+    for (const tile of added) tile.children.sort(byIndex);
   }
 
-  get root(): TileInfo | undefined {
-    return this.tiles.get('0');
+  /** Takes the tile at `path` and all below it out of the list. */
+  private remove(path: string): void {
+    const stack = [path];
+    while (stack.length > 0) {
+      const tile = this.tiles.get(stack.pop()!);
+      if (!tile) continue;
+      this.tiles.delete(tile.path);
+      stack.push(...tile.children);
+    }
   }
 
-  /** How many tiles the JSON has of each sort. */
-  counts(): { tiles: number; withContent: number; external: number; implicit: number } {
-    let [withContent, external, implicit] = [0, 0, 0];
+  /** How many tiles the JSON has of each sort, and how many more the renderer found. */
+  counts(): {
+    tiles: number;
+    withContent: number;
+    external: number;
+    implicit: number;
+    found: number;
+  } {
+    let [tiles, withContent, external, implicit, found] = [0, 0, 0, 0, 0];
     for (const tile of this.tiles.values()) {
+      if (tile.found) {
+        found++;
+        continue;
+      }
+      tiles++;
       if (tile.contents.length > 0) withContent++;
       if (tile.contents.some((content) => content.kind === 'tileset')) external++;
       if (tile.implicit) implicit++;
     }
-    return { tiles: this.tiles.size, withContent, external, implicit };
+    return { tiles, withContent, external, implicit, found };
   }
 }
 
 const byIndex = (a: string, b: string) =>
   Number(a.slice(a.lastIndexOf('/') + 1)) - Number(b.slice(b.lastIndexOf('/') + 1));
 
-function readTile(json: Json, path: string, parent: TileInfo | undefined): TileInfo {
+function readTile(
+  json: Json,
+  path: string,
+  parent: TileInfo | undefined,
+  found: boolean,
+): TileInfo {
   const refine = json.refine === 'ADD' || json.refine === 'REPLACE' ? json.refine : undefined;
   const multiple = isObject(json.extensions)
     ? json.extensions['3DTILES_multiple_contents']
@@ -240,7 +304,20 @@ function readTile(json: Json, path: string, parent: TileInfo | undefined): TileI
       availableLevels: num(implicit.availableLevels),
       subtrees: typeof subtrees === 'string' ? subtrees : undefined,
     },
+    found,
+    coordinates: found ? implicitCoordinates(json) : undefined,
   };
+}
+
+/** Where the renderer put a tile it made for implicit tiling, in its tree. */
+function implicitCoordinates(json: Json): TileInfo['coordinates'] {
+  const data = isObject(json.implicitTilingData) ? json.implicitTilingData : undefined;
+  if (!data) return undefined;
+  const [level, x, y, z] = [num(data.level), num(data.x), num(data.y), num(data.z)];
+  if (level === undefined || x === undefined || y === undefined) return undefined;
+  const root = isObject(data.root) ? data.root : {};
+  const tiling = isObject(root.implicitTiling) ? root.implicitTiling : {};
+  return { level, x, y, z: tiling.subdivisionScheme === 'OCTREE' ? z : undefined };
 }
 
 function volumeOf(value: unknown): TileVolume | undefined {
@@ -359,6 +436,7 @@ function inspectModel(context: TilesetContext): Inspection {
         [labels.withContent, format.count(counts.withContent)],
         [labels.externalTilesets, counts.external ? format.count(counts.external) : undefined],
         [labels.implicitRoots, counts.implicit ? format.count(counts.implicit) : undefined],
+        [labels.found, counts.found ? format.count(counts.found) : undefined],
       ]),
     },
   ];
@@ -445,6 +523,20 @@ function inspectTile(context: TilesetContext, tile: TileInfo): Inspection {
 
   if (tile.volume) sections.push(volumeSection(tile.volume, tile.transform, context));
 
+  if (tile.coordinates) {
+    const { level, x, y, z } = tile.coordinates;
+    sections.push({
+      title: strings.sections.implicit,
+      rows: [
+        { label: labels.level, text: format.count(level), mono: true },
+        {
+          label: labels.coordinates,
+          text: (z === undefined ? [x, y] : [x, y, z]).join(', '),
+          mono: true,
+        },
+      ],
+    });
+  }
   if (tile.implicit) {
     const { scheme, subtreeLevels, availableLevels, subtrees } = tile.implicit;
     const rows: Row[] = [];

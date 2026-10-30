@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whether the view has it loaded and drawn, with its screen-space error. The tile's bounding
   volume is boxed in the view and measured in its corner; Enter or a double-click frames it, and
   a click on the model selects the tile drawn there. The tileset itself shows how many tiles the
-  file has and how many are loaded, drawn and on their way, and the memory they take.
+  file has and how many are loaded, drawn and on their way, and the memory they take. The tiles
+  of external tilesets and of implicit tiling join the tree as they are read, an implicit tile
+  with its level and coordinates, and a click on one in the view selects it there.
 - **b3dm tiles open on their own**: a `.b3dm` file opens in Nightmesh like a GLB, with the scene
   tree, inspector, statistics, glTF Validator, size breakdown, JSON, measuring and comparing.
   The model's details add what the tile says around its GLB: its header (also the shorter ones
