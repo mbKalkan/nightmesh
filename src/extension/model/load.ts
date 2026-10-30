@@ -115,7 +115,11 @@ export async function* loadMessages(
   const resources = new Resources(openResource, options.texts);
   try {
     if (options.format === 'tileset') {
-      yield await tilesetMessage(source, { ...options, path: options.tilesetPath ?? '' }, resources);
+      yield await tilesetMessage(
+        source,
+        { ...options, path: options.tilesetPath ?? '' },
+        resources,
+      );
     } else if (options.format && isMeshFormat(options.format)) {
       yield* meshMessages(source, options.format, resources, options);
     } else if (options.format === 'b3dm' || options.format === 'i3dm') {
