@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **3D Tiles tilesets** open in Nightmesh: right-click a `tileset.json` (or any tileset's JSON)
   and pick **Open With › Nightmesh 3D Tiles**. The tiles the camera needs load as it moves, the
   nearer ones in more detail, and those out of view leave memory. External tilesets, implicit
-  tiling (binary subtrees) and Batched, Instanced, Point Cloud, Composite and glTF tiles are
+  tiling (binary or JSON subtrees), tiles with several contents (3D Tiles 1.1 `contents`, or
+  `3DTILES_multiple_contents`) and Batched, Instanced, Point Cloud, Composite and glTF tiles are
   drawn, with Draco, meshopt and KTX2 compression. A tileset placed on the globe is shown at the
   origin with up as +Y, seen from the south. Tiles are read from disk by the extension, only
   inside the tileset's workspace folder, and the notice above the view says which ones couldn't
@@ -25,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file has and how many are loaded, drawn and on their way, and the memory they take. The tiles
   of external tilesets and of implicit tiling join the tree as they are read, an implicit tile
   with its level and coordinates, and a click on one in the view selects it there.
+- **Shading, Copy Reference and reports for tilesets**: the Shading menu draws a tileset's tiles
+  lit, unlit or by their normals, with a wireframe over them, tiles that load later too. Copy
+  Reference names the tile selected by its path and content, and where the tileset's JSON has it
+  (`tile 0/3 "east/tileset.json" (root.children[3])`); with details, what the inspector says
+  about it. **Save Report…** saves what the inspector says about the tileset and its tiles from
+  the root down, those found in external tilesets and implicit tiling so far too, as Markdown or
+  JSON.
 - **b3dm tiles open on their own**: a `.b3dm` file opens in Nightmesh like a GLB, with the scene
   tree, inspector, statistics, glTF Validator, size breakdown, JSON, measuring and comparing.
   The model's details add what the tile says around its GLB: its header (also the shorter ones

@@ -3,6 +3,7 @@
 import type { TileContentKind, TileState, TilesetStrings } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import type { Inspection, Row, Section } from './details';
+import { implicitContents, severalContents, uriOf } from './tileContents';
 import type { EntryKey, OutlineEntry } from './outline';
 import {
   entitySection,
@@ -254,20 +255,16 @@ function readTile(
   found: boolean,
 ): TileInfo {
   const refine = json.refine === 'ADD' || json.refine === 'REPLACE' ? json.refine : undefined;
-  const multiple = isObject(json.extensions)
-    ? json.extensions['3DTILES_multiple_contents']
-    : undefined;
-  const list = (value: unknown) => (Array.isArray(value) ? (value as unknown[]) : []);
-  const contents = [
-    json.content,
-    ...list(json.contents),
-    // Its early drafts named the list `content`.
-    ...list(isObject(multiple) ? (multiple.contents ?? multiple.content) : undefined),
-  ]
+  const several = severalContents(json);
+  // A tile has one or the other; the renderer gives one with several a `content` of its own,
+  // and a tile of implicit tiling it made the first available of its root's.
+  const contents = (
+    (found ? implicitContents(json) : undefined) ?? (several.length > 0 ? several : [json.content])
+  )
     .filter(isObject)
     .flatMap((content): TileContent[] => {
-      const uri = typeof content.uri === 'string' ? content.uri : content.url;
-      if (typeof uri !== 'string') return [];
+      const uri = uriOf(content);
+      if (uri === undefined) return [];
       const old = legacy(content);
       const group = old ? old.group : content.group;
       return [
@@ -282,7 +279,15 @@ function readTile(
         },
       ];
     });
-  const implicit = isObject(json.implicitTiling) ? json.implicitTiling : undefined;
+  const legacyTiling = isObject(json.extensions)
+    ? json.extensions['3DTILES_implicit_tiling']
+    : undefined;
+  // 1.0's extension, which gave the deepest level rather than how many there are.
+  const implicit = isObject(json.implicitTiling)
+    ? json.implicitTiling
+    : isObject(legacyTiling)
+      ? { availableLevels: (num(legacyTiling.maximumLevel) ?? NaN) + 1, ...legacyTiling }
+      : undefined;
   const subtrees = implicit && isObject(implicit.subtrees) ? implicit.subtrees.uri : undefined;
   return {
     path,

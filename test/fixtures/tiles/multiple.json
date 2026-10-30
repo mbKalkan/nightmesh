@@ -1,0 +1,74 @@
+{
+  "asset": {
+    "version": "1.1",
+    "generator": "Nightmesh fixture generator"
+  },
+  "extensionsUsed": [
+    "3DTILES_multiple_contents"
+  ],
+  "geometricError": 100,
+  "root": {
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        25,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        25
+      ]
+    },
+    "geometricError": 20,
+    "refine": "ADD",
+    "contents": [
+      {
+        "uri": "south-west.b3dm"
+      },
+      {
+        "uri": "north-west.b3dm"
+      }
+    ],
+    "children": [
+      {
+        "boundingVolume": {
+          "box": [
+            25,
+            0,
+            25,
+            25,
+            0,
+            0,
+            0,
+            25,
+            0,
+            0,
+            0,
+            25
+          ]
+        },
+        "geometricError": 0,
+        "extensions": {
+          "3DTILES_multiple_contents": {
+            "contents": [
+              {
+                "uri": "south-east.b3dm"
+              },
+              {
+                "uri": "east/tower.b3dm"
+              },
+              {
+                "uri": "damaged.b3dm"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

@@ -251,7 +251,7 @@ function entryName(context: InspectContext, strings: ViewerStrings, key: EntryKe
 }
 
 /** An inspector row as a line of text: its label, value, links and note. */
-function rowText(row: Row): string {
+export function rowText(row: Row): string {
   const value = [
     row.text !== undefined ? escape(row.text) : undefined,
     row.links?.map((link) => escape(link.text)).join(', '),
@@ -264,16 +264,16 @@ function rowText(row: Row): string {
 }
 
 /** Text from the model, which Markdown would otherwise read as formatting. */
-function escape(text: string): string {
+export function escape(text: string): string {
   return text.replace(/[\\`*<|]/g, '\\$&').replace(/\r?\n/g, ' ');
 }
 
 /** A table cell: one line. Text from the model in it is escaped already. */
-function cell(text: string): string {
+export function cell(text: string): string {
   return text.replace(/\r?\n/g, ' ');
 }
 
 /** Text in a code span, in a table too: GitHub ends a cell at a bare `|` even there. */
-function code(text: string): string {
+export function code(text: string): string {
   return `\`${text.replace(/`/g, "'").replace(/\|/g, '\\|')}\``;
 }

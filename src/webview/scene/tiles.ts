@@ -3,11 +3,12 @@
 // URLs only name tiles, under a made-up origin, so references in a tileset resolve as the
 // specification says; nothing is fetched from the network, which the webview may not reach.
 import { TilesRenderer } from '3d-tiles-renderer/three';
-import { ImplicitTilingPlugin } from '3d-tiles-renderer/core/plugins';
 import { GLTFExtensionsPlugin, ReorientationPlugin } from '3d-tiles-renderer/three/plugins';
 import { Matrix4, Sphere } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Decoders } from './modelView';
+import { NightmeshImplicitTilingPlugin } from './implicitTiling';
+import { MultipleContentsPlugin } from './multipleContents';
 
 /** Asks the host for the tile at `path`; rejects with the reason it can't be had. */
 export type TileFetcher = (path: string) => Promise<Uint8Array>;
@@ -52,18 +53,27 @@ function dataUriBytes(uri: string): Uint8Array<ArrayBuffer> {
 /**
  * The renderer for the tileset at `url`, a path as the host gave it, whose JSON is `json`. It
  * puts a tileset on the globe at the origin, with up as +Y, east as +X and south as +Z; one in a
- * frame of its own around the origin, with its +Z up (D-046).
+ * frame of its own around the origin, with its +Z up (D-046). `failed` hears of one of a tile's
+ * several contents that couldn't be read; the renderer's `load-error` tells of whole tiles.
  */
 export function createTiles(
   url: string,
   json: string,
   fetchTile: TileFetcher,
   decoders: Decoders,
+  failed: (url: string, error: unknown) => void,
 ): TilesRenderer {
   const rootUrl = `${ORIGIN}${url}`;
   const tiles = new TilesRenderer(rootUrl);
   tiles.lruCache.maxBytesSize = CACHE_BYTES;
   shownTiles = fetchTile;
+  // First: the tile it makes for several contents is its own to read, not the host's.
+  tiles.registerPlugin(
+    new MultipleContentsPlugin(
+      async (at) => (await hostResponse(at, fetchTile)).arrayBuffer(),
+      failed,
+    ),
+  );
   tiles.registerPlugin({
     name: 'NIGHTMESH_HOST',
     fetchData: (requested: string) =>
@@ -71,7 +81,7 @@ export function createTiles(
         ? Promise.resolve(new Response(json))
         : hostResponse(requested, fetchTile),
   });
-  tiles.registerPlugin(new ImplicitTilingPlugin());
+  tiles.registerPlugin(new NightmeshImplicitTilingPlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({
       rtc: true,

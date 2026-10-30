@@ -71,6 +71,8 @@ describe('TilesetModel', () => {
         asset: { version: '1.1' },
         root: {
           contents: [{ uri: 'a.glb' }, { uri: 'b.pnts' }],
+          // As the renderer writes it for a tile with several.
+          content: { uri: 'contents.nmcontents' },
           implicitTiling: {
             subdivisionScheme: 'QUADTREE',
             subtreeLevels: 3,
@@ -156,6 +158,49 @@ describe('TilesetModel', () => {
     expect(model.tiles.get('0/1/1/0')?.coordinates).toEqual({ level: 2, x: 0, y: 3 });
     const implicit = rowsOf(inspectTileset({ ...context(district), model }, 'tile:0/1/0'));
     expect(implicit['Implicit tiling']).toEqual(['Level: 1', 'Coordinates: 1, 0, 1']);
+  });
+
+  it('names the contents available at an implicit tile, and reads 1.0 implicit tiling', () => {
+    const json = {
+      root: {
+        contents: [{ uri: 'a/{level}/{x}/{y}.glb' }, { uri: 'b/{level}/{x}/{y}.pnts' }],
+        extensions: {
+          '3DTILES_implicit_tiling': {
+            subdivisionScheme: 'QUADTREE',
+            subtreeLevels: 2,
+            maximumLevel: 3,
+            subtrees: { uri: 's/{level}/{x}/{y}.subtree' },
+          },
+        },
+      },
+    };
+    const model = new TilesetModel(JSON.stringify(json));
+    expect(model.root?.implicit).toEqual({
+      scheme: 'QUADTREE',
+      subtreeLevels: 2,
+      availableLevels: 4,
+      subtrees: 's/{level}/{x}/{y}.subtree',
+    });
+    // As the renderer has them: the root, its tile made from the subtree, and one standing for
+    // a subtree below.
+    const root = { ...json.root, content: { uri: 'contents.nmcontents' } };
+    model.addFound('0', [
+      {
+        implicitTilingData: { root, level: 1, x: 1, y: 0, z: 0 },
+        availableContents: [1],
+        content: { uri: 'contents.nmcontents' },
+        children: [
+          {
+            implicitTilingData: { root, level: 2, x: 2, y: 1, z: 0 },
+            content: { uri: 's/2/2/1.subtree' },
+          },
+        ],
+      },
+    ]);
+    expect(model.tiles.get('0/0')?.contents).toEqual([
+      { uri: 'b/1/1/0.pnts', kind: 'pnts', metadata: undefined, group: undefined },
+    ]);
+    expect(model.tiles.get('0/0/0')?.contents[0]?.uri).toBe('s/2/2/1.subtree');
   });
 
   it('tells content by its file', () => {

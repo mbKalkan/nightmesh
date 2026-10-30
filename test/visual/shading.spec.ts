@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowestTextContrast } from './contrast';
 import { openViewer } from './harness';
-import { centerOf, pixelAt } from './pixels';
+import { centerOf, pixelAt, pixelsOf } from './pixels';
 
 const SCREENS = 'test-results/screens';
 
@@ -75,5 +75,44 @@ test('draws the model lit, unlit or by its normals, with a wireframe over it', a
   await viewer.setTheme('light');
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${SCREENS}/shading-wireframe-light.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
+test("shades a tileset's tiles, those that come after the mode was chosen too", async ({
+  page,
+}) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/tileset.json');
+  // Chosen while tiles are still on their way.
+  await choose(page, 'Normals');
+  const tiles = async () =>
+    (await viewer.sent()).filter((message) => message.type === 'tile').length;
+  await expect.poll(tiles).toBe(6);
+  // From the front, as the tileset tests find the tower.
+  await page.locator('.nm-viewport').focus();
+  await page.keyboard.press('1');
+  /** Pixels of the yellow tower, in the external tileset that is read last. */
+  const yellow = async () => {
+    const pixels = await pixelsOf(page, '.nm-canvas');
+    let count = 0;
+    for (let y = 0; y < pixels.height; y += 2) {
+      for (let x = 0; x < pixels.width; x += 2) {
+        const [r, g, b] = pixels.at(x, y);
+        // Lit from the front, it is a light yellow: about 240, 200, 120.
+        if (r > 180 && g > 160 && b < 150 && Math.abs(r - g) < 60) count++;
+      }
+    }
+    return count;
+  };
+  await page.waitForTimeout(300);
+  expect(await yellow()).toBeLessThan(10);
+  await page.screenshot({ path: `${SCREENS}/shading-tiles-normals.png` });
+  await choose(page, 'Lit');
+  await expect.poll(yellow).toBeGreaterThan(50);
+  await choose(page, 'Unlit');
+  await expect.poll(yellow).toBeGreaterThan(50);
+  await choose(page, 'Wireframe');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SCREENS}/shading-tiles-wireframe.png` });
   expect(viewer.problems).toEqual([]);
 });

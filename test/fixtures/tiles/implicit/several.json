@@ -1,0 +1,43 @@
+{
+  "asset": {
+    "version": "1.1",
+    "generator": "Nightmesh fixture generator"
+  },
+  "geometricError": 100,
+  "root": {
+    "boundingVolume": {
+      "box": [
+        0,
+        0,
+        20,
+        50,
+        0,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0,
+        20
+      ]
+    },
+    "geometricError": 50,
+    "refine": "REPLACE",
+    "contents": [
+      {
+        "uri": "content/{level}/{x}/{y}.glb"
+      },
+      {
+        "uri": "posts/{level}/{x}/{y}.glb"
+      }
+    ],
+    "implicitTiling": {
+      "subdivisionScheme": "QUADTREE",
+      "subtreeLevels": 1,
+      "availableLevels": 2,
+      "subtrees": {
+        "uri": "several/{level}/{x}/{y}.subtree"
+      }
+    }
+  }
+}
