@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-30
+
+Fixes from a review of 0.5.0, and 3D Tiles in the name.
+
+### Changed
+
+- The name says what Nightmesh opens: "Nightmesh — 3D Model Viewer for glTF, GLB, OBJ, STL, PLY &
+  3D Tiles".
+
 ### Fixed
 
 - A Composite (cmpt) tile whose models have metadata (`EXT_structural_metadata`) wasn't drawn at
@@ -331,7 +340,8 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/mbKalkan/nightmesh/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mbKalkan/nightmesh/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mbKalkan/nightmesh/compare/v0.2.0...v0.3.0

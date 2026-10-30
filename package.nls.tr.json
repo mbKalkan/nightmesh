@@ -1,5 +1,5 @@
 {
-  "displayName": "Nightmesh — glTF, GLB, OBJ, STL ve PLY 3D Model Görüntüleyici",
+  "displayName": "Nightmesh — glTF, GLB, OBJ, STL, PLY ve 3D Tiles 3D Model Görüntüleyici",
   "description": "glTF, GLB, OBJ, STL ve PLY 3D modellerini ve 3D Tiles'ı VS Code'da, koyu temanızda görüntüleyin, inceleyin, karşılaştırın ve ölçün. Hızlı, çevrimdışı ve salt okunur.",
   "customEditor.displayName": "Nightmesh",
   "customEditor.tilesetDisplayName": "Nightmesh 3D Tiles",
