@@ -19,6 +19,9 @@ export interface SchemaProperty {
   type?: string;
   componentType?: string;
   enumType?: string;
+  /** An array: of `count` elements, or as long as each value is without one. */
+  array: boolean;
+  count?: number;
   normalized: boolean;
   offset?: unknown;
   scale?: unknown;
@@ -41,6 +44,8 @@ export interface MetadataSchema {
   classes: Map<string, SchemaClass>;
   /** Each enum's names by their value. */
   enums: Map<string, Map<number, string>>;
+  /** The type each enum's values are stored as in binary, `UINT16` when it says none. */
+  enumValueTypes: Map<string, string>;
 }
 
 /** A property of an entity as shown: given, taken from the class's default, or no data. */
@@ -79,6 +84,11 @@ export function readSchema(value: unknown): MetadataSchema | undefined {
         type: text(property.type),
         componentType: text(property.componentType),
         enumType: text(property.enumType),
+        array: property.array === true,
+        count:
+          typeof property.count === 'number' && Number.isInteger(property.count)
+            ? property.count
+            : undefined,
         normalized: property.normalized === true,
         offset: property.offset,
         scale: property.scale,
@@ -90,8 +100,10 @@ export function readSchema(value: unknown): MetadataSchema | undefined {
     classes.set(id, { name: text(json.name), description: text(json.description), properties });
   }
   const enums = new Map<string, Map<number, string>>();
+  const enumValueTypes = new Map<string, string>();
   for (const [id, json] of entries(value.enums)) {
     if (!isObject(json) || !Array.isArray(json.values)) continue;
+    enumValueTypes.set(id, text(json.valueType) ?? 'UINT16');
     const names = new Map<number, string>();
     for (const item of json.values.slice(0, MAX_ENTRIES)) {
       if (isObject(item) && typeof item.value === 'number' && typeof item.name === 'string')
@@ -106,6 +118,7 @@ export function readSchema(value: unknown): MetadataSchema | undefined {
     version: text(value.version),
     classes,
     enums,
+    enumValueTypes,
   };
 }
 
@@ -150,15 +163,18 @@ function valueOf(
       ? undefined
       : { value: property.default, note: 'default' };
   }
-  if (property.noData !== undefined && sameValue(raw, property.noData)) {
+  // Enums are named in JSON, their no-data value too; binary tables store them as numbers.
+  const names =
+    property.type === 'ENUM' && property.enumType !== undefined
+      ? schema.enums.get(property.enumType)
+      : undefined;
+  const named = names ? enumNames(raw, names) : raw;
+  if (property.noData !== undefined && sameValue(named, property.noData)) {
     return property.default === undefined
-      ? { value: raw, note: 'noData' }
+      ? { value: named, note: 'noData' }
       : { value: property.default, note: 'noData' };
   }
-  if (property.type === 'ENUM') {
-    const names = property.enumType === undefined ? undefined : schema.enums.get(property.enumType);
-    return { value: names ? enumNames(raw, names) : raw };
-  }
+  if (property.type === 'ENUM') return { value: named };
   return { value: transformed(raw, property) };
 }
 

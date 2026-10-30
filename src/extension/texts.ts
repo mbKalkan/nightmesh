@@ -121,6 +121,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
         schema: t('Metadata schema'),
         statisticsTitle: t('Metadata statistics'),
         featureProperties: t('Feature properties'),
+        subtree: t('Subtree metadata'),
         content: t('Content metadata'),
         contentOf: t('Content metadata ({0})', '{0}'),
         group: t('Group {0}', '{0}'),

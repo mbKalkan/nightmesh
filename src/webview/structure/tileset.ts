@@ -3,6 +3,7 @@
 import type { TileContentKind, TileState, TilesetStrings } from '../../shared/protocol';
 import { fill, type Formatter } from './format';
 import type { Inspection, Row, Section } from './details';
+import { tableRow, type PropertyTables } from './propertyTable';
 import { implicitContents, severalContents, uriOf } from './tileContents';
 import type { EntryKey, OutlineEntry } from './outline';
 import {
@@ -41,6 +42,8 @@ export interface TileInfo {
   inherited: boolean;
   contents: TileContent[];
   metadata?: MetadataEntity;
+  /** The metadata of the implicit subtree it is the first tile of. */
+  subtreeMetadata?: MetadataEntity;
   volume?: TileVolume;
   transform?: number[];
   requestVolume: boolean;
@@ -196,7 +199,7 @@ export class TilesetModel {
     // Without recursion: a deep tree mustn't run out of stack.
     while (stack.length > 0 && this.tiles.size < MAX_TILES) {
       const { json, path, parent } = stack.pop()!;
-      const info = readTile(json, path, parent, found);
+      const info = readTile(json, path, parent, found, this.schema);
       this.tiles.set(path, info);
       added.push(info);
       parent?.children.push(path);
@@ -253,7 +256,17 @@ function readTile(
   path: string,
   parent: TileInfo | undefined,
   found: boolean,
+  schema: MetadataSchema | undefined,
 ): TileInfo {
+  // A tile of implicit tiling has its metadata, and its contents', in its subtree's tables.
+  const fromTable = (at: unknown) =>
+    isObject(at) &&
+    isObject(at.tables) &&
+    typeof at.table === 'number' &&
+    typeof at.row === 'number'
+      ? tableRow(at.tables as unknown as PropertyTables, at.table, at.row, schema)
+      : undefined;
+  const contentRows = found && Array.isArray(json.contentRows) ? json.contentRows : [];
   const refine = json.refine === 'ADD' || json.refine === 'REPLACE' ? json.refine : undefined;
   const several = severalContents(json);
   // A tile has one or the other; the renderer gives one with several a `content` of its own,
@@ -271,7 +284,9 @@ function readTile(
         {
           uri,
           kind: contentKind(uri),
-          metadata: readEntity(old ?? content.metadata),
+          metadata:
+            readEntity(old ?? content.metadata) ??
+            (typeof content.index === 'number' ? fromTable(contentRows[content.index]) : undefined),
           group:
             typeof group === 'string' || (typeof group === 'number' && Number.isInteger(group))
               ? String(group)
@@ -298,7 +313,9 @@ function readTile(
     refine: refine ?? parent?.refine,
     inherited: refine === undefined && parent?.refine !== undefined,
     contents,
-    metadata: readEntity(legacy(json) ?? json.metadata),
+    metadata:
+      readEntity(legacy(json) ?? json.metadata) ?? (found ? fromTable(json.tileRow) : undefined),
+    subtreeMetadata: found ? readEntity(json.subtreeMetadata) : undefined,
     volume: volumeOf(json.boundingVolume),
     transform: numbers(json.transform, 16),
     requestVolume: isObject(json.viewerRequestVolume),
@@ -498,6 +515,9 @@ function inspectTile(context: TilesetContext, tile: TileInfo): Inspection {
   const words = strings.metadata;
   if (tile.metadata) {
     sections.push(entitySection(words.section, tile.metadata, model.schema, words, format));
+  }
+  if (tile.subtreeMetadata) {
+    sections.push(entitySection(words.subtree, tile.subtreeMetadata, model.schema, words, format));
   }
 
   if (tile.contents.length > 0) {

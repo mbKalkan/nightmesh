@@ -48,6 +48,7 @@ export function implicitContents(tile: Json): Json[] | undefined {
   return (available as unknown[]).flatMap((i) => {
     const template = typeof i === 'number' ? templates[i] : undefined;
     const uri = template && uriOf(template);
-    return uri === undefined ? [] : [{ ...template, uri: fill(uri) }];
+    // Which of the root's it is, for its metadata in the subtree.
+    return uri === undefined ? [] : [{ ...template, uri: fill(uri), index: i }];
   });
 }

@@ -241,6 +241,35 @@ for (const [name, kind] of [
   });
 }
 
+test("shows implicit tiles' metadata from their subtree's property tables", async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('tiles/implicit/metadata.json');
+  await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+  // The subtree, the root's content and the four quarters'.
+  await settle(page, viewer, 6);
+  await expect(page.locator('.nm-notice')).toBeHidden();
+  const section = (title: string) =>
+    page.locator('.nm-section', {
+      has: page.locator('.nm-section-title', { hasText: new RegExp(`^${title}$`) }),
+    });
+  await page.locator('.nm-tree-row', { hasText: 'content/0/0/0.glb' }).click();
+  await expect(section('Metadata')).toContainText('Square');
+  await expect(section('Metadata')).toContainText('Park');
+  await expect(section('Subtree metadata')).toContainText('Atlas');
+  await expect(section('Subtree metadata')).toContainText('2026');
+  await expect(section('Content metadata')).toContainText('1');
+  await page.keyboard.press('ArrowRight');
+  await page.locator('.nm-tree-row', { hasText: 'content/1/1/1.glb' }).click();
+  const metadata = section('Metadata');
+  await expect(metadata).toContainText('North-east');
+  await expect(metadata).toContainText('34');
+  await expect(metadata).toContainText('Unknown');
+  await expect(section('Content metadata')).toContainText('9');
+  await expect(section('Subtree metadata')).toHaveCount(0);
+  await page.screenshot({ path: `${SCREENS}/tiles-implicit-metadata-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
 test('draws the contents of implicit tiling available at each tile', async ({ page }) => {
   const viewer = await openViewer(page, 'dark');
   await viewer.open('tiles/implicit/several.json');
