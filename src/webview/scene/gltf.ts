@@ -42,6 +42,7 @@ export function parseModel(
   loader.register(variantsPlugin);
   loader.register(nodeVisibilityPlugin);
   if (readFromMesh) loader.register(meshFormatsPlugin);
+  for (const plugin of decoders.plugins ?? []) loader.register(plugin);
   return loader.parseAsync(json, '');
 }
 

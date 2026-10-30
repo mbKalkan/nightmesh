@@ -54,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   table gives it, from its JSON or its binary body (vectors on one line), with the properties of
   each class of the batch table hierarchy it belongs to. Instances and points that name their
   feature by `BATCH_ID` show that feature.
+- **glTF feature IDs and metadata (3D Tiles 1.1)**: click a model with `EXT_mesh_features` or
+  `EXT_structural_metadata`, a glTF or GLB file or a tileset's glTF content, and the inspector
+  shows what it says at that point: the feature of each feature ID set, whether its IDs are a
+  vertex attribute, a texture or the vertices themselves, with its row of the property table and
+  the row's class; the values of property textures there; and the property attributes of the
+  vertex or point. Strings, enums, booleans, vectors, matrices, arrays and 64-bit integers are
+  shown, with offset, scale and no-data values applied. A schema given as a file of its own is
+  read next to the model.
 - **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
   model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 

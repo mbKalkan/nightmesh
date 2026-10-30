@@ -1,3 +1,4 @@
+import { METADATA_EXTENSIONS } from '../../shared/gltfExtensions';
 import {
   Box3,
   Color,
@@ -36,12 +37,21 @@ import type { BatchTable, FeatureTable } from '3d-tiles-renderer/core';
 import type { TilesRenderer } from '3d-tiles-renderer/three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTF, GLTFLoaderPlugin, GLTFParser } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { VariantMaterials } from './gltf';
 import { Helpers, type HelperColors } from './helpers';
 import type { TileTables } from './features';
-import { Picker, type FeatureKind, type PickRegion, type SurfacePoint } from './picking';
+import {
+  Picker,
+  type FeatureKind,
+  type PickRegion,
+  type ProbeHit,
+  type SurfacePoint,
+} from './picking';
+import { surfaceProbes, type StructuralMetadata } from './surface';
+
+type SurfaceMetadataData = { structuralMetadata?: StructuralMetadata };
 import { Playback } from './playback';
 import { Ruler, type Measurement } from './ruler';
 import {
@@ -73,19 +83,24 @@ const ENVIRONMENT_KEY = `room-${ENVIRONMENT_SIGMA}-three-${REVISION}`;
 export interface Decoders {
   draco?: DRACOLoader;
   ktx2?: KTX2Loader;
+  /** Loader plugins for the feature IDs and metadata of EXT_mesh_features and the like. */
+  plugins?: ((parser: GLTFParser) => GLTFLoaderPlugin)[];
 }
 
 /**
  * A clicked feature and where its tile's tables are: on the tile the tileset loaded, or in the
- * file shown, under its top `node`.
+ * file shown, under its top `node`. Or, `surface`, what was read where a glTF primitive with
+ * EXT_mesh_features or EXT_structural_metadata was clicked.
  */
-export interface PickedFeature {
-  kind: FeatureKind;
-  index: number;
-  tables?: TileTables;
-  /** The top node the feature's model is under, in the file shown. */
-  node?: number;
-}
+export type PickedFeature =
+  | {
+      kind: FeatureKind;
+      index: number;
+      tables?: TileTables;
+      /** The top node the feature's model is under, in the file shown. */
+      node?: number;
+    }
+  | { kind: 'surface'; hit: ProbeHit };
 
 export interface ViewEvents {
   /**
@@ -893,6 +908,9 @@ export class ModelView {
       );
       decoders.ktx2 = await this.ktx2;
     }
+    if (METADATA_EXTENSIONS.some((name) => extensions.includes(name))) {
+      decoders.plugins = (await import('./metadataPlugins')).metadataPlugins;
+    }
     return decoders;
   }
 
@@ -1011,10 +1029,21 @@ export class ModelView {
   /**
    * The 3D Tiles feature under the pointer, with where its tables are: on the tile a tileset
    * loaded, which the renderer's loaders give its tables; else in the file shown, with the top
-   * node its model is under (a composite names it for the tile: `b3dm 2`).
+   * node its model is under (a composite names it for the tile: `b3dm 2`). A primitive with
+   * EXT_mesh_features or EXT_structural_metadata gives what the picker read there instead.
    */
   private featureAt(event: MouseEvent): PickedFeature | undefined {
     if (!this.model) return undefined;
+    const surface = this.picker.probe(
+      this.renderer,
+      this.scene,
+      this.viewpoint.camera,
+      this.model,
+      this.overlays(),
+      this.regionAt(event),
+      surfaceProbes,
+    );
+    if (surface) return { kind: 'surface', hit: surface };
     const hit = this.picker.feature(
       this.renderer,
       this.scene,
@@ -1173,7 +1202,7 @@ function ownSize(object: Object3D): [number, number, number] | undefined {
 /**
  * Computes bounds while the vertex data is still in memory, then lets plain meshes drop it once
  * it is on the GPU: a large model would otherwise be held twice. Skinned and morphed meshes keep
- * theirs, as three.js reads it to bound their poses.
+ * theirs, as three.js reads it to bound their poses, and so do meshes with property attributes.
  */
 function prepareForUpload(model: Object3D): void {
   const release = function (this: { array: unknown }) {
@@ -1186,7 +1215,9 @@ function prepareForUpload(model: Object3D): void {
     geometry.computeBoundingSphere();
     const deformed =
       object instanceof SkinnedMesh || Object.keys(geometry.morphAttributes).length > 0;
-    if (!(object instanceof Mesh) || deformed) return;
+    // Property attributes are read at the vertex clicked (EXT_structural_metadata).
+    const read = (object.userData as SurfaceMetadataData).structuralMetadata?.attributeAccessors;
+    if (!(object instanceof Mesh) || deformed || read?.length) return;
     // Index data stays: wireframe drawing builds its lines from it.
     for (const attribute of Object.values(geometry.attributes)) {
       // Interleaved attributes share one buffer, which is what gets uploaded.

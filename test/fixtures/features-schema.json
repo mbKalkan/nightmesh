@@ -1,0 +1,17 @@
+{
+  "id": "scan",
+  "classes": {
+    "point": {
+      "properties": {
+        "intensity": {
+          "type": "SCALAR",
+          "componentType": "FLOAT32"
+        },
+        "normal": {
+          "type": "VEC3",
+          "componentType": "FLOAT32"
+        }
+      }
+    }
+  }
+}

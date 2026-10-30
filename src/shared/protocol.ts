@@ -252,6 +252,19 @@ export interface TileFileStrings {
   featureOf: string;
   /** A note on a property a feature takes from a class of the batch table hierarchy. */
   featureClass: string;
+  /** The section of a feature of one of a primitive's feature ID sets: `{0}` its label. */
+  featureNamed: string;
+  /** Its row: its feature ID, `2`, noted `of 4`. */
+  featureIdSet: string;
+  /** The metadata class of the properties shown. */
+  metadataClass: string;
+  /** Sections of what a property texture, or property attributes, give at the point clicked. */
+  textureProperties: string;
+  vertexProperties: string;
+  pointProperties: string;
+  /** Rows of the vertex or point clicked, by its number. */
+  vertex: string;
+  point: string;
   /** The cmpt format's name. */
   composite: string;
   tiles: string;

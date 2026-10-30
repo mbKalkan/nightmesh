@@ -4,8 +4,10 @@
  */
 export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
   'EXT_materials_bump',
+  'EXT_mesh_features',
   'EXT_mesh_gpu_instancing',
   'EXT_meshopt_compression',
+  'EXT_structural_metadata',
   'EXT_texture_avif',
   'EXT_texture_webp',
   'KHR_draco_mesh_compression',
@@ -28,3 +30,9 @@ export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
   'KHR_texture_basisu',
   'KHR_texture_transform',
 ]);
+
+/** Extensions whose feature IDs and metadata a click on the model reads. */
+export const METADATA_EXTENSIONS: readonly string[] = [
+  'EXT_mesh_features',
+  'EXT_structural_metadata',
+];

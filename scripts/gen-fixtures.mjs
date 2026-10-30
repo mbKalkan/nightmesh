@@ -1245,6 +1245,287 @@ const texturedPly = () =>
     line(3, 0, 2, 3, 6, 0, 0, 1, 1, 0, 1),
   ]);
 
+// EXT_mesh_features and EXT_structural_metadata (written by hand: glTF-Transform doesn't know them)
+
+/** A binary buffer built view by view, each view starting at a multiple of 8 bytes. */
+function binaryBuilder() {
+  const chunks = [];
+  const bufferViews = [];
+  const accessors = [];
+  let length = 0;
+  const view = (bytes, target) => {
+    const padding = (8 - (length % 8)) % 8;
+    if (padding) chunks.push(Buffer.alloc(padding));
+    length += padding;
+    const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    chunks.push(data);
+    bufferViews.push({ buffer: 0, byteOffset: length, byteLength: data.length, target });
+    length += data.length;
+    return bufferViews.length - 1;
+  };
+  const COMPONENT = { Float32Array: 5126, Uint16Array: 5123, Uint32Array: 5125 };
+  const SIZE = { SCALAR: 1, VEC2: 2, VEC3: 3 };
+  const accessor = (array, type, { indices = false, bounds = false } = {}) => {
+    const count = array.length / SIZE[type];
+    const result = {
+      bufferView: view(array, indices ? 34963 : 34962),
+      componentType: COMPONENT[array.constructor.name],
+      count,
+      type,
+    };
+    if (bounds) {
+      const size = SIZE[type];
+      result.min = Array.from({ length: size }, (_, i) =>
+        Math.min(...array.filter((_, j) => j % size === i)),
+      );
+      result.max = Array.from({ length: size }, (_, i) =>
+        Math.max(...array.filter((_, j) => j % size === i)),
+      );
+    }
+    accessors.push(result);
+    return accessors.length - 1;
+  };
+  return { view, accessor, bufferViews, accessors, bytes: () => Buffer.concat(chunks) };
+}
+
+/**
+ * Two buildings on a parcel of ground. The buildings' feature IDs are an attribute, with a
+ * property table of each one's name, height, kind, floors, origin and year built; a second set
+ * numbers each vertex as its own feature. The ground's feature IDs and properties are in a
+ * texture: its west half is one parcel, a dry park, its east half another, a wet plaza; its
+ * color shows the halves, yellow and magenta.
+ */
+function featuresModel() {
+  const data = binaryBuilder();
+  const box = (center, height, color) => {
+    const geometry = boxGeometry(1);
+    return {
+      positions: geometry.positions.map((value, i) =>
+        i % 3 === 1 ? (value + 0.5) * height : value + center[i % 3],
+      ),
+      normals: geometry.normals,
+      colors: geometry.positions.flatMap((_, i) => (i % 3 === 0 ? color : [])),
+      indices: geometry.indices,
+    };
+  };
+  const hall = box([-1.5, 0, -1], 1, [0.8, 0.1, 0.1]);
+  const tower = box([1.5, 0, -1], 2, [0.1, 0.2, 0.9]);
+  const vertices = hall.positions.length / 3;
+  const buildings = {
+    attributes: {
+      POSITION: data.accessor(new Float32Array([...hall.positions, ...tower.positions]), 'VEC3', {
+        bounds: true,
+      }),
+      NORMAL: data.accessor(new Float32Array([...hall.normals, ...tower.normals]), 'VEC3'),
+      COLOR_0: data.accessor(new Float32Array([...hall.colors, ...tower.colors]), 'VEC3'),
+      _FEATURE_ID_0: data.accessor(new Float32Array(vertices * 2).fill(1, vertices), 'SCALAR'),
+    },
+    indices: data.accessor(
+      new Uint16Array([...hall.indices, ...tower.indices.map((index) => index + vertices)]),
+      'SCALAR',
+      { indices: true },
+    ),
+    material: 0,
+    extensions: {
+      EXT_mesh_features: {
+        featureIds: [
+          { featureCount: 2, attribute: 0, propertyTable: 0, label: 'building' },
+          { featureCount: vertices * 2, label: 'vertex' },
+        ],
+      },
+    },
+  };
+  const ground = {
+    attributes: {
+      POSITION: data.accessor(
+        new Float32Array([-4, 0, 2.5, 4, 0, 2.5, 4, 0, -2.5, -4, 0, -2.5]),
+        'VEC3',
+        { bounds: true },
+      ),
+      NORMAL: data.accessor(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), 'VEC3'),
+      TEXCOORD_0: data.accessor(new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]), 'VEC2'),
+    },
+    indices: data.accessor(new Uint16Array([0, 1, 2, 0, 2, 3]), 'SCALAR', { indices: true }),
+    material: 1,
+    extensions: {
+      EXT_mesh_features: {
+        featureIds: [{ featureCount: 2, texture: { index: 1, channels: [0] }, label: 'parcel' }],
+      },
+      EXT_structural_metadata: { propertyTextures: [0] },
+    },
+  };
+  // The property table's columns.
+  const names = ['Town hall', 'Clock tower'].map((name) => Buffer.from(name));
+  const offsets = new Uint32Array([0, names[0].length, names[0].length + names[1].length]);
+  const table = {
+    name: { values: data.view(Buffer.concat(names)), stringOffsets: data.view(offsets) },
+    height: { values: data.view(new Float32Array([12.5, 31.25])) },
+    kind: { values: data.view(new Uint16Array([0, 1])) },
+    floors: { values: data.view(new Uint8Array([3, 9])) },
+    origin: { values: data.view(new Float32Array([-1.5, 0, -1, 1.5, 0, -1])) },
+    built: { values: data.view(new BigInt64Array([1923n, 2004n])) },
+  };
+  // West texel: parcel 0, moisture 0.2, a park; east: parcel 1, moisture 0.8, a plaza.
+  const images = [
+    png(2, 1, (x) => (x === 0 ? [235, 200, 40, 255] : [200, 50, 190, 255])),
+    png(2, 1, (x) => (x === 0 ? [0, 51, 1, 255] : [1, 204, 2, 255])),
+  ].map((bytes) => ({ bufferView: data.view(bytes), mimeType: 'image/png' }));
+  const json = {
+    asset: { version: '2.0', generator: GENERATOR, copyright: 'Public domain (CC0 1.0)' },
+    extensionsUsed: ['EXT_mesh_features', 'EXT_structural_metadata'],
+    extensions: {
+      EXT_structural_metadata: {
+        schema: {
+          id: 'town',
+          enums: {
+            kind: {
+              valueType: 'UINT16',
+              values: [
+                { name: 'civic', value: 0 },
+                { name: 'clock', value: 1 },
+              ],
+            },
+            zone: {
+              valueType: 'UINT8',
+              values: [
+                { name: 'park', value: 1 },
+                { name: 'plaza', value: 2 },
+              ],
+            },
+          },
+          classes: {
+            building: {
+              properties: {
+                name: { type: 'STRING' },
+                height: { type: 'SCALAR', componentType: 'FLOAT32' },
+                kind: { type: 'ENUM', enumType: 'kind' },
+                floors: { type: 'SCALAR', componentType: 'UINT8' },
+                origin: { type: 'VEC3', componentType: 'FLOAT32' },
+                built: { type: 'SCALAR', componentType: 'INT64' },
+              },
+            },
+            parcel: {
+              properties: {
+                moisture: { type: 'SCALAR', componentType: 'UINT8', normalized: true },
+                zone: { type: 'ENUM', enumType: 'zone' },
+              },
+            },
+          },
+        },
+        propertyTables: [{ class: 'building', count: 2, properties: table }],
+        propertyTextures: [
+          {
+            class: 'parcel',
+            properties: {
+              moisture: { index: 1, channels: [1] },
+              zone: { index: 1, channels: [2] },
+            },
+          },
+        ],
+      },
+    },
+    scene: 0,
+    scenes: [{ name: 'Town', nodes: [0, 1] }],
+    nodes: [
+      { name: 'Buildings', mesh: 0 },
+      { name: 'Ground', mesh: 1 },
+    ],
+    meshes: [
+      { name: 'Buildings', primitives: [buildings] },
+      { name: 'Ground', primitives: [ground] },
+    ],
+    materials: [
+      { name: 'Walls', pbrMetallicRoughness: { metallicFactor: 0, roughnessFactor: 0.8 } },
+      {
+        name: 'Parcels',
+        pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicFactor: 0 },
+      },
+    ],
+    // Texels stay sharp: each half of the ground is one color, as it is one parcel.
+    samplers: [{ magFilter: 9728, minFilter: 9728 }],
+    textures: [
+      { source: 0, sampler: 0 },
+      { source: 1, sampler: 0 },
+    ],
+    images,
+  };
+  const bin = data.bytes();
+  return {
+    json: {
+      ...json,
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: data.bufferViews,
+      accessors: data.accessors,
+    },
+    bin,
+  };
+}
+
+/** The schema of `features-points.gltf`, a file of its own. */
+const POINT_SCHEMA = {
+  id: 'scan',
+  classes: {
+    point: {
+      properties: {
+        intensity: { type: 'SCALAR', componentType: 'FLOAT32' },
+        normal: { type: 'VEC3', componentType: 'FLOAT32' },
+      },
+    },
+  },
+};
+
+/** Four points of a scan, each with an intensity and a normal, by property attributes. */
+function featuresPoints() {
+  const data = binaryBuilder();
+  const position = data.accessor(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), 'VEC3', {
+    bounds: true,
+  });
+  const intensity = data.accessor(new Float32Array([0.25, 0.5, 0.75, 1]), 'SCALAR');
+  const normal = data.accessor(new Float32Array([0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, -1]), 'VEC3');
+  const bin = data.bytes();
+  return {
+    asset: { version: '2.0', generator: GENERATOR, copyright: 'Public domain (CC0 1.0)' },
+    extensionsUsed: ['EXT_structural_metadata'],
+    extensions: {
+      EXT_structural_metadata: {
+        schemaUri: 'features-schema.json',
+        propertyAttributes: [
+          {
+            class: 'point',
+            properties: {
+              intensity: { attribute: '_INTENSITY' },
+              normal: { attribute: '_NORMAL' },
+            },
+          },
+        ],
+      },
+    },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'Scan', mesh: 0 }],
+    meshes: [
+      {
+        name: 'Scan',
+        primitives: [
+          {
+            attributes: { POSITION: position, _INTENSITY: intensity, _NORMAL: normal },
+            mode: 0,
+            extensions: { EXT_structural_metadata: { propertyAttributes: [0] } },
+          },
+        ],
+      },
+    ],
+    buffers: [
+      {
+        byteLength: bin.length,
+        uri: `data:application/octet-stream;base64,${bin.toString('base64')}`,
+      },
+    ],
+    bufferViews: data.bufferViews.map(({ target: _, ...view }) => view),
+    accessors: data.accessors,
+  };
+}
+
 // Writing
 
 /** A GLB container: 12-byte header, then a JSON chunk padded with spaces and a BIN chunk. */
@@ -1893,6 +2174,12 @@ await writeGlb(
 );
 await writeGlb('quantized.glb', await dense().transform(quantize()));
 await writeGlb('ktx2.glb', await compressedTextures());
+{
+  const { json, bin } = featuresModel();
+  write('features.glb', glb(json, bin));
+  write('features-points.gltf', Buffer.from(`${JSON.stringify(featuresPoints(), null, 2)}\n`));
+  write('features-schema.json', Buffer.from(`${JSON.stringify(POINT_SCHEMA, null, 2)}\n`));
+}
 
 // Files that can't be shown, or only partly.
 write('empty.glb', Buffer.alloc(0));

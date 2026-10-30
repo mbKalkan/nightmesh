@@ -528,6 +528,7 @@ async function* drawMessages(
   { loadId, reload, texts, largeBytes = LARGE_MODEL_BYTES }: LoadOptions,
   notices: readonly string[],
 ): AsyncGenerator<HostToWebviewMessage> {
+  json = await withSchema(json, resources);
   const images = await Promise.all(
     (json.images ?? []).map((image) =>
       image.uri !== undefined ? resources.data(image.uri) : undefined,
@@ -575,6 +576,46 @@ async function* drawMessages(
     notices: said,
   };
   yield* partMessages(plan.parts, loadId);
+}
+
+/** The largest metadata schema read from a file of its own: schemas are a few kilobytes. */
+const SCHEMA_BYTES = 16 * 1024 * 1024;
+
+type WithMetadata = Gltf & {
+  extensions?: { EXT_structural_metadata?: { schema?: unknown; schemaUri?: unknown } };
+};
+
+/**
+ * The JSON to draw with EXT_structural_metadata's schema in it, when the file gives it as a file
+ * of its own: the webview resolves no URIs. A schema that can't be read leaves the metadata out
+ * (the model is drawn all the same), and the user is told.
+ */
+async function withSchema(json: WithMetadata, resources: Resources): Promise<WithMetadata> {
+  const metadata = json.extensions?.EXT_structural_metadata;
+  const uri = metadata?.schemaUri;
+  if (!metadata || metadata.schema !== undefined || typeof uri !== 'string') return json;
+  const data = await resources.data(uri);
+  let schema: unknown;
+  if (data) {
+    try {
+      if (data.available > SCHEMA_BYTES) throw new RangeError();
+      schema = JSON.parse(new TextDecoder().decode(await data.source.read(0, data.available)));
+    } catch {
+      resources.problem(uri, 'unreadable', resourceName(uri));
+    }
+  }
+  const extensions = { ...json.extensions };
+  if (schema && typeof schema === 'object') {
+    const { schemaUri: _, ...rest } = metadata;
+    extensions.EXT_structural_metadata = { ...rest, schema };
+    return { ...json, extensions };
+  }
+  delete extensions.EXT_structural_metadata;
+  return {
+    ...json,
+    extensions,
+    extensionsUsed: json.extensionsUsed?.filter((name) => name !== 'EXT_structural_metadata'),
+  };
 }
 
 /**

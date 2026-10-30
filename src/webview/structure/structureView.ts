@@ -85,8 +85,8 @@ export class StructureView {
   private imageBytes: readonly (number | null)[] | undefined;
   private readonly panel: SidePanel;
   private readonly format: Formatter;
-  /** The feature clicked in the view, shown above the selection's details until it changes. */
-  private feature: Section | undefined;
+  /** What the metadata says at the point clicked in the view, shown above the selection's details until it changes. */
+  private feature: Section[] | undefined;
   private context: InspectContext | undefined;
   /** Who uses accessors, bufferViews and images: read when first asked for. */
   private usage: ModelUsage | undefined;
@@ -501,9 +501,11 @@ export class StructureView {
     return inspection && `${inspection.title}, ${inspection.kind}`;
   }
 
-  /** Shows a 3D Tiles feature clicked in the view above what is selected; none clears it. */
-  showFeature(feature: Feature | undefined): void {
-    this.feature = feature && featureSection(feature, this.strings.structure.tile, this.format);
+  /** Shows what the metadata says at the point clicked above what is selected; none clears it. */
+  showFeature(features: readonly Feature[] | undefined): void {
+    this.feature = features?.map((feature) =>
+      featureSection(feature, this.strings.structure.tile, this.format),
+    );
     this.render(true);
   }
 

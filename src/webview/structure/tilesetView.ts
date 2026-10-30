@@ -32,8 +32,8 @@ export class TilesetView {
   private readonly tree: StructureTree;
   private readonly inspector: InspectorView;
   private readonly format: Formatter;
-  /** The feature clicked in the view, shown above the tile's details until it changes. */
-  private feature: Section | undefined;
+  /** What the metadata says at the point clicked in the view, shown above the tile's details until it changes. */
+  private feature: Section[] | undefined;
   private context: TilesetContext | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
@@ -125,9 +125,11 @@ export class TilesetView {
     return inspection && `${inspection.title}, ${inspection.kind}`;
   }
 
-  /** Shows a feature clicked in the view above the tile's details; none clears it. */
-  showFeature(feature: Feature | undefined): void {
-    this.feature = feature && featureSection(feature, this.strings.structure.tile, this.format);
+  /** Shows what the metadata says at the point clicked above the tile's details; none clears it. */
+  showFeature(features: readonly Feature[] | undefined): void {
+    this.feature = features?.map((feature) =>
+      featureSection(feature, this.strings.structure.tile, this.format),
+    );
     if (this.context) {
       this.inspector.show(
         withFeature(inspectTileset(this.context, this.selected), this.feature),

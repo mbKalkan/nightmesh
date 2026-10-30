@@ -1,5 +1,6 @@
 import './styles/viewer.css';
 import { isGltfFormat, isMeshFormat } from '../shared/formats';
+import { METADATA_EXTENSIONS } from '../shared/gltfExtensions';
 import type {
   CameraState,
   DiffSide,
@@ -895,6 +896,10 @@ async function build(current: Arrival): Promise<void> {
     const gltf = await parseModel(json, current.parts, decoders, readFromMesh);
     if (current !== arrival) return;
     target.show(gltf, current.message.reload && hasModel);
+    // A click on a primitive with feature IDs or metadata reads them there.
+    if (METADATA_EXTENSIONS.some((name) => current.message.extensions.includes(name))) {
+      target.pickFeatures = true;
+    }
     // The other side of a comparison is shown from where it looks.
     if (diffSide && peerCamera) {
       followed = true;
@@ -977,10 +982,20 @@ function refreshTiles(): void {
   }, 250);
 }
 
-/** Shows the feature clicked in the view in the inspector, once its tile's tables are read. */
+/**
+ * Shows the feature clicked in the view in the inspector, once its tile's tables are read; or what
+ * a primitive's feature IDs and metadata say there.
+ */
 async function showFeature(picked: PickedFeature | undefined): Promise<void> {
   const click = ++featureClick;
   if (!picked) return;
+  if (picked.kind === 'surface') {
+    const { surfaceFeatures } = await import('./scene/features');
+    const features = surfaceFeatures(picked.hit);
+    if (click === featureClick && features.length)
+      (tilesetView ?? structure)?.showFeature(features);
+    return;
+  }
   let tables = picked.tables;
   if (!tables) {
     // A composite's tiles are each under a node named for the tile's kind and place: `b3dm 3/1`.
@@ -993,7 +1008,7 @@ async function showFeature(picked: PickedFeature | undefined): Promise<void> {
   // The tables' readers load with the first feature clicked.
   const { featureOf } = await import('./scene/features');
   const feature = tables && featureOf(tables, picked.kind, picked.index);
-  if (click === featureClick && feature) (tilesetView ?? structure)?.showFeature(feature);
+  if (click === featureClick && feature) (tilesetView ?? structure)?.showFeature([feature]);
 }
 
 /** The tables of the tile file shown, or of a tile in the composite shown, from the host. */
