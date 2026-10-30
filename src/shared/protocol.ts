@@ -470,6 +470,8 @@ export interface TilesetMetadataStrings {
   schema: string;
   statisticsTitle: string;
   featureProperties: string;
+  /** The metadata of the implicit subtree a tile is the first of. */
+  subtree: string;
   content: string;
   /** A content's, when the tile has several: `Content metadata ({0})`. */
   contentOf: string;

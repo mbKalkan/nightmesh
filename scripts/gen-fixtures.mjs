@@ -2239,6 +2239,7 @@ async function writeTilesets() {
     }),
   );
   await implicitTileset();
+  implicitMetadata();
   // Several contents in one tile: 3D Tiles 1.1's `contents` at the root, and 1.0's extension
   // below it, with one content that can't be read.
   write(
@@ -2417,16 +2418,134 @@ async function implicitTileset() {
   );
 }
 
-/** A binary subtree file: its header, then its JSON padded to 8 bytes; no binary chunk. */
-function subtree(value) {
-  let text = JSON.stringify(value);
+/**
+ * A binary subtree file: its header, then its JSON padded to 8 bytes, then its binary chunk: the
+ * `views` given, each padded to 8 bytes, as its one buffer's buffer views.
+ */
+function subtree(value, views = []) {
+  const padded = views.map((view) =>
+    Buffer.concat([view, Buffer.alloc((8 - (view.length % 8)) % 8)]),
+  );
+  let offset = 0;
+  const bufferViews = views.map((view, i) => {
+    const entry = { buffer: 0, byteOffset: offset, byteLength: view.length };
+    offset += padded[i].length;
+    return entry;
+  });
+  const json =
+    views.length > 0 ? { ...value, buffers: [{ byteLength: offset }], bufferViews } : value;
+  let text = JSON.stringify(json);
   text += ' '.repeat((8 - (text.length % 8)) % 8);
   const header = Buffer.alloc(24);
   header.write('subt', 0, 'ascii');
   header.writeUInt32LE(1, 4);
   header.writeBigUInt64LE(BigInt(text.length), 8);
-  header.writeBigUInt64LE(0n, 16);
-  return Buffer.concat([header, Buffer.from(text)]);
+  header.writeBigUInt64LE(BigInt(offset), 16);
+  return Buffer.concat([header, Buffer.from(text), ...padded]);
+}
+
+/** Implicit tiling with its tiles' and contents' metadata in the subtree's property tables. */
+function implicitMetadata() {
+  mkdirSync(join(OUT, 'tiles', 'implicit', 'tables', '0', '0'), { recursive: true });
+  // The root, then the quarters as their bits come: south-west, south-east, north-west, north-east.
+  const names = ['Square', 'South-west', 'South-east', 'North-west', 'North-east'];
+  const strings = names.map((name) => Buffer.from(name));
+  const stringOffsets = new Uint32Array(names.length + 1);
+  strings.forEach((bytes, i) => (stringOffsets[i + 1] = stringOffsets[i] + bytes.length));
+  // Marks as long as each tile wants: none for the root.
+  const marks = [[], [1], [2, 3], [4, 5, 6], [7]];
+  const markOffsets = new Uint32Array(marks.length + 1);
+  marks.forEach((list, i) => (markOffsets[i + 1] = markOffsets[i] + list.length));
+  const bytes = (array) => Buffer.from(array.buffer, array.byteOffset, array.byteLength);
+  const views = [
+    Buffer.concat(strings),
+    bytes(stringOffsets),
+    bytes(new Float32Array([4, 10, 18, 26, 34])),
+    Buffer.from([0, 1, 2, 1, 255]), // landUse, the last no data
+    Buffer.from([0b01011]), // surveyed: the root, the south-west and the north-west
+    bytes(new Uint16Array(marks.flat())),
+    bytes(markOffsets),
+    Buffer.from([1, 3, 5, 7, 9]), // floors
+  ];
+  write(
+    'tiles/implicit/tables/0/0/0.subtree',
+    subtree(
+      {
+        tileAvailability: { constant: 1 },
+        contentAvailability: [{ constant: 1 }],
+        childSubtreeAvailability: { constant: 0 },
+        propertyTables: [
+          {
+            class: 'area',
+            count: 5,
+            properties: {
+              name: { values: 0, stringOffsets: 1 },
+              height: { values: 2 },
+              landUse: { values: 3 },
+              surveyed: { values: 4 },
+              marks: { values: 5, arrayOffsets: 6 },
+            },
+          },
+          { class: 'building', count: 5, properties: { floors: { values: 7 } } },
+        ],
+        tileMetadata: 0,
+        contentMetadata: [1],
+        subtreeMetadata: { class: 'survey', properties: { surveyor: 'Atlas', year: 2026 } },
+      },
+      views,
+    ),
+  );
+  write(
+    'tiles/implicit/metadata.json',
+    json({
+      asset: { version: '1.1', generator: GENERATOR },
+      schema: {
+        id: 'square',
+        enums: {
+          landUse: {
+            valueType: 'UINT8',
+            values: [
+              { name: 'Park', value: 0 },
+              { name: 'Residential', value: 1 },
+              { name: 'Commercial', value: 2 },
+              { name: 'Unknown', value: 255 },
+            ],
+          },
+        },
+        classes: {
+          area: {
+            properties: {
+              name: { type: 'STRING' },
+              height: { type: 'SCALAR', componentType: 'FLOAT32' },
+              landUse: { type: 'ENUM', enumType: 'landUse', noData: 'Unknown' },
+              surveyed: { type: 'BOOLEAN' },
+              marks: { type: 'SCALAR', componentType: 'UINT16', array: true },
+            },
+          },
+          building: { properties: { floors: { type: 'SCALAR', componentType: 'UINT8' } } },
+          survey: {
+            properties: {
+              surveyor: { type: 'STRING' },
+              year: { type: 'SCALAR', componentType: 'UINT16' },
+            },
+          },
+        },
+      },
+      geometricError: 100,
+      root: {
+        boundingVolume: boxVolume([0, 0], 100, 40),
+        geometricError: 50,
+        refine: 'REPLACE',
+        content: { uri: 'content/{level}/{x}/{y}.glb' },
+        implicitTiling: {
+          subdivisionScheme: 'QUADTREE',
+          subtreeLevels: 2,
+          availableLevels: 2,
+          subtrees: { uri: 'tables/{level}/{x}/{y}.subtree' },
+        },
+      },
+    }),
+  );
 }
 
 /** The triangle as .gltf JSON with its one buffer pointing at `uri`. */

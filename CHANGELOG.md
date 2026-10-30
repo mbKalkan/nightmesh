@@ -79,7 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows its schema (ID, name, version, classes, enums, groups), its metadata statistics, and the
   value ranges of its tiles' feature properties. A schema in a file of its own is read next to
   the tileset. 3D Tiles 1.0 tilesets with `3DTILES_metadata` and `3DTILES_multiple_contents` are
-  read the same way.
+  read the same way. Tiles of implicit tiling show their own metadata and their contents' from
+  their subtree's property tables (strings, numbers, vectors, enums, booleans and arrays), and the
+  first tile of each subtree shows the subtree's metadata; implicit tilesets of metadata alone,
+  without content, open too.
 - **b3dm tiles on the globe stand upright**: a tile whose `RTC_CENTER` is on the globe has its
   model along the Earth's axes, and was shown leaning; it is now turned to stand where it is.
 
