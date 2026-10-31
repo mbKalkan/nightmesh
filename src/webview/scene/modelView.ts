@@ -173,11 +173,11 @@ const MEASURE_INTERVAL = 500;
 /** A press that moves less than this, in CSS pixels, is a click rather than a drag. */
 const CLICK_SLOP = 4;
 
-/** While measuring, a click this many CSS pixels from a vertex places the end on it. */
+/** While measuring, a click this many CSS pixels from a vertex or an edge places the end on it. */
 const SNAP_RADIUS = 8;
 
 /**
- * While measuring, the vertex a click would snap to is looked for once the pointer rests this
+ * While measuring, the point a click would snap to is looked for once the pointer rests this
  * long, in milliseconds: looking draws the model again, too costly at every move.
  */
 const SNAP_HOVER_DELAY = 60;
@@ -279,6 +279,7 @@ export class ModelView {
       this.highlight.clear();
       for (const kind of CHANGE_KINDS) this.changeBoxes[kind].clear();
       this.ruler.clear();
+      this.picker.releaseEdges();
       this.stopPlaying();
     });
     canvas.addEventListener('webglcontextrestored', () => this.requestRender());
@@ -411,15 +412,23 @@ export class ModelView {
   }
 
   /**
-   * Starts or stops measuring: while it lasts, a click on the model places an end of the
-   * measurement instead of selecting what is there.
+   * Starts or stops measuring: while it lasts, a click on the model places an end of a
+   * measurement instead of selecting what is there. Stopping takes the measurements away.
    */
   setMeasuring(measuring: boolean): void {
     if (measuring === this.measuring) return;
     this.measuring = measuring;
     clearTimeout(this.snapTimer);
     this.ruler.clear();
+    if (!measuring) this.picker.releaseEdges();
     this.render();
+  }
+
+  /** Takes away the last measurement, or the end of one placed; whether there was one. */
+  removeMeasurement(): boolean {
+    if (!this.measuring || !this.ruler.removeLast()) return false;
+    this.render();
+    return true;
   }
 
   get isMeasuring(): boolean {
@@ -533,6 +542,7 @@ export class ModelView {
     this.scene.add(model);
     // What was measured was on the model before.
     this.ruler.clear();
+    this.picker.releaseEdges();
     this.cameras = [];
     this.cameraIndex = -1;
     model.traverse((object) => {
@@ -578,6 +588,7 @@ export class ModelView {
     this.scene.add(tiles.group);
     this.shading.attach(tiles.group);
     this.ruler.clear();
+    this.picker.releaseEdges();
     this.cameras = [];
     this.cameraIndex = -1;
     this.variantNames = [];
@@ -1016,14 +1027,14 @@ export class ModelView {
     this.canvas.addEventListener('dblclick', (event) => {
       if (!this.measuring) this.events.picked(this.pickAt(event), true);
     });
-    // While measuring, a ring shows the vertex a click would snap to.
+    // While measuring, a ring shows the vertex or the point on an edge a click would snap to.
     this.canvas.addEventListener('pointermove', (event) => {
       clearTimeout(this.snapTimer);
       if (!this.measuring) return;
       if (event.buttons !== 0) return this.showSnap(undefined);
       const { clientX, clientY } = event;
       this.snapTimer = setTimeout(
-        () => this.showSnap(this.vertexAt({ clientX, clientY })?.point),
+        () => this.showSnap(this.snapAt({ clientX, clientY })?.point),
         SNAP_HOVER_DELAY,
       );
     });
@@ -1037,12 +1048,12 @@ export class ModelView {
     if (this.ruler.setSnap(point)) this.requestRender();
   }
 
-  /** The vertex near the pointer that a click would snap to, while measuring. */
-  private vertexAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): SurfacePoint | undefined {
+  /** The vertex or the point on an edge near the pointer a click would snap to, measuring. */
+  private snapAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): SurfacePoint | undefined {
     if (!this.model || !this.measuring) return undefined;
     const region = this.regionAt(event);
     const scale = region.width / Math.max(1, this.canvas.getBoundingClientRect().width);
-    return this.picker.nearestVertex(
+    return this.picker.snapPoint(
       this.renderer,
       this.scene,
       this.viewpoint.camera,
@@ -1117,13 +1128,13 @@ export class ModelView {
   }
 
   /**
-   * Places an end of the measurement on the vertex near the pointer, or else where the pointer
-   * is on the model; nothing off it.
+   * Places an end of a measurement on the vertex or the edge near the pointer, or else where the
+   * pointer is on the model; nothing off it.
    */
   private placeEnd(event: MouseEvent): void {
     if (!this.model) return;
     const hit =
-      this.vertexAt(event) ??
+      this.snapAt(event) ??
       this.picker.surfacePoint(
         this.renderer,
         this.scene,

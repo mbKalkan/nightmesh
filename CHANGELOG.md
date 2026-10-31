@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Several measurements at once: each pair of clicks adds one, the ones before stay with their
+  lengths, and <kbd>Backspace</kbd> removes the last. Stopping the ruler clears them.
+- Measuring snaps to edges: a click near an edge of the shape, where faces meet at an angle or
+  the surface ends, places the point exactly on the edge. Corners still come first, and the
+  diagonals that split a flat face into triangles are left alone.
+
 ## [0.5.1] - 2026-10-30
 
 Fixes from a review of 0.5.0, and 3D Tiles in the name.

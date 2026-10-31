@@ -282,7 +282,7 @@
   "Contains changes": "Değişiklik içeriyor",
   "Visibility": "Görünürlük",
   "Bounds": "Sınırlar",
-  "Arrow keys orbit, plus and minus zoom. 1, 3 and 7 look from the front, the right and the top, with Shift from the other side; 5 switches between perspective and orthographic. F frames the selection, Escape lets go of it, Space plays an animation. M measures the distance between two points clicked on the model.": "Ok tuşları modelin etrafında döndürür, artı ve eksi yakınlaştırır. 1, 3 ve 7 önden, sağdan ve üstten bakar, Shift ile karşı taraftan; 5 perspektif ile ortografik arasında geçer. F seçimi çerçeveler, Escape seçimi bırakır, Boşluk animasyonu oynatır. M, modelde tıklanan iki nokta arasındaki mesafeyi ölçer.",
+  "Arrow keys orbit, plus and minus zoom. 1, 3 and 7 look from the front, the right and the top, with Shift from the other side; 5 switches between perspective and orthographic. F frames the selection, Escape lets go of it, Space plays an animation. M measures the distance between two points clicked on the model; Backspace removes the last measurement.": "Ok tuşları modelin etrafında döndürür, artı ve eksi yakınlaştırır. 1, 3 ve 7 önden, sağdan ve üstten bakar, Shift ile karşı taraftan; 5 perspektif ile ortografik arasında geçer. F seçimi çerçeveler, Escape seçimi bırakır, Boşluk animasyonu oynatır. M, modelde tıklanan iki nokta arasındaki mesafeyi ölçer; Backspace son ölçümü kaldırır.",
   "Measure Distance (M)": "Mesafe Ölç (M)",
   "Click a point on the model": "Modelde bir noktaya tıklayın",
   "Click a second point": "İkinci bir noktaya tıklayın",

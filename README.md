@@ -57,8 +57,9 @@ Control shows them, and measures distances on it.
 - The size of the model, or of what is selected, in the corner of the view.
 - **Measure** the distance between two points on the model: click them with the ruler on (the
   toolbar or <kbd>M</kbd>), and the length shows over the line, with how far apart they are
-  along X, Y and Z in the corner. Clicks near a corner snap to it, so edges measure exactly. In
-  the file's units for OBJ, STL and PLY.
+  along X, Y and Z in the corner. Measure as many as you need; <kbd>Backspace</kbd> removes the
+  last. Clicks near a corner snap to it, and clicks near an edge of the shape snap onto the edge,
+  so edges measure exactly. In the file's units for OBJ, STL and PLY.
 - Models are lit by a built-in environment, so they look right without any setup.
 - Draco and meshopt compressed meshes, quantized models and KTX2 (Basis Universal) textures open
   too. Their decoders load only when a model needs them.
@@ -253,6 +254,7 @@ An `.obj` that is a compiler's object file, not a model, is said to be one: open
 | Look through the next camera in the model   | <kbd>0</kbd>                                              |
 | Play or pause the animation                 | <kbd>Space</kbd>                                          |
 | Measure between two clicked points          | <kbd>M</kbd>, then click twice; <kbd>Esc</kbd> to stop    |
+| Remove the last measurement                 | <kbd>Backspace</kbd>                                      |
 
 The number keys work on the main keyboard and the number pad. Nightmesh doesn't use
 <kbd>Ctrl</kbd> shortcuts in the view, so VS Code's own stay as they are.

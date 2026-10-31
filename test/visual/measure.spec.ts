@@ -50,13 +50,32 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
     expect(await lowestTextContrast(page)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `${SCREENS}/measure-${theme}.png` });
 
-    // A third point starts again.
+    // A third point starts another, the first kept: two of them, each with its length.
     await clickView(page, ...PLATE_TOP);
     await expect(badge(page)).toHaveText('Click a second point');
-    await expect(page.locator('.nm-ruler-label')).toBeHidden();
+    await expect(page.locator('.nm-ruler-label')).toHaveText([`${total} mm`]);
+    await page.mouse.click(BASE_RIGHT.x, BASE_RIGHT.y);
+    await expect(page.locator('.nm-ruler-label')).toHaveCount(2);
+    await expect(page.locator('.nm-ruler-label').nth(1)).toBeVisible();
+    await expect(badge(page)).not.toHaveAttribute('aria-label', PLATE_TO_BASE);
+    await page.screenshot({ path: `${SCREENS}/measure-two-${theme}.png` });
+
+    // Backspace takes the last away, and the corner shows the one before; then that one too.
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.nm-ruler-label')).toHaveText([`${total} mm`]);
+    await expect(badge(page)).toHaveAttribute('aria-label', PLATE_TO_BASE);
+    await clickView(page, ...PLATE_TOP);
+    await page.keyboard.press('Backspace');
+    await expect(badge(page)).toHaveAttribute('aria-label', PLATE_TO_BASE);
+    await page.keyboard.press('Backspace');
+    await expect(badge(page)).toHaveText('Click a point on the model');
+    await expect(page.locator('.nm-ruler-label')).toHaveCount(0);
 
     // Escape stops measuring: the size is back, and clicks select again.
+    await clickView(page, ...PLATE_TOP);
+    await clickView(page, ...BASE_TOP);
     await page.keyboard.press('Escape');
+    await expect(page.locator('.nm-ruler-label')).toHaveCount(0);
     await expect(button(page)).toHaveAttribute('aria-pressed', 'false');
     await expect(badge(page)).toHaveAttribute(
       'aria-label',
@@ -86,7 +105,7 @@ test('keeps a measurement on the model when its units change', async ({ page }) 
 
   // The button stops it too.
   await button(page).click();
-  await expect(page.locator('.nm-ruler-label')).toBeHidden();
+  await expect(page.locator('.nm-ruler-label')).toHaveCount(0);
   await expect(badge(page)).toHaveAttribute(
     'aria-label',
     /^Size of the model.*: 40 in × 25 in × 20 in$/,
@@ -130,6 +149,47 @@ test('snaps to a corner near the click, ringed before it is clicked', async ({ p
   );
   await expect(page.locator('.nm-ruler-label')).toHaveText('40 mm');
   await page.screenshot({ path: `${SCREENS}/measure-snap-dark.png` });
+  expect(viewer.problems).toEqual([]);
+});
+
+/** Where the ring is drawn, in page pixels, once it shows. */
+async function ringAt(page: Page): Promise<{ x: number; y: number } | undefined> {
+  const canvas = (await page.locator('.nm-canvas').boundingBox())!;
+  const ring = await areaOf(page, '.nm-canvas', FOCUS);
+  if (!ring) return undefined;
+  return { x: canvas.x + (ring.left + ring.right) / 2, y: canvas.y + (ring.top + ring.bottom) / 2 };
+}
+
+/** How far `point` is from the line through the base's two front bottom corners, in pixels. */
+function offBaseEdge({ x, y }: { x: number; y: number }): number {
+  const [ax, ay, bx, by] = [304, 500, 655, 632];
+  return Math.abs((bx - ax) * (ay - y) - (ax - x) * (by - ay)) / Math.hypot(bx - ax, by - ay);
+}
+
+test('snaps to an edge near the click, where there is no corner', async ({ page }) => {
+  const viewer = await openViewer(page, 'dark');
+  await viewer.open('bracket.stl');
+  await button(page).click();
+  await page.locator('.nm-measure').evaluate((badge) => (badge.style.visibility = 'hidden'));
+
+  // A few pixels above the middle of the base's front bottom edge, on its front face: the ring
+  // is on the edge, under the pointer.
+  const near = { x: 480, y: 563 };
+  await page.mouse.move(near.x, near.y);
+  await expect.poll(async () => (await ringAt(page)) !== undefined).toBe(true);
+  const ring = (await ringAt(page))!;
+  expect(offBaseEdge(ring)).toBeLessThanOrEqual(1.5);
+  expect(Math.hypot(ring.x - near.x, ring.y - near.y)).toBeLessThanOrEqual(4);
+
+  await page.screenshot({ path: `${SCREENS}/measure-edge-dark.png` });
+
+  // From there to the corner: along the edge, so straight across X.
+  await page.mouse.click(near.x, near.y);
+  await page.mouse.click(BASE_LEFT.x, BASE_LEFT.y);
+  await expect(badge(page)).toHaveAttribute(
+    'aria-label',
+    /^Distance: (\d+(?:\.\d+)?) mm \(X \1 mm, Y 0 mm, Z 0 mm\)$/,
+  );
   expect(viewer.problems).toEqual([]);
 });
 

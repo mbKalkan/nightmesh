@@ -3,8 +3,8 @@ import {
   BufferGeometry,
   CanvasTexture,
   Group,
-  Line,
   LineBasicMaterial,
+  LineSegments,
   Points,
   PointsMaterial,
   SRGBColorSpace,
@@ -16,10 +16,12 @@ import {
 
 /** The ends of a measurement are dots this many CSS pixels across. */
 const DOT_SIZE = 9;
-/** The ring around the vertex a click would snap to, in CSS pixels across. */
+/** The ring around the point a click would snap to, in CSS pixels across. */
 const RING_SIZE = 17;
+/** Room for this many ends at first; more makes room for twice as many. */
+const FIRST_ENDS = 16;
 
-/** A measurement as far as it has come: its ends, and once both are placed how far apart. */
+/** The last measurement as far as it has come: its ends, and once both are placed how far apart. */
 export interface Measurement {
   /** How many of the two ends are placed. */
   ends: number;
@@ -29,20 +31,25 @@ export interface Measurement {
   delta?: [number, number, number];
 }
 
-/** An end of the measurement, kept in its object's own space so it moves with the object. */
+/** An end of a measurement, kept in its object's own space so it moves with the object. */
 interface End {
   object: Object3D;
   local: Vector3;
 }
 
 /**
- * The distance between two points on the model: dots at the ends, a line between them, solid
- * where it can be seen and faint where the model hides it, and the length over its middle.
+ * Distances between points on the model, as many as are measured: dots at the ends, a line
+ * between each two, solid where it can be seen and faint where the model hides it, and each
+ * length over its line's middle.
  */
 export class Ruler {
   readonly group = new Group();
+  /** Every measurement's ends, two by two; the last one may have only its first. */
   private readonly ends: End[] = [];
-  private readonly positions = new BufferAttribute(new Float32Array(6), 3);
+  /** Where the ends are, which the dots and the lines both draw, each as far as it should. */
+  private positions = new BufferAttribute(new Float32Array(FIRST_ENDS * 3), 3);
+  private pointGeometry = new BufferGeometry();
+  private lineGeometry = new BufferGeometry();
   private readonly front = new LineBasicMaterial({ toneMapped: false });
   private readonly behind = new LineBasicMaterial({
     toneMapped: false,
@@ -52,16 +59,17 @@ export class Ruler {
     depthWrite: false,
   });
   private readonly dots: PointsMaterial;
-  private readonly lines: Line[];
+  private readonly lines: LineSegments[];
   private readonly points: Points;
-  /** A ring around the vertex a click would snap to. */
+  /** A ring around the point a click would snap to. */
   private readonly ring: Points;
-  private readonly label: HTMLElement;
+  /** Each whole measurement's length, over its line. */
+  private readonly labels: HTMLElement[] = [];
 
-  constructor(container: HTMLElement) {
+  constructor(private readonly container: HTMLElement) {
     this.group.name = 'Nightmesh ruler';
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', this.positions);
+    this.pointGeometry.setAttribute('position', this.positions);
+    this.lineGeometry.setAttribute('position', this.positions);
     this.dots = new PointsMaterial({
       size: DOT_SIZE * window.devicePixelRatio,
       sizeAttenuation: false,
@@ -71,8 +79,11 @@ export class Ruler {
       depthWrite: false,
       toneMapped: false,
     });
-    this.lines = [new Line(geometry, this.behind), new Line(geometry, this.front)];
-    this.points = new Points(geometry, this.dots);
+    this.lines = [
+      new LineSegments(this.lineGeometry, this.behind),
+      new LineSegments(this.lineGeometry, this.front),
+    ];
+    this.points = new Points(this.pointGeometry, this.dots);
     const ringGeometry = new BufferGeometry();
     ringGeometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
     this.ring = new Points(
@@ -88,18 +99,13 @@ export class Ruler {
       }),
     );
     this.ring.visible = false;
-    // Over the model, the dots over the line, the ring over them all.
+    // Over the model, the dots over the lines, the ring over them all.
     [...this.lines, this.points, this.ring].forEach((object, index) => {
       object.frustumCulled = false;
       object.renderOrder = 1000 + index;
       this.group.add(object);
     });
-    this.label = document.createElement('div');
-    this.label.className = 'nm-ruler-label';
-    // The corner of the view says it, for screen readers too.
-    this.label.setAttribute('aria-hidden', 'true');
-    this.label.hidden = true;
-    container.append(this.label);
+    this.show();
   }
 
   /** The theme's focus color, as sRGB channels from 0 to 1. */
@@ -113,7 +119,7 @@ export class Ruler {
       material.color.setRGB(r, g, b, SRGBColorSpace);
   }
 
-  /** Rings the vertex a click would snap to; undefined takes the ring away. */
+  /** Rings the point a click would snap to; undefined takes the ring away. */
   setSnap(point: Vector3 | undefined): boolean {
     const was = this.ring.visible
       ? new Vector3().fromBufferAttribute(this.ring.geometry.attributes.position, 0)
@@ -128,65 +134,109 @@ export class Ruler {
     return true;
   }
 
-  /** Places an end where `point` is on `object`; after two, a third starts a new measurement. */
+  /**
+   * Places an end where `point` is on `object`: the second end of the last measurement, or the
+   * first of a new one, the ones before kept.
+   */
   add(point: Vector3, object: Object3D): void {
-    if (this.ends.length === 2) this.ends.length = 0;
     object.updateWorldMatrix(true, false);
     this.ends.push({ object, local: object.worldToLocal(point.clone()) });
+    this.show();
+  }
+
+  /** Takes away the last measurement, or the end of one placed; whether there was one. */
+  removeLast(): boolean {
+    if (this.ends.length === 0) return false;
+    this.ends.length -= this.ends.length % 2 === 1 ? 1 : 2;
+    this.show();
+    return true;
   }
 
   clear(): void {
     this.ends.length = 0;
-    this.points.visible = false;
-    for (const line of this.lines) line.visible = false;
     this.ring.visible = false;
-    this.label.hidden = true;
+    this.show();
   }
 
   /**
-   * Puts the dots and the line where the ends are now and the length over the line's middle, as
-   * `camera` sees it; `lengthText` writes a length given in metres.
+   * Puts the dots and the lines where the ends are now and each length over its line's middle,
+   * as `camera` sees it; `lengthText` writes a length given in metres. Returns the last
+   * measurement as far as it has come.
    */
   update(
     camera: PerspectiveCamera | OrthographicCamera,
     lengthText: (metres: number) => string,
   ): Measurement {
     const points = this.ends.map(({ object, local }) => object.localToWorld(local.clone()));
-    points.forEach((point, index) => this.positions.setXYZ(index, point.x, point.y, point.z));
-    this.positions.needsUpdate = true;
-    this.points.visible = points.length > 0;
-    this.points.geometry.setDrawRange(0, points.length);
-    const [a, b] = points;
-    for (const line of this.lines) line.visible = b !== undefined;
-    if (!a || !b) {
-      this.label.hidden = true;
-      return { ends: points.length };
-    }
-    const length = a.distanceTo(b);
+    const positions = this.positions;
+    points.forEach((point, index) => positions.setXYZ(index, point.x, point.y, point.z));
+    positions.needsUpdate = true;
     camera.updateMatrixWorld();
-    const middle = a.clone().add(b).multiplyScalar(0.5).project(camera);
-    // Behind the camera, or past the edges, it isn't shown.
-    this.label.hidden =
-      middle.z < -1 || middle.z > 1 || Math.abs(middle.x) > 1 || Math.abs(middle.y) > 1;
-    this.label.textContent = lengthText(length);
-    this.label.style.left = `${((middle.x + 1) / 2) * 100}%`;
-    this.label.style.top = `${((1 - middle.y) / 2) * 100}%`;
-    return {
-      ends: 2,
-      length,
-      delta: [Math.abs(b.x - a.x), Math.abs(b.y - a.y), Math.abs(b.z - a.z)],
-    };
+    let last: Measurement = { ends: 0 };
+    this.labels.forEach((label, index) => {
+      const a = points[index * 2];
+      const b = points[index * 2 + 1];
+      const length = a.distanceTo(b);
+      const middle = a.clone().add(b).multiplyScalar(0.5).project(camera);
+      // Behind the camera, or past the edges, it isn't shown.
+      label.hidden =
+        middle.z < -1 || middle.z > 1 || Math.abs(middle.x) > 1 || Math.abs(middle.y) > 1;
+      label.textContent = lengthText(length);
+      label.style.left = `${((middle.x + 1) / 2) * 100}%`;
+      label.style.top = `${((1 - middle.y) / 2) * 100}%`;
+      last = {
+        ends: 2,
+        length,
+        delta: [Math.abs(b.x - a.x), Math.abs(b.y - a.y), Math.abs(b.z - a.z)],
+      };
+    });
+    return points.length % 2 === 1 ? { ends: 1 } : last;
   }
 
   dispose(): void {
-    this.points.geometry.dispose();
+    this.pointGeometry.dispose();
+    this.lineGeometry.dispose();
     this.ring.geometry.dispose();
     const ring = this.ring.material as PointsMaterial;
     for (const material of [this.front, this.behind, this.dots, ring]) {
       material.map?.dispose();
       material.dispose();
     }
-    this.label.remove();
+    for (const label of this.labels) label.remove();
+  }
+
+  /** Draws as many dots, lines and lengths as there are ends and whole measurements. */
+  private show(): void {
+    const ends = this.ends.length;
+    const capacity = this.positions.count;
+    if (ends > capacity) {
+      // The buffer drawn has a fixed size: a larger one takes its place.
+      this.pointGeometry.dispose();
+      this.lineGeometry.dispose();
+      this.positions = new BufferAttribute(new Float32Array(capacity * 2 * 3), 3);
+      this.pointGeometry = new BufferGeometry();
+      this.lineGeometry = new BufferGeometry();
+      this.pointGeometry.setAttribute('position', this.positions);
+      this.lineGeometry.setAttribute('position', this.positions);
+      this.points.geometry = this.pointGeometry;
+      for (const line of this.lines) line.geometry = this.lineGeometry;
+    }
+    const whole = ends >> 1;
+    this.points.visible = ends > 0;
+    this.pointGeometry.setDrawRange(0, ends);
+    for (const line of this.lines) line.visible = whole > 0;
+    // Lines draw two ends each: the last end alone draws none.
+    this.lineGeometry.setDrawRange(0, whole * 2);
+    while (this.labels.length > whole) this.labels.pop()!.remove();
+    while (this.labels.length < whole) {
+      const label = document.createElement('div');
+      label.className = 'nm-ruler-label';
+      // The corner of the view says the last one, for screen readers too.
+      label.setAttribute('aria-hidden', 'true');
+      label.hidden = true;
+      this.container.append(label);
+      this.labels.push(label);
+    }
   }
 }
 
