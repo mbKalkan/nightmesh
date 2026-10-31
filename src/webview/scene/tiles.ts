@@ -7,6 +7,7 @@ import { GLTFExtensionsPlugin, ReorientationPlugin } from '3d-tiles-renderer/thr
 import { Matrix4, Sphere } from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Decoders } from './modelView';
+import { instanceFeaturesPlugin } from './gltf';
 import { NightmeshImplicitTilingPlugin } from './implicitTiling';
 import { MultipleContentsPlugin } from './multipleContents';
 
@@ -89,6 +90,7 @@ export function createTiles(
       dracoLoader: decoders.draco ?? null,
       ktxLoader: decoders.ktx2 ?? null,
       meshoptDecoder: MeshoptDecoder,
+      plugins: [instanceFeaturesPlugin],
     }),
   );
   tiles.registerPlugin(new ReorientationPlugin({ recenter: true }));

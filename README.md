@@ -107,7 +107,8 @@ Control shows them, and measures distances on it.
   and drawn; the tileset's counts what is loaded, drawn and on its way, and the memory it takes.
   The selected tile's volume is boxed in the view, and a click on the model selects its tile.
 - **Metadata**: click a building or a point and the inspector shows that feature's properties,
-  from the tile's batch table or the glTF's `EXT_mesh_features` and `EXT_structural_metadata`.
+  from the tile's batch table or the glTF's `EXT_mesh_features` and `EXT_structural_metadata`,
+  and a GPU instance's from `EXT_instance_features`.
   The tileset's, its tiles', contents' and groups' metadata show with their class, read as the
   schema says, implicit tiles' from their subtrees too.
 - A `.b3dm`, `.i3dm`, `.pnts` or `.cmpt` file opens on its own, with the glTF tools for the model

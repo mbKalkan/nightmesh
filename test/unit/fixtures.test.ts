@@ -24,6 +24,7 @@ const VALID = [
   'meshopt.glb',
   'quantized.glb',
   'ktx2.glb',
+  'instance-features.glb',
 ];
 
 // Small files come back as views into Node's shared buffer pool; the validator needs their own bytes.

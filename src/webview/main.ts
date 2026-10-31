@@ -1023,6 +1023,13 @@ async function showFeature(picked: PickedFeature | undefined): Promise<void> {
       (tilesetView ?? structure)?.showFeature(features);
     return;
   }
+  if (picked.kind === 'instanceFeatures') {
+    const { instanceFeatures } = await import('./scene/features');
+    const features = instanceFeatures(picked.object, picked.index);
+    if (click === featureClick && features.length)
+      (tilesetView ?? structure)?.showFeature(features);
+    return;
+  }
   let tables = picked.tables;
   if (!tables) {
     // A composite's tiles are each under a node named for the tile's kind and place: `b3dm 3/1`.

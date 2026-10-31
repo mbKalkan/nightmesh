@@ -3,6 +3,7 @@
  * shown; one that only uses it is drawn without it.
  */
 export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
+  'EXT_instance_features',
   'EXT_materials_bump',
   'EXT_mesh_features',
   'EXT_mesh_gpu_instancing',
@@ -33,6 +34,7 @@ export const DRAWN_EXTENSIONS: ReadonlySet<string> = new Set([
 
 /** Extensions whose feature IDs and metadata a click on the model reads. */
 export const METADATA_EXTENSIONS: readonly string[] = [
+  'EXT_instance_features',
   'EXT_mesh_features',
   'EXT_structural_metadata',
 ];

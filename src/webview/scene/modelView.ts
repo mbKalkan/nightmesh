@@ -27,6 +27,7 @@ import {
   type BufferAttribute,
   type BufferGeometry,
   type CompressedTexture,
+  type InstancedBufferAttribute,
   type InterleavedBufferAttribute,
   type Material,
   type Object3D,
@@ -101,7 +102,9 @@ export type PickedFeature =
       /** The top node the feature's model is under, in the file shown. */
       node?: number;
     }
-  | { kind: 'surface'; hit: ProbeHit };
+  | { kind: 'surface'; hit: ProbeHit }
+  /** A GPU instance of a node with EXT_instance_features, by its number. */
+  | { kind: 'instanceFeatures'; object: Object3D; index: number };
 
 export interface ViewEvents {
   /**
@@ -1092,6 +1095,9 @@ export class ModelView {
     );
     if (!hit) return undefined;
     const { kind, index } = hit;
+    if (kind === 'instance' && hit.object.userData.instanceFeatures) {
+      return { kind: 'instanceFeatures', object: hit.object, index };
+    }
     let top: number | undefined;
     for (let above: Object3D | null = hit.object; above; above = above.parent) {
       const loaded = above as Object3D &
@@ -1258,6 +1264,8 @@ function prepareForUpload(model: Object3D): void {
     if (!(object instanceof Mesh) || deformed || read?.length) return;
     // Index data stays: wireframe drawing builds its lines from it.
     for (const attribute of Object.values(geometry.attributes)) {
+      // Instances' values are a few per instance: their feature IDs are read where clicked.
+      if ((attribute as InstancedBufferAttribute).isInstancedBufferAttribute) continue;
       // Interleaved attributes share one buffer, which is what gets uploaded.
       const uploaded = (attribute as InterleavedBufferAttribute).isInterleavedBufferAttribute
         ? (attribute as InterleavedBufferAttribute).data

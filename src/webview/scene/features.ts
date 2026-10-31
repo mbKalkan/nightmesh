@@ -1,9 +1,10 @@
 // A clicked feature of a 3D Tiles tile, read from the tile's feature and batch tables with the
 // 3D Tiles renderer's own readers: binary properties and the batch table hierarchy included. Also
-// what a glTF primitive's EXT_mesh_features and EXT_structural_metadata say at the point clicked.
+// what a glTF primitive's EXT_mesh_features and EXT_structural_metadata say at the point clicked,
+// and a node's EXT_instance_features for the GPU instance clicked.
 import { BatchTable } from '3d-tiles-renderer/src/core/renderer/utilities/BatchTable.js';
 import { FeatureTable } from '3d-tiles-renderer/src/core/renderer/utilities/FeatureTable.js';
-import type { BufferGeometry, Mesh, Points } from 'three';
+import type { BufferGeometry, Mesh, Object3D, Points } from 'three';
 import type { TileTablesBytes } from '../../shared/protocol';
 import { probedNumber, type FeatureKind, type Probe, type ProbeHit } from './picking';
 import {
@@ -13,6 +14,7 @@ import {
   VERTEX,
   type FeatureIdSet,
   type MetadataProperty,
+  type StructuralMetadata,
 } from './surface';
 
 /** A tile's tables, as the renderer's loaders attach them to a tile they load. */
@@ -201,26 +203,7 @@ export function surfaceFeatures(hit: ProbeHit): Feature[] {
     const id = featureId(set, featureProbe(set, features!.textures), hit.bytes);
     if (id === undefined) return;
     const label = set.label ?? (sets.length > 1 ? String(index + 1) : undefined);
-    const feature: Feature = {
-      source: 'feature',
-      id,
-      count: set.featureCount,
-      label,
-      properties: [],
-    };
-    const tableIndex = set.propertyTable;
-    const table = tableIndex === null ? undefined : metadata?.tableAccessors[tableIndex];
-    if (table && id < (table.count ?? 0)) {
-      feature.className = table.definition.class;
-      for (const name of Object.keys(table.properties)) {
-        try {
-          feature.properties.push({ name, value: plain(table.getPropertyValue(name, id)) });
-        } catch {
-          // A value the renderer can't read, such as a number its enum doesn't name, is left out.
-        }
-      }
-    }
-    result.push(feature);
+    result.push(tableFeature(metadata, set.propertyTable, id, set.featureCount, label));
   });
   for (const set of metadata?.textureAccessors ?? []) {
     const properties: FeatureProperty[] = [];
@@ -249,6 +232,67 @@ export function surfaceFeatures(hit: ProbeHit): Feature[] {
       result.push({ source, id: vertex, count, className: set.definition.class, properties });
     }
   }
+  return result;
+}
+
+/**
+ * Feature `id` of a feature ID set, with its row of the property table the set names, if the
+ * table has it.
+ */
+function tableFeature(
+  metadata: StructuralMetadata | undefined,
+  tableIndex: number | null | undefined,
+  id: number,
+  count: number | undefined,
+  label: string | undefined,
+): Feature {
+  const feature: Feature = { source: 'feature', id, count, label, properties: [] };
+  const table = tableIndex == null ? undefined : metadata?.tableAccessors[tableIndex];
+  if (table && id < (table.count ?? 0)) {
+    feature.className = table.definition.class;
+    for (const name of Object.keys(table.properties)) {
+      try {
+        feature.properties.push({ name, value: plain(table.getPropertyValue(name, id)) });
+      } catch {
+        // A value the renderer can't read, such as a number its enum doesn't name, is left out.
+      }
+    }
+  }
+  return feature;
+}
+
+/**
+ * What a node's EXT_instance_features says of GPU instance `instance` of `object`: each feature
+ * ID set's feature, from the set's `_FEATURE_ID_n` instance attribute or else the instance's
+ * own number, with its property table row.
+ */
+export function instanceFeatures(object: Object3D, instance: number): Feature[] {
+  const sets = object.userData.instanceFeatures as unknown;
+  if (!Array.isArray(sets)) return [];
+  // The renderer's metadata plugin gives it to each primitive's mesh, and to the scene.
+  let metadata: StructuralMetadata | undefined;
+  for (let above: Object3D | null = object; above && !metadata; above = above.parent) {
+    metadata = above.userData.structuralMetadata as StructuralMetadata | undefined;
+  }
+  const result: Feature[] = [];
+  sets.forEach((set: unknown, index) => {
+    if (!set || typeof set !== 'object') return;
+    const { featureCount, attribute, propertyTable, label, nullFeatureId } = set as Record<
+      string,
+      unknown
+    >;
+    const values = Number.isInteger(attribute)
+      ? (object as Partial<Mesh>).geometry?.getAttribute(`_FEATURE_ID_${attribute as number}`)
+      : undefined;
+    if (attribute !== undefined && !values) return;
+    const value = values ? values.getX(instance) : instance;
+    if (!Number.isFinite(value) || value < 0 || value === nullFeatureId) return;
+    const name =
+      typeof label === 'string' ? label : sets.length > 1 ? String(index + 1) : undefined;
+    const count = Number.isInteger(featureCount) ? (featureCount as number) : undefined;
+    const table = Number.isInteger(propertyTable) ? (propertyTable as number) : undefined;
+    result.push(tableFeature(metadata, table, Math.round(value), count, name));
+  });
   return result;
 }
 

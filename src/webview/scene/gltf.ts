@@ -7,6 +7,7 @@ import {
   type Material,
   type Mesh,
   type MeshStandardMaterial,
+  type Object3D,
   type Points,
   type PointsMaterial,
 } from 'three';
@@ -46,6 +47,7 @@ export function parseModel(
   if (readFromMesh) loader.register(meshFormatsPlugin);
   // Before the plugins that read primitives' extensions, which find instanced ones through it.
   loader.register(instancedAssociationsPlugin);
+  loader.register(instanceFeaturesPlugin);
   for (const plugin of decoders.plugins ?? []) loader.register(plugin);
   return loader.parseAsync(json, '');
 }
@@ -130,6 +132,36 @@ function instancedAssociationsPlugin(parser: GLTFParser) {
           meshes: primitive.meshes,
           primitives: primitive.primitives,
         });
+      });
+    },
+  };
+}
+
+/**
+ * EXT_instance_features: a node's feature ID sets for its GPU instances go to the meshes that
+ * draw them, as `userData.instanceFeatures`: the node's own mesh, or for a node of several
+ * primitives each of its meshes, not those of the nodes below it. The sets are as the JSON has
+ * them; whatever reads them checks them.
+ */
+export function instanceFeaturesPlugin(parser: GLTFParser) {
+  return {
+    name: 'EXT_instance_features',
+    afterRoot: async (gltf: GLTF) => {
+      const nodes = (parser.json as { nodes?: { extensions?: Record<string, unknown> }[] }).nodes;
+      gltf.scene.traverse((object) => {
+        const node = parser.associations.get(object)?.nodes;
+        if (node === undefined) return;
+        const extension = nodes?.[node]?.extensions?.EXT_instance_features as
+          { featureIds?: unknown } | undefined;
+        const sets = extension?.featureIds;
+        if (!Array.isArray(sets) || sets.length === 0) return;
+        const give = (drawn: Object3D) => {
+          if ((drawn as InstancedMesh).isInstancedMesh) drawn.userData.instanceFeatures = sets;
+          for (const child of drawn.children) {
+            if (parser.associations.get(child)?.nodes === undefined) give(child);
+          }
+        };
+        give(object);
       });
     },
   };
