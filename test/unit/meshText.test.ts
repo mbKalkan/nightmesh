@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TripleIndex, bitsOf } from '../../src/extension/model/mesh/arrays';
+import { TripleIndex, bitsOf } from '../../src/shared/arrays';
 import { Cursor, LineSplitter } from '../../src/extension/model/mesh/text';
 
 const bytes = (text: string) => new TextEncoder().encode(text);

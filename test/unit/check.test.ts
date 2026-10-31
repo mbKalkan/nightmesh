@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkMesh, measure } from '../../src/extension/model/mesh/check';
+import { checkMesh, measure } from '../../src/shared/meshCheck';
 
 /** A unit cube's corners, and its faces wound outward. */
 const CORNERS = [

@@ -366,8 +366,11 @@ export class StructureView {
     this.statistics.show(statistics(model, images, motion), model);
   }
 
-  /** The check of an OBJ, STL or PLY model's triangles, from the host. */
-  setMeshCheck(check: MeshCheck): void {
+  /**
+   * The check of the model's triangles: an OBJ, STL or PLY file's from the host, a glTF model's
+   * from a worker of the view; undefined when a model has none to check.
+   */
+  setMeshCheck(check: MeshCheck | undefined): void {
     if (!this.context) return;
     this.context.check = check;
     this.render(true);

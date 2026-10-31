@@ -8,3 +8,9 @@ declare module 'inline-binary:*' {
   const bytes: Uint8Array;
   export default bytes;
 }
+
+/** A worker of the webview, bundled on its own as text, to start from a blob: URL. */
+declare module 'worker-source:*' {
+  const source: string;
+  export default source;
+}

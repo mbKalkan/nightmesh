@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename } from 'node:path';
+import { basename, resolve } from 'node:path';
 import * as esbuild from 'esbuild';
 import { embindWithoutEval } from './embindWithoutEval.mjs';
 
@@ -67,6 +67,40 @@ const inlineFiles = {
 };
 
 /**
+ * A worker of the webview, bundled on its own and embedded as text, to start from a blob: URL:
+ * the webview's CSP allows no other. Import as `worker-source:<path from the importing file>`.
+ * @type {import('esbuild').Plugin}
+ */
+const workerSource = {
+  name: 'worker-source',
+  setup(build) {
+    build.onResolve({ filter: /^worker-source:/ }, (args) => {
+      const path = resolve(args.resolveDir, args.path.slice('worker-source:'.length));
+      return { path: path.endsWith('.ts') ? path : `${path}.ts`, namespace: 'worker-source' };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'worker-source' }, async (args) => {
+      const result = await esbuild.build({
+        entryPoints: [args.path],
+        bundle: true,
+        write: false,
+        metafile: true,
+        format: 'iife',
+        platform: 'browser',
+        target: 'chrome120',
+        minify: production,
+        legalComments: 'none',
+        logLevel: 'silent',
+      });
+      return {
+        contents: result.outputFiles[0].text,
+        loader: 'text',
+        watchFiles: Object.keys(result.metafile.inputs).map((input) => resolve(input)),
+      };
+    });
+  },
+};
+
+/**
  * OBJ, STL, PLY and pnts files are read in a worker thread of the extension host too, with the
  * Draco decoder embedded for pnts tiles that compress their points.
  */
@@ -88,7 +122,7 @@ const webview = {
   splitting: true,
   target: 'chrome120',
   chunkNames: 'chunks/[name]-[hash]',
-  plugins: [inlineFiles],
+  plugins: [inlineFiles, workerSource],
 };
 
 if (watch) {

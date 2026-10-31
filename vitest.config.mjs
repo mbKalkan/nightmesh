@@ -19,8 +19,16 @@ const inlineFiles = {
   },
 };
 
+/** `worker-source:` imports: workers don't run in the unit tests, so their source is empty. */
+const workerSource = {
+  name: 'worker-source',
+  enforce: 'pre',
+  resolveId: (id) => (id.startsWith('worker-source:') ? `\0${id}` : undefined),
+  load: (id) => (id.startsWith('\0worker-source:') ? 'export default "";' : undefined),
+};
+
 export default defineConfig({
-  plugins: [inlineFiles],
+  plugins: [inlineFiles, workerSource],
   test: {
     include: ['test/unit/**/*.test.ts'],
     environment: 'node',

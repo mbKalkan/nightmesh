@@ -86,7 +86,7 @@ export interface InspectContext {
   validation?: string;
   /** What an OBJ, STL or PLY file says about itself; its glTF was made from it. */
   source?: SourceFacts;
-  /** The check of an OBJ, STL or PLY model's triangles, once the host has made it. */
+  /** The check of the model's triangles, once it is made. */
   check?: MeshCheck;
 }
 
@@ -246,6 +246,7 @@ function inspectModel(context: InspectContext): Inspection {
           ]
         : []),
       contentsSection(context),
+      ...(context.check ? [checkSection(context, context.check)] : []),
       {
         title: strings.sections.extensions,
         rows: used(model).map(({ name, required }) => ({
@@ -524,7 +525,7 @@ function inspectSource(context: InspectContext, source: SourceFacts): Inspection
 
 /**
  * What a 3D printing check asks: the surface area, whether the surface is closed and the volume
- * it holds, and where it isn't closed. Lengths are the file's, in its unit.
+ * it holds, and where it isn't closed. Lengths are the file's, in its unit: metres for glTF.
  */
 function checkSection(context: InspectContext, check: MeshCheck): Section {
   const { format } = context;

@@ -231,6 +231,8 @@ function json({ context, strings, statistics, size, validation }: ReportInputs):
     extensionsUsed: list(model.root.extensionsUsed),
     extensionsRequired: list(model.root.extensionsRequired),
     statistics: { ...statistics, meshes },
+    // Lengths in metres.
+    check: context.check ? { ...context.check, unit: context.format.lengthUnit } : null,
     size: {
       ...size,
       largest: size.largest.map((entry) => ({ ...entry, name: name(entry.key) })),

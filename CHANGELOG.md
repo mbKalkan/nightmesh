@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Measuring snaps to edges: a click near an edge of the shape, where faces meet at an angle or
   the surface ends, places the point exactly on the edge. Corners still come first, and the
   diagonals that split a flat face into triangles are left alone.
+- The mesh check comes to glTF models too: surface area, whether the model is watertight and the
+  volume it holds, open, non-manifold and flipped edges, and shells, in metres. It covers the
+  model as it is drawn, with each mesh where its node puts it and every GPU instance. Draco,
+  meshopt and quantized meshes are checked as they are decoded. It runs alongside the view,
+  after the model is shown, for models of up to 5 million triangles.
 
 ## [0.5.1] - 2026-10-30
 

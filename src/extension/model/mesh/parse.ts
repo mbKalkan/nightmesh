@@ -3,7 +3,8 @@
 import type { MeshFormat, SourceFacts } from '../../../shared/protocol';
 import type { ByteSource } from '../sources';
 import type { MeshCheck } from '../../../shared/protocol';
-import { checkMesh, trianglesOf } from './check';
+import { checkMesh } from '../../../shared/meshCheck';
+import { trianglesOf } from './check';
 import { MeshFormatError, type MeshReader, type ParsedMesh } from './geometry';
 import { ObjReader } from './obj';
 import { PlyReader, plyHeaderFacts } from './ply';
