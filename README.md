@@ -79,7 +79,9 @@ Control shows them, and measures distances on it.
   material's MTL statements.
 - A **mesh check**, as for 3D printing: the surface area, whether the model is watertight and
   the volume it holds, and what keeps it from being so: open edges, edges of more than two
-  faces, faces wound the wrong way. It counts the separate shells too.
+  faces, faces wound the wrong way. It counts the separate shells too. glTF models get it as
+  well, in metres, for the whole model as it is drawn: each mesh where its node puts it, and
+  every GPU instance.
 - These formats seldom say what their units are or which way is up. STL opens in millimetres
   with Z up, as CAD writes it; OBJ and PLY in metres with Y up, or Z up when their coordinates
   are georeferenced, and an OBJ in the unit its comments name, as Maya writes. The **View** menu

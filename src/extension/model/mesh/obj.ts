@@ -5,7 +5,7 @@
 // group around each vertex, as Blender and 3ds Max draw them; other faces without normals stay
 // flat, in a primitive of their own.
 import type { ObjFacts } from '../../../shared/protocol';
-import { Growable, TripleIndex } from './arrays';
+import { Growable, TripleIndex } from '../../../shared/arrays';
 import {
   MeshFormatError,
   Origin,

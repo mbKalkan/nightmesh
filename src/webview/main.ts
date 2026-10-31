@@ -310,6 +310,9 @@ document.addEventListener('keydown', (event) => {
 
 vscode.postMessage({ type: 'ready' });
 
+/** Stops the check of a glTF model when the next one starts. */
+let checking: AbortController | undefined;
+
 /** Which side of a comparison this viewer is, if it is one. */
 let diffSide: DiffSide | undefined;
 /** Where the other side's camera last was. */
@@ -895,13 +898,29 @@ async function build(current: Arrival): Promise<void> {
       shell.setState('failed');
       return;
     }
-    const { parseModel } = await import('./scene');
+    const { parseModel, meshesForCheck, checkInWorker } = await import('./scene');
     const decoders = await target.decoders(current.message.extensions);
     const readFromMesh = opened !== undefined && isMeshFormat(opened.format);
     const json = inUnits(current.message.json, true);
     const gltf = await parseModel(json, current.parts, decoders, readFromMesh);
     if (current !== arrival) return;
+    // A glTF model's meshes are taken for its check before it is drawn, when their vertices
+    // leave memory; the host checks OBJ, STL and PLY files.
+    const format = opened?.format;
+    const meshes = format === 'glb' || format === 'gltf' ? meshesForCheck(gltf.scene) : undefined;
     target.show(gltf, current.message.reload && hasModel);
+    if (format === 'glb' || format === 'gltf') {
+      checking?.abort();
+      const loadId = current.message.loadId;
+      if (!meshes) {
+        if (loadId === structureLoad) structure?.setMeshCheck(undefined);
+      } else {
+        const controller = (checking = new AbortController());
+        void checkInWorker(meshes, controller.signal).then((check) => {
+          if (loadId === structureLoad) structure?.setMeshCheck(check);
+        });
+      }
+    }
     // A click on a primitive with feature IDs or metadata reads them there.
     if (METADATA_EXTENSIONS.some((name) => current.message.extensions.includes(name))) {
       target.pickFeatures = true;

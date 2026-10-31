@@ -2,7 +2,7 @@
 // model has the vertex count and memory of an indexed mesh; facet normals aren't kept, as files
 // often have them zero or wrong, and a mesh without normals is drawn flat-shaded from its winding.
 import type { StlFacts } from '../../../shared/protocol';
-import { Growable, TripleIndex, bitsOf } from './arrays';
+import { Growable, TripleIndex, bitsOf } from '../../../shared/arrays';
 import {
   LINEAR_BYTES,
   MeshFormatError,

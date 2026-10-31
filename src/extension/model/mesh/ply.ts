@@ -3,7 +3,7 @@
 // are read; any other element is passed over. A file with faces is a mesh, one without a point
 // cloud.
 import type { PlyFacts } from '../../../shared/protocol';
-import { Growable, TripleIndex, bitsOf } from './arrays';
+import { Growable, TripleIndex, bitsOf } from '../../../shared/arrays';
 import {
   LINEAR_BYTES,
   MeshFormatError,

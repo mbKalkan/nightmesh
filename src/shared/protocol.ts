@@ -62,8 +62,9 @@ export interface PntsFacts extends TileTables {
 export type SourceFacts = StlFacts | PlyFacts | ObjFacts | PntsFacts;
 
 /**
- * What a 3D printing check finds in an OBJ, STL or PLY file's triangles, with corners at the same
- * place taken as one vertex. Lengths are in the file's own units.
+ * What a 3D printing check finds in a model's triangles, with corners at the same place taken as
+ * one vertex. Lengths are in the file's own units: an OBJ, STL or PLY file's, metres for glTF,
+ * whose meshes are checked where their nodes put them.
  */
 export interface MeshCheck {
   triangles: number;

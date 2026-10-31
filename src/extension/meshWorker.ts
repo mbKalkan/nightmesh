@@ -4,7 +4,8 @@
 import { parentPort } from 'node:worker_threads';
 import type { MeshReader } from './model/mesh/geometry';
 import { MeshFormatError } from './model/mesh/geometry';
-import { checkMesh, trianglesOf } from './model/mesh/check';
+import { checkMesh } from '../shared/meshCheck';
+import { trianglesOf } from './model/mesh/check';
 import { decodePoints } from './model/mesh/draco';
 import { createReader, meshBuffers } from './model/mesh/parse';
 import type { MeshRequest, MeshResponse } from './workerMesh';
