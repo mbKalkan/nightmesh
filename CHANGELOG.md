@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model as it is drawn, with each mesh where its node puts it and every GPU instance. Draco,
   meshopt and quantized meshes are checked as they are decoded. It runs alongside the view,
   after the model is shown, for models of up to 5 million triangles.
+- `EXT_instance_features`: clicking a GPU instance shows its feature IDs, and each one's row of
+  the property table (`EXT_structural_metadata`), in glTF files and in tilesets.
 
 ## [0.5.1] - 2026-10-30
 

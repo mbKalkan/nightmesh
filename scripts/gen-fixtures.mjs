@@ -1265,10 +1265,11 @@ function binaryBuilder() {
   };
   const COMPONENT = { Float32Array: 5126, Uint16Array: 5123, Uint32Array: 5125 };
   const SIZE = { SCALAR: 1, VEC2: 2, VEC3: 3 };
-  const accessor = (array, type, { indices = false, bounds = false } = {}) => {
+  const accessor = (array, type, { indices = false, bounds = false, instances = false } = {}) => {
     const count = array.length / SIZE[type];
     const result = {
-      bufferView: view(array, indices ? 34963 : 34962),
+      // Instance attributes are no vertex data: their views have no target.
+      bufferView: view(array, instances ? undefined : indices ? 34963 : 34962),
       componentType: COMPONENT[array.constructor.name],
       count,
       type,
@@ -1448,6 +1449,105 @@ function featuresModel() {
       { source: 1, sampler: 0 },
     ],
     images,
+  };
+  const bin = data.bytes();
+  return {
+    json: {
+      ...json,
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: data.bufferViews,
+      accessors: data.accessors,
+    },
+    bin,
+  };
+}
+
+/**
+ * Three crates in a row, drawn as GPU instances of one box (EXT_mesh_gpu_instancing). Their
+ * feature IDs are an instance attribute (EXT_instance_features), in another order than the
+ * instances, with a property table of each one's fruit and weight; a second set numbers each
+ * instance as its own feature.
+ */
+function instanceFeaturesModel() {
+  const data = binaryBuilder();
+  const geometry = boxGeometry(1);
+  const names = ['Apples', 'Pears', 'Plums'].map((name) => Buffer.from(name));
+  const offsets = new Uint32Array([0, 1, 2, 3].map((n) => Buffer.concat(names.slice(0, n)).length));
+  const json = {
+    asset: { version: '2.0', generator: GENERATOR, copyright: 'Public domain (CC0 1.0)' },
+    extensionsUsed: ['EXT_mesh_gpu_instancing', 'EXT_instance_features', 'EXT_structural_metadata'],
+    extensions: {
+      EXT_structural_metadata: {
+        schema: {
+          id: 'store',
+          classes: {
+            crate: {
+              properties: {
+                fruit: { type: 'STRING' },
+                weight: { type: 'SCALAR', componentType: 'FLOAT32' },
+              },
+            },
+          },
+        },
+        propertyTables: [
+          {
+            class: 'crate',
+            count: 3,
+            properties: {
+              fruit: { values: data.view(Buffer.concat(names)), stringOffsets: data.view(offsets) },
+              weight: { values: data.view(new Float32Array([12.5, 9.75, 20])) },
+            },
+          },
+        ],
+      },
+    },
+    scene: 0,
+    scenes: [{ name: 'Store', nodes: [0] }],
+    nodes: [
+      {
+        name: 'Crates',
+        mesh: 0,
+        extensions: {
+          EXT_mesh_gpu_instancing: {
+            attributes: {
+              TRANSLATION: data.accessor(new Float32Array([-2, 0, 0, 0, 0, 0, 2, 0, 0]), 'VEC3', {
+                instances: true,
+              }),
+              // The left crate is plums, the middle one apples, the right one pears.
+              _FEATURE_ID_0: data.accessor(new Float32Array([2, 0, 1]), 'SCALAR', {
+                instances: true,
+              }),
+            },
+          },
+          EXT_instance_features: {
+            featureIds: [
+              { featureCount: 3, attribute: 0, propertyTable: 0, label: 'crate' },
+              { featureCount: 3, label: 'instance' },
+            ],
+          },
+        },
+      },
+    ],
+    meshes: [
+      {
+        name: 'Crate',
+        primitives: [
+          {
+            attributes: {
+              POSITION: data.accessor(new Float32Array(geometry.positions), 'VEC3', {
+                bounds: true,
+              }),
+              NORMAL: data.accessor(new Float32Array(geometry.normals), 'VEC3'),
+            },
+            indices: data.accessor(new Uint16Array(geometry.indices), 'SCALAR', {
+              indices: true,
+            }),
+            material: 0,
+          },
+        ],
+      },
+    ],
+    materials: [{ name: 'Wood', pbrMetallicRoughness: { baseColorFactor: [0.7, 0.5, 0.3, 1] } }],
   };
   const bin = data.bytes();
   return {
@@ -2592,6 +2692,10 @@ await writeGlb(
 );
 await writeGlb('quantized.glb', await dense().transform(quantize()));
 await writeGlb('ktx2.glb', await compressedTextures());
+{
+  const { json, bin } = instanceFeaturesModel();
+  write('instance-features.glb', glb(json, bin));
+}
 {
   const { json, bin } = featuresModel();
   write('features.glb', glb(json, bin));

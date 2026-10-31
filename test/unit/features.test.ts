@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { fileSource, memorySource } from '../../src/extension/model/sources';
 import { readTileTables } from '../../src/extension/model/tileTables';
 import type { TileTablesBytes } from '../../src/shared/protocol';
-import { featureOf, tablesFromBytes } from '../../src/webview/scene/features';
+import { BoxGeometry, Group, InstancedBufferAttribute, InstancedMesh } from 'three';
+import { featureOf, instanceFeatures, tablesFromBytes } from '../../src/webview/scene/features';
 
 const FIXTURES = resolve('test/fixtures/tiles');
 
@@ -168,5 +169,62 @@ describe('tile tables', () => {
       { name: 'name', value: 'Home', className: 'Building' },
       { name: 'color', value: 'white', className: 'Wall' },
     ]);
+  });
+});
+
+describe('instanceFeatures', () => {
+  /** Three instances whose feature IDs are 2, 0 and 1, under a scene with a table of fruit. */
+  function crates(sets: unknown[]) {
+    const geometry = new BoxGeometry();
+    geometry.setAttribute(
+      '_FEATURE_ID_0',
+      new InstancedBufferAttribute(new Float32Array([2, 0, 1]), 1),
+    );
+    const mesh = new InstancedMesh(geometry, undefined, 3);
+    mesh.userData.instanceFeatures = sets;
+    const fruit = ['Apples', 'Pears', 'Plums'];
+    const scene = new Group().add(mesh);
+    scene.userData.structuralMetadata = {
+      tableAccessors: [
+        {
+          count: 3,
+          definition: { class: 'crate' },
+          properties: { fruit: {} },
+          getPropertyValue: (_: string, id: number) => fruit[id],
+        },
+      ],
+    };
+    return mesh;
+  }
+
+  it("reads each set's feature: by its instance attribute, or the instance's number", () => {
+    const mesh = crates([
+      { featureCount: 3, attribute: 0, propertyTable: 0, label: 'crate' },
+      { featureCount: 3 },
+    ]);
+    expect(instanceFeatures(mesh, 0)).toEqual([
+      {
+        source: 'feature',
+        id: 2,
+        count: 3,
+        label: 'crate',
+        className: 'crate',
+        properties: [{ name: 'fruit', value: 'Plums' }],
+      },
+      { source: 'feature', id: 0, count: 3, label: '2', properties: [] },
+    ]);
+  });
+
+  it('leaves out the null feature, and sets it cannot read', () => {
+    const mesh = crates([
+      { featureCount: 3, attribute: 0, nullFeatureId: 2 },
+      { featureCount: 3, attribute: 5 },
+      'not a set',
+      { featureCount: 3, propertyTable: 9 },
+    ]);
+    expect(instanceFeatures(mesh, 0)).toEqual([
+      { source: 'feature', id: 0, count: 3, label: '4', properties: [] },
+    ]);
+    expect(instanceFeatures(mesh, 1).map((feature) => feature.id)).toEqual([0, 1]);
   });
 });

@@ -106,6 +106,44 @@ for (const theme of ['dark', 'light'] as ThemeName[]) {
   });
 }
 
+/** The crates' wood, lit or in shade. */
+const wood = ([r, g, b]: number[]) => r > 50 && r > b * 1.6 && g > b * 1.15 && r > g;
+
+for (const theme of ['dark', 'light'] as ThemeName[]) {
+  test(`shows the features of the GPU instance clicked, ${theme} theme`, async ({ page }) => {
+    const viewer = await openViewer(page, theme);
+    // Three crates drawn as instances of one box: their feature IDs are another order.
+    await viewer.open('instance-features.glb');
+    await expect(page.locator('.nm-viewport')).toHaveAttribute('data-state', 'shown');
+    const crates: [[number, number], string, string, string][] = [
+      [[0, 1 / 3], '2of 3', 'Plums', '20'],
+      [[1 / 3, 2 / 3], '0of 3', 'Apples', '12.5'],
+      [[2 / 3, 1], '1of 3', 'Pears', '9.75'],
+    ];
+    for (const [instance, [across, id, fruit, weight]] of crates.entries()) {
+      await clickColor(page, wood, across);
+      await expect(section(page, 'Feature (crate)').locator('dt')).toHaveText([
+        'Feature ID',
+        'Class',
+        'fruit',
+        'weight',
+      ]);
+      await expect(section(page, 'Feature (crate)').locator('dd')).toHaveText([
+        id,
+        'crate',
+        fruit,
+        weight,
+      ]);
+      // The second set numbers each instance as its own feature.
+      await expect(section(page, 'Feature (instance)').locator('dd')).toHaveText([
+        `${instance}of 3`,
+      ]);
+    }
+    await page.screenshot({ path: `${SCREENS}/metadata-instances-${theme}.png` });
+    expect(viewer.problems).toEqual([]);
+  });
+}
+
 test("draws the tiles of a composite with their metadata, and reads each tile's", async ({
   page,
 }) => {
