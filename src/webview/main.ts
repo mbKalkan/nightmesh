@@ -262,14 +262,16 @@ watchTheme(
     }),
 );
 
-// F frames the selection, Escape lets go of it, as in most 3D tools; M measures, and Escape
-// stops measuring.
+// F frames the selection, Escape lets go of it, as in most 3D tools; M measures, Backspace takes
+// the last measurement away, and Escape stops measuring.
 shell.viewport.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
   if (event.key === 'f' || event.key === 'F') {
     void view?.then((target) => target?.frameSelection());
   } else if ((event.key === 'm' || event.key === 'M') && shownView) {
     setMeasuring(!shownView.isMeasuring);
+  } else if ((event.key === 'Backspace' || event.key === 'Delete') && shownView?.isMeasuring) {
+    shownView.removeMeasurement();
   } else if (event.key === 'Escape' && shownView?.isMeasuring) {
     setMeasuring(false);
   } else if (event.key === 'Escape') {

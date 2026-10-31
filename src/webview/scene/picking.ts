@@ -1,17 +1,22 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   Color,
   FloatType,
+  Line,
   LineBasicMaterial,
+  LineLoop,
+  LineSegments,
   LinearSRGBColorSpace,
   MeshBasicMaterial,
   Points,
   PointsMaterial,
   Scene,
+  Sphere,
   Vector2,
   Vector3,
   WebGLRenderTarget,
   type InstancedMesh,
-  type Line,
   type Material,
   type Mesh,
   type Object3D,
@@ -21,6 +26,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
+import { anyFace, nearestWritten, onEdgeOfShape } from './snap';
 
 /** The square around the pointer that is read, so a thin line or a point can still be hit. */
 const SIZE = 7;
@@ -41,6 +47,11 @@ export interface PickRegion {
 export interface SurfacePoint {
   point: Vector3;
   object: Object3D;
+}
+
+/** A point a click snaps to: a vertex, or a point on an edge. */
+export interface SnapPoint extends SurfacePoint {
+  kind: 'vertex' | 'edge';
 }
 
 /**
@@ -129,6 +140,16 @@ const DISTANCE_FRAGMENT = `#include <premultiplied_alpha_fragment>
 \tfloat nmMiddle = floor((nmLevel - nmHigh * 65536.0) / 256.0);
 \tgl_FragColor = vec4(vec3(nmHigh, nmMiddle, nmLevel - nmHigh * 65536.0 - nmMiddle * 256.0) / 255.0, 1.0);`;
 
+/**
+ * Writes the plane of the face drawn, in view space: its normal, from how the position changes
+ * across the pixel, and its distance along it. Zeros where a face is too small to tell.
+ */
+const PLANE_FRAGMENT = `#include <premultiplied_alpha_fragment>
+	vec3 nmNormal = cross(dFdx(nmView), dFdy(nmView));
+	float nmLength = length(nmNormal);
+	nmNormal = nmLength > 0.0 ? nmNormal / nmLength : vec3(0.0);
+	gl_FragColor = vec4(nmNormal, dot(nmNormal, nmView));`;
+
 /** Writes each vertex's view-space position, and the number of its object, as floats. */
 const VERTEX_FRAGMENT = `#include <premultiplied_alpha_fragment>
 \tgl_FragColor = vec4(nmView, nmObject);`;
@@ -147,11 +168,17 @@ export class Picker {
   private readonly depthMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly featureMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly probeMaterials = new WeakMap<Object3D, Map<string, PickMaterial>>();
+  private readonly planeMaterials = new WeakMap<Object3D, PickMaterial>();
   private readonly vertexMaterials: PointsMaterial[] = [];
+  private readonly edgeMaterials: LineBasicMaterial[] = [];
   private readonly made: PickMaterial[] = [];
-  /** Where vertices near the pointer are drawn, as floats, and how many pixels across. */
-  private vertexTarget: WebGLRenderTarget | undefined;
-  private vertexPixels = new Float32Array(0);
+  /** Where what is near the pointer is drawn to snap to, as floats: vertices, then edges. */
+  private snapTarget: WebGLRenderTarget | undefined;
+  private snapPixels = new Float32Array(0);
+  /** The faces' planes drawn there. */
+  private planePixels = new Float32Array(0);
+  /** Each mesh geometry's edges while measuring, by the geometry; null for one without. */
+  private readonly edges = new Map<BufferGeometry, BufferGeometry | null>();
   private readonly clearColor = new Color();
   /** The distances the distance drawing spans, and whether the camera is orthographic. */
   private readonly range = { value: new Vector2() };
@@ -270,13 +297,15 @@ export class Picker {
   }
 
   /**
-   * The vertex nearest the pixel of `region`, at most `radius` pixels from it, that the model
-   * doesn't hide: exactly where it is, and its object. Each mesh, line and point cloud is drawn
-   * once more as its vertices alone, one pixel each, over the depth of the model, and each pixel
-   * written gets its vertex's position: posed as the mesh is, skinned, morphed and instanced. GPUs
-   * that can't draw floats get nothing.
+   * Where a click at the pixel of `region` snaps to, at most `radius` pixels from it, of what
+   * the model doesn't hide: the nearest vertex, or else the nearest point on an edge of the shape,
+   * exactly, with its object. Over the depth of the model, each mesh, line and point cloud is
+   * drawn once more as its vertices alone, one pixel each, and each mesh as its triangles' edges
+   * and each line as itself; each pixel written gets its position, posed as the mesh is: skinned,
+   * morphed and instanced. Edges are made only once no vertex is near: a dense mesh, with a vertex
+   * near every click, never needs them. GPUs that can't draw floats get nothing.
    */
-  nearestVertex(
+  snapPoint(
     renderer: WebGLRenderer,
     scene: Scene,
     camera: Camera,
@@ -284,91 +313,136 @@ export class Picker {
     hidden: readonly Object3D[],
     region: PickRegion,
     radius: number,
-  ): SurfacePoint | undefined {
+  ): SnapPoint | undefined {
     if (!renderer.extensions.has('EXT_color_buffer_float')) return undefined;
     const size = radius * 2 + 1;
-    if (this.vertexTarget?.width !== size) {
-      this.vertexTarget?.dispose();
-      this.vertexTarget = new WebGLRenderTarget(size, size, { type: FloatType });
-      this.vertexPixels = new Float32Array(size * size * 4);
+    if (this.snapTarget?.width !== size) {
+      this.snapTarget?.dispose();
+      this.snapTarget = new WebGLRenderTarget(size, size, { type: FloatType });
+      this.snapPixels = new Float32Array(size * size * 4);
+      this.planePixels = new Float32Array(size * size * 4);
     }
-    const target = this.vertexTarget;
+    const target = this.snapTarget;
     const vertices = new Scene();
-    const sources: Object3D[] = [];
+    const vertexSources: Object3D[] = [];
     model.traverseVisible((object) => {
-      const drawable = object as Partial<Mesh & Line & Points & SkinnedMesh & InstancedMesh>;
+      const drawable = object as Partial<Mesh & Line & Points>;
       if (!(drawable.isMesh || drawable.isLine || drawable.isPoints)) return;
       if (!drawable.geometry) return;
-      sources.push(object);
-      const points = new Points(drawable.geometry, this.vertexMaterial(sources.length));
-      points.matrixAutoUpdate = false;
-      points.matrixWorldAutoUpdate = false;
-      points.matrixWorld.copy(object.matrixWorld);
-      points.frustumCulled = false;
-      if (drawable.morphTargetInfluences) {
-        points.morphTargetInfluences = drawable.morphTargetInfluences;
-        points.morphTargetDictionary = drawable.morphTargetDictionary;
-      }
-      // three.js skins and instances whatever says it is skinned or instanced, whichever way it
-      // draws it: the points take the mesh's bones, or its instances, to be where its faces are.
-      if (drawable.isSkinnedMesh) {
-        Object.assign(points, {
-          isSkinnedMesh: true,
-          skeleton: drawable.skeleton,
-          bindMode: drawable.bindMode,
-          bindMatrix: drawable.bindMatrix,
-          bindMatrixInverse: drawable.bindMatrixInverse,
-        });
-      }
-      if (drawable.isInstancedMesh) {
-        Object.assign(points, {
-          isInstancedMesh: true,
-          instanceMatrix: drawable.instanceMatrix,
-          instanceColor: null,
-          morphTexture: null,
-          count: drawable.count,
-        });
-      }
-      vertices.add(points);
+      vertexSources.push(object);
+      vertices.add(
+        standIn(object, new Points(drawable.geometry, this.vertexMaterial(vertexSources.length))),
+      );
     });
-    if (sources.length === 0) return undefined;
+    if (vertexSources.length === 0) return undefined;
 
-    this.inRegion(renderer, camera, hidden, target, region, size, () => {
-      // The model's depth first, pushed back a hair so its own vertices aren't hidden by it.
+    const pixels = this.snapPixels;
+    const planes = this.planePixels;
+    const found = this.inRegion(renderer, camera, hidden, target, region, size, () => {
+      // The faces' planes and the model's depth first, pushed back a hair so its own vertices
+      // and edges aren't hidden by it.
       this.withMaterials(
         model,
-        (object) => this.depthMaterialFor(object),
+        (object) => this.planeMaterialFor(object),
         () => renderer.render(scene, camera),
       );
+      renderer.readRenderTargetPixels(target, 0, 0, size, size, planes);
       const autoClear = renderer.autoClear;
       renderer.autoClear = false;
-      renderer.render(vertices, camera);
-      renderer.autoClear = autoClear;
-      renderer.readRenderTargetPixels(target, 0, 0, size, size, this.vertexPixels);
-    });
-
-    const pixels = this.vertexPixels;
-    let best: number | undefined;
-    let bestDistance = radius * radius + 1e-9;
-    for (let row = 0; row < size; row++) {
-      for (let column = 0; column < size; column++) {
-        const offset = (row * size + column) * 4;
-        if (pixels[offset + 3] < 0.5) continue;
-        const distance = (row - radius) ** 2 + (column - radius) ** 2;
-        if (distance < bestDistance) {
-          best = offset;
-          bestDistance = distance;
-        }
+      try {
+        renderer.clear(true, false, false);
+        renderer.render(vertices, camera);
+        renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+        const vertex = nearestWritten(pixels, size, radius);
+        if (vertex !== undefined) return { offset: vertex, sources: vertexSources, kind: 'vertex' };
+        // Off the model, no face's edge is near: only a line's could be.
+        const lines = vertexSources.some((object) => (object as Line).isLine);
+        if (!anyFace(planes) && !lines) return undefined;
+        const { edges, edgeSources } = this.edgesFor(vertexSources);
+        if (edgeSources.length === 0) return undefined;
+        renderer.clear(true, false, false);
+        renderer.render(edges, camera);
+        renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+        // A line is an edge wherever it is; a triangle's edge, only where the shape has one.
+        const edge = nearestWritten(pixels, size, radius, (offset, row, column) => {
+          const object = edgeSources[Math.round(pixels[offset + 3]) - 1];
+          if (!object) return false;
+          if ((object as Line).isLine) return true;
+          const point = [pixels[offset], pixels[offset + 1], pixels[offset + 2]] as const;
+          return onEdgeOfShape(planes, size, row, column, point);
+        });
+        return edge === undefined
+          ? undefined
+          : { offset: edge, sources: edgeSources, kind: 'edge' };
+      } finally {
+        renderer.autoClear = autoClear;
       }
-    }
-    if (best === undefined) return undefined;
-    const object = sources[Math.round(pixels[best + 3]) - 1];
+    });
+    if (!found) return undefined;
+    const object = found.sources[Math.round(pixels[found.offset + 3]) - 1];
     if (!object) return undefined;
     camera.updateMatrixWorld();
-    const point = new Vector3(pixels[best], pixels[best + 1], pixels[best + 2]).applyMatrix4(
-      camera.matrixWorld,
-    );
-    return { point, object };
+    const point = new Vector3(
+      pixels[found.offset],
+      pixels[found.offset + 1],
+      pixels[found.offset + 2],
+    ).applyMatrix4(camera.matrixWorld);
+    return { point, object, kind: found.kind as SnapPoint['kind'] };
+  }
+
+  /** The edges of the meshes and lines among `drawn`, standing in for them, and theirs by number. */
+  private edgesFor(drawn: readonly Object3D[]): { edges: Scene; edgeSources: Object3D[] } {
+    const edges = new Scene();
+    const edgeSources: Object3D[] = [];
+    const edged = new Set<BufferGeometry>();
+    for (const object of drawn) {
+      const drawable = object as Partial<Mesh & LineSegments & LineLoop & Points>;
+      if (drawable.isPoints || !drawable.geometry) continue;
+      const geometry = drawable.isMesh ? this.edgesOf(drawable.geometry) : drawable.geometry;
+      if (!geometry) continue;
+      edged.add(drawable.geometry);
+      edgeSources.push(object);
+      const material = this.edgeMaterial(edgeSources.length);
+      edges.add(
+        standIn(
+          object,
+          drawable.isMesh || drawable.isLineSegments
+            ? new LineSegments(geometry, material)
+            : drawable.isLineLoop
+              ? new LineLoop(geometry, material)
+              : new Line(geometry, material),
+        ),
+      );
+    }
+    // Edges of what is no longer drawn, a tileset's tiles that went, leave the GPU.
+    this.releaseEdges(edged);
+    return { edges, edgeSources };
+  }
+
+  /**
+   * Lets the GPU drop the edges made to snap to, all but those of `keep`: they hold an index
+   * of their own, the size of their mesh's twice over.
+   */
+  releaseEdges(keep?: ReadonlySet<BufferGeometry>): void {
+    for (const [source, edges] of this.edges) {
+      if (keep?.has(source)) continue;
+      this.edges.delete(source);
+      if (!edges) continue;
+      // The attributes are the mesh's own, still drawn: only the edges' index goes.
+      edges.attributes = {};
+      edges.morphAttributes = {};
+      edges.dispose();
+    }
+  }
+
+  /** The edges of a mesh's triangles, made once while measuring; none for a mesh without. */
+  private edgesOf(geometry: BufferGeometry): BufferGeometry | undefined {
+    let edges = this.edges.get(geometry);
+    if (edges === undefined) {
+      edges = edgeGeometry(geometry) ?? null;
+      this.edges.set(geometry, edges);
+    }
+    return edges ?? undefined;
   }
 
   /** Draws the patch with each object in an id color, and finds the pixel nearest the middle. */
@@ -498,10 +572,14 @@ export class Picker {
 
   dispose(): void {
     this.target.dispose();
-    this.vertexTarget?.dispose();
-    for (const material of [...this.made, ...this.vertexMaterials]) material.dispose();
+    this.snapTarget?.dispose();
+    this.releaseEdges();
+    for (const material of [...this.made, ...this.vertexMaterials, ...this.edgeMaterials]) {
+      material.dispose();
+    }
     this.made.length = 0;
     this.vertexMaterials.length = 0;
+    this.edgeMaterials.length = 0;
   }
 
   /** A flat material for an object, drawn like its own: same sides, point size and so on. */
@@ -634,6 +712,61 @@ export class Picker {
     return material;
   }
 
+  /**
+   * A material that writes the plane of each face drawn, in view space, pushed back a hair as
+   * the depth material is; lines and points, only their depth.
+   */
+  private planeMaterialFor(object: Object3D): PickMaterial {
+    if (!(object as Mesh).isMesh) return this.depthMaterialFor(object);
+    let material = this.planeMaterials.get(object);
+    if (material) return material;
+    material = this.flatMaterial(object);
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = `varying vec3 nmView;\n${shader.vertexShader}`.replace(
+        '#include <project_vertex>',
+        DISTANCE_VERTEX,
+      );
+      shader.fragmentShader = `varying vec3 nmView;\n${shader.fragmentShader}`.replace(
+        '#include <premultiplied_alpha_fragment>',
+        PLANE_FRAGMENT,
+      );
+    };
+    material.customProgramCacheKey = () => 'nightmesh-plane';
+    this.planeMaterials.set(object, material);
+    return material;
+  }
+
+  /**
+   * Draws lines, writing their view-space position and object `id`. They leave the depth be: a
+   * vertex at the end of one is still found.
+   */
+  private edgeMaterial(id: number): LineBasicMaterial {
+    let material = this.edgeMaterials[id - 1];
+    if (material) return material;
+    const object = { value: id };
+    material = new LineBasicMaterial({ depthWrite: false });
+    material.toneMapped = false;
+    material.fog = false;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.nmObject = object;
+      shader.vertexShader = `varying vec3 nmView;\n${shader.vertexShader}`.replace(
+        '#include <project_vertex>',
+        DISTANCE_VERTEX,
+      );
+      shader.fragmentShader =
+        `varying vec3 nmView;\nuniform float nmObject;\n${shader.fragmentShader}`.replace(
+          '#include <premultiplied_alpha_fragment>',
+          VERTEX_FRAGMENT,
+        );
+    };
+    material.customProgramCacheKey = () => 'nightmesh-edge';
+    this.edgeMaterials[id - 1] = material;
+    return material;
+  }
+
   /** Draws vertices a pixel each, writing their view-space position and object `id`. */
   private vertexMaterial(id: number): PointsMaterial {
     let material = this.vertexMaterials[id - 1];
@@ -686,4 +819,87 @@ export class Picker {
     this.made.push(material);
     return material;
   }
+}
+
+/**
+ * `drawn` in place of `object`, where the object is and as it is posed: three.js skins and
+ * instances whatever says it is skinned or instanced, whichever way it draws it, so points or
+ * lines standing in for a mesh take its bones, or its instances, to be where its faces are.
+ */
+function standIn<T extends Points | Line>(object: Object3D, drawn: T): T {
+  const drawable = object as Partial<Mesh & SkinnedMesh & InstancedMesh>;
+  drawn.matrixAutoUpdate = false;
+  drawn.matrixWorldAutoUpdate = false;
+  drawn.matrixWorld.copy(object.matrixWorld);
+  drawn.frustumCulled = false;
+  if (drawable.morphTargetInfluences) {
+    drawn.morphTargetInfluences = drawable.morphTargetInfluences;
+    drawn.morphTargetDictionary = drawable.morphTargetDictionary;
+  }
+  if (drawable.isSkinnedMesh) {
+    Object.assign(drawn, {
+      isSkinnedMesh: true,
+      skeleton: drawable.skeleton,
+      bindMode: drawable.bindMode,
+      bindMatrix: drawable.bindMatrix,
+      bindMatrixInverse: drawable.bindMatrixInverse,
+    });
+  }
+  if (drawable.isInstancedMesh) {
+    Object.assign(drawn, {
+      isInstancedMesh: true,
+      instanceMatrix: drawable.instanceMatrix,
+      instanceColor: null,
+      morphTexture: null,
+      count: drawable.count,
+    });
+  }
+  return drawn;
+}
+
+/** Lets an array go once it is on the GPU. */
+const release = function (this: { array: unknown }) {
+  this.array = null;
+};
+
+/**
+ * The edges of a mesh's triangles, each triangle's three, as lines over the mesh's own vertex
+ * buffers: from its indices, which stay in memory, or from the vertex count alone. Undefined for
+ * a mesh with no triangles, or whose indices are gone.
+ */
+export function edgeGeometry(source: BufferGeometry): BufferGeometry | undefined {
+  const position = source.getAttribute('position') as BufferAttribute | undefined;
+  if (!position) return undefined;
+  const index = source.index;
+  const from = index?.array as ArrayLike<number> | null | undefined;
+  if (index && !from) return undefined;
+  const triangles = Math.floor((index ? index.count : position.count) / 3);
+  if (triangles === 0) return undefined;
+  const indices =
+    position.count > 0xffff ? new Uint32Array(triangles * 6) : new Uint16Array(triangles * 6);
+  for (let triangle = 0, at = 0; triangle < triangles; triangle++) {
+    const first = triangle * 3;
+    const a = from ? from[first] : first;
+    const b = from ? from[first + 1] : first + 1;
+    const c = from ? from[first + 2] : first + 2;
+    indices[at++] = a;
+    indices[at++] = b;
+    indices[at++] = b;
+    indices[at++] = c;
+    indices[at++] = c;
+    indices[at++] = a;
+  }
+  const edges = new BufferGeometry();
+  for (const name of ['position', 'skinIndex', 'skinWeight']) {
+    const attribute = source.getAttribute(name);
+    if (attribute) edges.setAttribute(name, attribute);
+  }
+  edges.morphAttributes = source.morphAttributes;
+  edges.morphTargetsRelative = source.morphTargetsRelative;
+  // The vertices may have left memory: the bounds three.js sorts by are the mesh's.
+  edges.boundingSphere = source.boundingSphere?.clone() ?? new Sphere();
+  const attribute = new BufferAttribute(indices, 1);
+  attribute.onUpload(release);
+  edges.setIndex(attribute);
+  return edges;
 }
