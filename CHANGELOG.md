@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
+Several measurements and edge snapping, the mesh check for glTF, and GPU instances' metadata.
+
 ### Added
 
 - Several measurements at once: each pair of clicks adds one, the ones before stay with their
@@ -355,7 +359,8 @@ First preview release.
 - Files next to a `.gltf` are read only from the model's folder and workspace, never from the
   network or an absolute path.
 
-[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/mbKalkan/nightmesh/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mbKalkan/nightmesh/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/mbKalkan/nightmesh/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mbKalkan/nightmesh/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mbKalkan/nightmesh/compare/v0.3.0...v0.4.0
