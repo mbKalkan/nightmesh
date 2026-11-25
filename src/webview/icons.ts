@@ -42,6 +42,14 @@ export const icons = {
   ruler: svg(
     '<path d="M1.75 11.25 11.25 1.75l3 3-9.5 9.5z"/><path d="M4.25 8.75l1.5 1.5M6.25 6.75l1 1M8.25 4.75l1.5 1.5M10.25 2.75l1 1"/>',
   ),
+  // The handles to move, rotate and scale (D-069).
+  move: svg(
+    '<path d="M8 1.75v12.5M1.75 8h12.5"/><path d="M6.25 3.5 8 1.75 9.75 3.5M6.25 12.5 8 14.25 9.75 12.5M3.5 6.25 1.75 8 3.5 9.75M12.5 6.25 14.25 8 12.5 9.75"/>',
+  ),
+  rotate: svg('<path d="M13.25 8A5.25 5.25 0 1 1 11.7 4.3"/><path d="M12.25 1.75v3h-3"/>'),
+  scale: svg(
+    '<rect x="1.75" y="8.75" width="5.5" height="5.5" rx="0.5"/><path d="M7.25 8.75 14.25 1.75M9.75 1.75h4.5v4.5"/>',
+  ),
   frame: svg(
     '<path d="M2.5 5.5v-3h3M10.5 2.5h3v3M13.5 10.5v3h-3M5.5 13.5h-3v-3"/><circle cx="8" cy="8" r="2"/>',
   ),

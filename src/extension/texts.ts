@@ -44,6 +44,22 @@ export function viewerStrings(t: Translate): ViewerStrings {
       second: t('Click a second point'),
       distance: t('Distance'),
     },
+    transform: {
+      move: t('Move (G)'),
+      rotate: t('Rotate (R)'),
+      scale: t('Scale (S)'),
+      position: t('Position'),
+      rotation: t('Rotation'),
+      scaleRow: t('Scale'),
+      metres: t('m'),
+      degrees: t('°'),
+      animated: t('Set by an animation'),
+      reset: t('Revert'),
+      resetTitle: t('Back to the values in the saved file'),
+      keys: t(
+        'G, R and S show handles to move, rotate and scale the selection, or the whole model when nothing is selected; the inspector has the values to type. Ctrl+S saves, Ctrl+Z undoes.',
+      ),
+    },
     structure: structureStrings(t),
     tileset: {
       tree: t('Tiles'),
@@ -220,7 +236,7 @@ export function viewerStrings(t: Translate): ViewerStrings {
       unusedImage: t('Not used by any texture'),
       suggestions: t('Suggestions'),
       suggestionsNote: t(
-        'Only suggestions: Nightmesh never changes the file. Each command writes a new file with glTF Transform, which needs Node.js.',
+        "Only suggestions: Nightmesh doesn't apply them. Each command writes a new file with glTF Transform, which needs Node.js.",
       ),
       suggestion: {
         geometry: {

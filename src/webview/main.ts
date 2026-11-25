@@ -38,6 +38,7 @@ import {
 } from './theme';
 import { UNIT_METRES, fileTransform, statedUnit, unitsFor, withUnits, type Units } from './units';
 import { SHORTCUTS, STANDARD_VIEWS, viewKey } from './viewKeys';
+import { MODE_PATHS, animatedPaths, type TransformMode, type Trs } from '../shared/transforms';
 import { vscode } from './vscodeApi';
 
 type SceneModule = typeof import('./scene');
@@ -73,6 +74,7 @@ const shell = new Shell(
     frame: () => void view?.then((target) => target?.frameSelection()),
     json: () => showJson(selectedKey),
     measure: () => setMeasuring(!shownView?.isMeasuring),
+    transform: (mode) => setTransformMode(mode === transformMode ? undefined : mode),
   },
 );
 let opened: OpenMessage | undefined;
@@ -100,6 +102,12 @@ let latestLoad = 0;
 let hasModel = false;
 /** What the context menu's reference commands name: what was right-clicked last. */
 let menuKey: string | undefined;
+/** Whether the model's nodes can be moved, turned, scaled and saved (D-069). */
+let editable = false;
+/** The nodes changed since the file was saved, as the host keeps them. */
+let transforms: ReadonlyMap<number, Trs> = new Map();
+/** The handles the 3D view shows on the selection, if any. */
+let transformMode: TransformMode | undefined;
 /** A JSON pointer right-clicked last, in the validation tab: shown in the JSON as it is. */
 let menuPointer: string | undefined;
 /** True while the glTF JSON document selects in the viewer, which needn't be told back. */
@@ -127,7 +135,7 @@ const COMPOSITE_PART = /^(?:b3dm|i3dm) (\d+(?:\/\d+)*)$/;
 /** What couldn't be had of the tileset shown, in sentences for the user. */
 const tileProblems = new Set<string>();
 
-// Cut and Paste do nothing in a read-only viewer; Copy stays for the values in the inspector.
+// Cut and Paste do nothing in the view; the inspector keeps them for its values and fields.
 document.body.dataset.vscodeContext = JSON.stringify({ preventDefaultContextMenuItems: true });
 shell.inspectorPanel.body.dataset.vscodeContext = JSON.stringify({
   preventDefaultContextMenuItems: false,
@@ -228,6 +236,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       selectingFromJson = false;
       break;
     }
+    case 'transforms':
+      transforms = new Map(message.nodes);
+      structure?.setTransforms(transforms);
+      shownView?.setTransforms(transforms, structure?.modelJson);
+      showTransformTool();
+      break;
     case 'copyReference': {
       const key = message.atPointer ? (menuKey ?? selectedKey) : selectedKey;
       const panels = tilesetView ?? structure;
@@ -262,10 +276,19 @@ watchTheme(
     }),
 );
 
+/** G, R and S show the handles to move, rotate and scale, as in Blender. */
+const TRANSFORM_KEYS: Readonly<Record<string, TransformMode>> = {
+  g: 'move',
+  r: 'rotate',
+  s: 'scale',
+};
+
 // F frames the selection, Escape lets go of it, as in most 3D tools; M measures, Backspace takes
-// the last measurement away, and Escape stops measuring.
+// the last measurement away, and Escape stops measuring. G, R and S show handles on a model that
+// can be changed, the same key again or Escape hides them.
 shell.viewport.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target !== shell.viewport) return;
+  const mode = TRANSFORM_KEYS[event.key.toLowerCase()];
   if (event.key === 'f' || event.key === 'F') {
     void view?.then((target) => target?.frameSelection());
   } else if ((event.key === 'm' || event.key === 'M') && shownView) {
@@ -274,6 +297,10 @@ shell.viewport.addEventListener('keydown', (event) => {
     shownView.removeMeasurement();
   } else if (event.key === 'Escape' && shownView?.isMeasuring) {
     setMeasuring(false);
+  } else if (mode && editable && shownView) {
+    setTransformMode(mode === transformMode ? undefined : mode);
+  } else if (event.key === 'Escape' && transformMode) {
+    setTransformMode(undefined);
   } else if (event.key === 'Escape') {
     structure?.select('model');
   } else {
@@ -353,8 +380,30 @@ function cameraMoved(camera: CameraState): void {
 /** Starts or stops measuring the distance between two points clicked on the model. */
 function setMeasuring(measuring: boolean): void {
   if (!shownView) return;
+  if (measuring) setTransformMode(undefined);
   shownView.setMeasuring(measuring);
   shell.setMeasuring(measuring);
+}
+
+/** Shows the handles to move, rotate or scale the selection, or the whole model; or hides them. */
+function setTransformMode(mode: TransformMode | undefined): void {
+  if (mode && shownView?.isMeasuring) setMeasuring(false);
+  transformMode = mode;
+  shell.setTransformMode(mode);
+  showTransformTool();
+}
+
+/**
+ * Puts the handles on the node selected, or on what moves the whole model, unless an animation
+ * sets what they would change.
+ */
+function showTransformTool(): void {
+  if (!shownView) return;
+  const json = structure?.modelJson;
+  const node = editable && transformMode ? structure?.transformNode(selectedKey) : undefined;
+  const locked =
+    node !== undefined && transformMode && animatedPaths(json, node).has(MODE_PATHS[transformMode]);
+  shownView.setTransformTool(locked ? undefined : node, transformMode);
 }
 
 /** The nodes a comparison found changed on this side, for the 3D view to box. */
@@ -511,7 +560,8 @@ function open(message: OpenMessage): void {
   strings = message.strings;
   metres = new Formatter(message.locale);
   if (units) metres.setLength(units.unit);
-  shell.setDocument(message.fileName, message.format, strings);
+  editable = message.editable;
+  shell.setDocument(message.fileName, message.format, strings, editable);
   if (!hasModel) shell.startLoading(strings.loading);
   viewOptions ??= new MenuButton(shell.viewButton, document.getElementById('app')!, viewMenuItems);
   exportOptions ??= new MenuButton(shell.exportButton, document.getElementById('app')!, () => {
@@ -562,6 +612,7 @@ function open(message: OpenMessage): void {
         // Picking an animation in the structure makes it the one the bar plays.
         const animation = /^animation:(\d+)$/.exec(key);
         if (animation) target?.setClip(Number(animation[1]));
+        showTransformTool();
       });
     },
     activated: () => void view?.then((target) => target?.frameSelection()),
@@ -574,6 +625,11 @@ function open(message: OpenMessage): void {
       shownView?.setChanges(nodes);
     },
   });
+  if (editable) {
+    structure.enableTransforms((node, from, to) =>
+      vscode.postMessage({ type: 'transform', node, from, to }),
+    );
+  }
 }
 
 /** The Shading menu: how the model is drawn, then the wireframe over it. */
@@ -826,6 +882,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
         refreshTiles();
       },
       environment: (environment) => vscode.postMessage({ type: 'environment', environment }),
+      transforming: (node, trs) => structure?.liveTransform(node, trs),
+      transformed: (node, from, to) => vscode.postMessage({ type: 'transform', node, from, to }),
     },
     opened?.environment,
   );
@@ -833,6 +891,8 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
   shell.viewButton.hidden = false;
   shell.measureButton.hidden = false;
   shell.shadingButton.hidden = false;
+  for (const button of Object.values(shell.transformButtons)) button.hidden = !editable;
+  created.setTransforms(transforms, structure?.modelJson);
   created.setBackground(viewportBackground(shell.viewport));
   created.setHighlightColor(highlightColor());
   created.setHelperColors(helperColors(shell.viewport));
@@ -845,6 +905,7 @@ async function createView(text: ViewerStrings): Promise<View | undefined> {
     format === 'b3dm' || format === 'i3dm' || format === 'pnts' || format === 'cmpt';
   if (units) created.setGridUnit(UNIT_METRES[units.unit]);
   created.select(selectedKey);
+  showTransformTool();
   return created;
 }
 

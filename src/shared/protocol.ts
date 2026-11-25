@@ -1,5 +1,7 @@
 // Messages exchanged between the extension host and the webview.
 
+import type { Trs } from './transforms';
+
 /** Formats read into glTF on the way in: they have no structure of their own beyond geometry. */
 export type MeshFormat = 'obj' | 'stl' | 'ply' | 'pnts';
 
@@ -446,6 +448,7 @@ export interface ViewerStrings {
   modelSize: string;
   selectionSize: string;
   measure: MeasureStrings;
+  transform: TransformStrings;
   structure: StructureStrings;
   tileset: TilesetStrings;
   validation: ValidationStrings;
@@ -585,6 +588,26 @@ export interface MeasureStrings {
   second: string;
   /** What the corner of the view shows once both points are placed. */
   distance: string;
+}
+
+/** Moving, turning and scaling a glTF model's nodes (D-069). */
+export interface TransformStrings {
+  /** The toolbar buttons that show the handles in the view, with their shortcuts. */
+  move: string;
+  rotate: string;
+  scale: string;
+  /** The rows of the inspector's transform section, and their units. */
+  position: string;
+  rotation: string;
+  scaleRow: string;
+  metres: string;
+  degrees: string;
+  /** Next to what an animation sets, which can't be changed here. */
+  animated: string;
+  reset: string;
+  resetTitle: string;
+  /** Added to the view's key help when the model can be changed. */
+  keys: string;
 }
 
 /** How much a validation issue matters, from the glTF Validator's report. */
@@ -729,6 +752,8 @@ export interface OpenMessage {
   preferences: Preferences;
   /** The lighting environment a viewer made before, kept by the host for the next ones. */
   environment?: Environment;
+  /** Whether the model's nodes can be moved, turned, scaled and saved: glTF, in a file on disk. */
+  editable: boolean;
 }
 
 /**
@@ -1015,7 +1040,12 @@ export type HostToWebviewMessage =
   /** The other side of the comparison, in short, to find what changed. */
   | { type: 'peerSummary'; summary: ModelSummary }
   /** The other side of the comparison selected something: select it here too. */
-  | { type: 'peerSelect'; target: CompareTarget };
+  | { type: 'peerSelect'; target: CompareTarget }
+  /**
+   * The nodes changed since the file was saved, as they are now (D-069): after each structure,
+   * and whenever a change is made, undone, redone or reverted.
+   */
+  | { type: 'transforms'; nodes: [number, Trs][] };
 
 /**
  * Asks for a reference to copy: to what was right-clicked when the context menu ran the command
@@ -1064,4 +1094,6 @@ export type WebviewToHostMessage =
   /** The model in short, in a viewer that is one side of a comparison, for the other side. */
   | { type: 'summary'; summary: ModelSummary }
   /** The selection changed, in a viewer that is one side of a comparison. */
-  | { type: 'compareSelect'; target: CompareTarget };
+  | { type: 'compareSelect'; target: CompareTarget }
+  /** The user changed a node's transform, which the host keeps as a step to undo. */
+  | { type: 'transform'; node: number; from: Trs; to: Trs };

@@ -4,13 +4,14 @@ This extension bundles the following open-source components.
 
 | Component | License | Source |
 |---|---|---|
-| three.js (core, GLTFLoader, DRACOLoader, KTX2Loader, OrbitControls, RoomEnvironment) | MIT | https://github.com/mrdoob/three.js |
+| three.js (core, GLTFLoader, DRACOLoader, KTX2Loader, OrbitControls, TransformControls, RoomEnvironment) | MIT | https://github.com/mrdoob/three.js |
 | meshoptimizer decoder (bundled inside three.js, unmodified) | MIT | https://github.com/zeux/meshoptimizer |
 | Draco decoder (WebAssembly build shipped with three.js, unmodified; in the webview and in the extension's file-reading thread) | Apache-2.0 | https://github.com/google/draco |
 | Basis Universal transcoder (WebAssembly build shipped with three.js; see the note below) | Apache-2.0 | https://github.com/BinomialLLC/basis_universal |
 | zstddec, with the Zstandard decoder (shipped with three.js, unmodified) | MIT, BSD-3-Clause | https://github.com/donmccurdy/zstddec |
 | 3DTilesRendererJS (npm package `3d-tiles-renderer`: the three.js tiles renderer and its plugins, unmodified) | Apache-2.0 | https://github.com/NASA-AMMOS/3DTilesRendererJS |
 | Khronos glTF Validator (npm package `gltf-validator`, compiled from Dart, unmodified) | Apache-2.0; its bundled Dart libraries BSD-3-Clause, MIT, zlib | https://github.com/KhronosGroup/glTF-Validator |
+| jsonc-parser (saving a changed glTF's JSON with its layout kept, unmodified) | MIT | https://github.com/microsoft/node-jsonc-parser |
 
 ## Models in the screenshots
 
@@ -134,6 +135,30 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## jsonc-parser
+
+The MIT License (MIT)
+
+Copyright (c) Microsoft
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ## 3DTilesRendererJS
 

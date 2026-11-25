@@ -1,5 +1,6 @@
 import { isGltfFormat } from '../shared/formats';
 import type { ModelFormat, PanelLayout, ViewerStrings } from '../shared/protocol';
+import type { TransformMode } from '../shared/transforms';
 import { icons } from './icons';
 import { SidePanel } from './panel';
 
@@ -30,6 +31,8 @@ export class Shell {
   readonly exportButton: HTMLButtonElement;
   /** Starts and stops measuring, once there is a 3D view. */
   readonly measureButton: HTMLButtonElement;
+  /** Show the handles to move, rotate and scale, once there is a 3D view of a model to change. */
+  readonly transformButtons: Readonly<Record<TransformMode, HTMLButtonElement>>;
   readonly structurePanel: SidePanel;
   readonly inspectorPanel: SidePanel;
   private readonly root: HTMLElement;
@@ -65,6 +68,7 @@ export class Shell {
       frame(): void;
       json(): void;
       measure(): void;
+      transform(mode: TransformMode): void;
     },
   ) {
     container.innerHTML = `
@@ -78,6 +82,9 @@ export class Shell {
             <button class="nm-icon-button nm-menu-button" data-action="shading" type="button" hidden>${icons.shading}${icons.chevronDown}</button>
             <button class="nm-icon-button nm-menu-button" data-action="view" type="button" hidden>${icons.view}${icons.chevronDown}</button>
             <button class="nm-icon-button" data-action="measure" type="button" aria-pressed="false" hidden>${icons.ruler}</button>
+            <button class="nm-icon-button" data-transform="move" type="button" aria-pressed="false" hidden>${icons.move}</button>
+            <button class="nm-icon-button" data-transform="rotate" type="button" aria-pressed="false" hidden>${icons.rotate}</button>
+            <button class="nm-icon-button" data-transform="scale" type="button" aria-pressed="false" hidden>${icons.scale}</button>
             <button class="nm-icon-button" data-action="frame" type="button">${icons.frame}</button>
             <button class="nm-icon-button" data-action="json" type="button">${icons.json}</button>
             <button class="nm-icon-button nm-menu-button" data-action="export" type="button">${icons.export}${icons.chevronDown}</button>
@@ -143,6 +150,11 @@ export class Shell {
     this.shadingButton = find('[data-action="shading"]');
     this.exportButton = find('[data-action="export"]');
     this.measureButton = find('[data-action="measure"]');
+    this.transformButtons = {
+      move: find('[data-transform="move"]'),
+      rotate: find('[data-transform="rotate"]'),
+      scale: find('[data-transform="scale"]'),
+    };
     find('[data-action="close-notice"]').addEventListener('click', () => {
       this.notice.hidden = true;
       this.viewport.focus();
@@ -163,6 +175,8 @@ export class Shell {
       if (button?.dataset.action === 'frame') return this.events.frame();
       if (button?.dataset.action === 'json') return this.events.json();
       if (button?.dataset.action === 'measure') return this.events.measure();
+      const mode = button?.dataset.transform as TransformMode | undefined;
+      if (mode) return this.events.transform(mode);
       const panel = button?.dataset.panel as 'structure' | 'inspector' | undefined;
       if (!panel) return;
       if (panel === 'structure' && this.narrowed) this.narrowed = false;
@@ -180,7 +194,13 @@ export class Shell {
     }).observe(this.center.parentElement!);
   }
 
-  setDocument(fileName: string, format: ModelFormat, strings: ViewerStrings): void {
+  /** `editable` when the model can be changed and saved: its keys are told too. */
+  setDocument(
+    fileName: string,
+    format: ModelFormat,
+    strings: ViewerStrings,
+    editable: boolean,
+  ): void {
     this.strings = strings;
     this.root.dataset.format = format;
     // OBJ, STL, PLY and tilesets have no glTF JSON of their own to show.
@@ -190,7 +210,9 @@ export class Shell {
     this.fileName.title = fileName;
     document.title = fileName;
     this.viewport.setAttribute('aria-label', fileName);
-    (this.viewport.querySelector('#nm-view-keys') as HTMLElement).textContent = strings.viewKeys;
+    (this.viewport.querySelector('#nm-view-keys') as HTMLElement).textContent = editable
+      ? `${strings.viewKeys} ${strings.transform.keys}`
+      : strings.viewKeys;
     this.progress.setAttribute('aria-label', strings.loading);
     const close = this.notice.querySelector('[data-action="close-notice"]') as HTMLElement;
     close.title = strings.close;
@@ -199,8 +221,10 @@ export class Shell {
     this.structurePanel.setLabels(structure.structure, structure.structureWidth);
     this.inspectorPanel.setLabels(structure.inspector, structure.inspectorWidth);
     for (const button of this.toggles.querySelectorAll<HTMLElement>('button')) {
-      const label =
-        button.dataset.action === 'view'
+      const mode = button.dataset.transform as TransformMode | undefined;
+      const label = mode
+        ? strings.transform[mode]
+        : button.dataset.action === 'view'
           ? strings.view.menu
           : button.dataset.action === 'shading'
             ? strings.shading.menu
@@ -267,6 +291,13 @@ export class Shell {
   setMeasuring(measuring: boolean): void {
     this.measureButton.setAttribute('aria-pressed', String(measuring));
     this.viewport.classList.toggle('nm-measuring', measuring);
+  }
+
+  /** Marks the button of the handles shown pressed; none when they are hidden. */
+  setTransformMode(mode: TransformMode | undefined): void {
+    for (const [each, button] of Object.entries(this.transformButtons)) {
+      button.setAttribute('aria-pressed', String(each === mode));
+    }
   }
 
   /**

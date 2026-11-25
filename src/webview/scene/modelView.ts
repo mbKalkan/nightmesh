@@ -76,6 +76,15 @@ import type {
 } from '../../shared/protocol';
 import { OPPOSITE, Viewpoint } from './viewpoint';
 import { sameCamera } from '../cameraState';
+import {
+  MODE_PATHS,
+  nodeTrs,
+  sameTrs,
+  withPath,
+  type TransformMode,
+  type Trs,
+} from '../../shared/transforms';
+import { TransformTool } from './transformTool';
 
 /** How the lighting environment is blurred; with three.js's version, what makes it the same. */
 const ENVIRONMENT_SIGMA = 0.04;
@@ -149,6 +158,10 @@ export interface ViewEvents {
   tilesFound(path: string, children: readonly object[]): void;
   /** The view made its lighting environment, which the next views can start with. */
   environment(environment: Environment): void;
+  /** While a handle is dragged, the node's transform as it is now (D-069). */
+  transforming(node: number, trs: Trs): void;
+  /** A handle was let go, having changed the node from `from` to `to`. */
+  transformed(node: number, from: Trs, to: Trs): void;
 }
 
 /** What a comparison found about a structure entry, to box it in the view. */
@@ -250,6 +263,20 @@ export class ModelView {
   private readonly turnedTo = new Quaternion(Number.NaN);
   /** The camera last said to have moved, so a frame drawn without moving says nothing. */
   private movedTo: CameraState | undefined;
+  private readonly transformTool: TransformTool;
+  /** The nodes changed since the file was saved (D-069). */
+  private transforms: ReadonlyMap<number, Trs> = new Map();
+  /** The glTF JSON last read, whose values the nodes no longer changed go back to. */
+  private transformJson: unknown;
+  /** Nodes the view set to a change, to set back once they are no longer changed. */
+  private transformed = new Set<number>();
+  /** How many nodes the shown model has: node `nodeCount` is the one saving adds above it. */
+  private nodeCount = 0;
+  /** The node the handles are on, and which handles. */
+  private toolNode: number | undefined;
+  private toolMode: TransformMode | undefined;
+  /** The dragged node's transform when its handle was grabbed. */
+  private dragStart: Trs | undefined;
 
   constructor(
     private readonly container: HTMLElement,
@@ -274,6 +301,15 @@ export class ModelView {
 
     this.viewpoint = new Viewpoint(canvas, this.modelSphere, () => this.requestRender());
     this.listenForClicks();
+    this.transformTool = new TransformTool(this.viewpoint.camera, canvas, {
+      dragging: (dragging) => {
+        this.viewpoint.controls.enabled = !dragging;
+        if (!dragging) return this.endDrag();
+        this.dragStart = this.toolNode === undefined ? undefined : this.nodeNow(this.toolNode);
+      },
+      changed: (moved) => (moved ? this.duringDrag() : this.requestRender()),
+    });
+    this.scene.add(this.transformTool.helper);
     // Vertex data left memory once it was on the GPU, so a lost context can't redraw the model:
     // drop it, and draw again once the model comes back.
     canvas.addEventListener('webglcontextlost', () => {
@@ -411,6 +447,7 @@ export class ModelView {
       this.helpers.group,
       this.ruler.group,
       ...CHANGE_KINDS.map((kind) => this.changeBoxes[kind].group),
+      this.transformTool.helper,
     ];
   }
 
@@ -543,6 +580,10 @@ export class ModelView {
     this.model = model;
     this.index = new SelectionIndex(gltf);
     this.scene.add(model);
+    // Changes not yet saved, before playback takes the pose as its rest.
+    this.nodeCount = ((gltf.parser.json as { nodes?: unknown[] }).nodes ?? []).length;
+    this.transformed.clear();
+    this.applyTransforms();
     // What was measured was on the model before.
     this.ruler.clear();
     this.picker.releaseEdges();
@@ -575,6 +616,7 @@ export class ModelView {
     this.startAnimations(model, gltf.animations, keepCamera);
     this.select(this.selected);
     this.showChanges();
+    this.showTool();
     this.viewpoint.updateClipping();
     this.render();
   }
@@ -660,6 +702,9 @@ export class ModelView {
   /** Takes the model shown out of the scene and frees what it holds. */
   private removeModel(): void {
     const previous = this.model;
+    this.transformTool.show(undefined, undefined);
+    this.dragStart = undefined;
+    this.viewpoint.controls.enabled = true;
     // Its own materials back first, to be disposed with it.
     this.shading.detach();
     if (this.tiles) {
@@ -693,6 +738,107 @@ export class ModelView {
     this.viewpoint.updateClipping();
     this.measure();
     this.requestRender();
+  }
+
+  /**
+   * The nodes changed since the file was saved, and the glTF JSON last read, which has the file's
+   * values for the nodes no longer changed (D-069). The shown model follows.
+   */
+  setTransforms(transforms: ReadonlyMap<number, Trs>, json: unknown): void {
+    this.transforms = transforms;
+    this.transformJson = json;
+    if (this.applyTransforms()) this.afterTransform();
+  }
+
+  /** Shows the handles of `mode` on node `node`; none without either. */
+  setTransformTool(node: number | undefined, mode: TransformMode | undefined): void {
+    this.toolNode = node;
+    this.toolMode = mode;
+    this.showTool();
+  }
+
+  private showTool(): void {
+    const object = this.toolNode === undefined ? undefined : this.nodeObject(this.toolNode);
+    this.transformTool.show(object, this.toolMode);
+    this.requestRender();
+  }
+
+  /** What node `node` is drawn as. Node `nodeCount`, which saving adds above the model, is it. */
+  private nodeObject(node: number): Object3D | undefined {
+    if (this.tiles || !this.model) return undefined;
+    if (node === this.nodeCount) return this.model;
+    return this.index?.objects(`node:${node}`)[0];
+  }
+
+  /** A node's transform as it is now: as changed, or as the file has it. */
+  private nodeNow(node: number): Trs {
+    return this.transforms.get(node) ?? nodeTrs(this.transformJson, node);
+  }
+
+  /**
+   * Sets the nodes changed, and those no longer changed, as they are now; playback takes that as
+   * where they rest. Whether the model had any of them.
+   */
+  private applyTransforms(): boolean {
+    let any = false;
+    for (const node of new Set([...this.transformed, ...this.transforms.keys()])) {
+      const object = this.nodeObject(node);
+      if (!object) continue;
+      const { translation, rotation, scale } = this.nodeNow(node);
+      object.position.fromArray(translation);
+      object.quaternion.fromArray(rotation);
+      object.scale.fromArray(scale);
+      this.playback?.setRest(object);
+      any = true;
+    }
+    this.transformed = new Set(this.transforms.keys());
+    return any;
+  }
+
+  /** After nodes moved: the bounds, boxes, grid and size follow; the camera stays. */
+  private afterTransform(): void {
+    this.model?.updateMatrixWorld(true);
+    this.modelBox().getBoundingSphere(this.modelSphere);
+    this.helpers.fit(this.modelBox());
+    this.updateBounds();
+    this.updateBoxes();
+    this.viewpoint.updateClipping();
+    this.measure();
+    this.requestRender();
+  }
+
+  /** The dragged node as the handles have it now: only what they change differs from `start`. */
+  private dragged(start: Trs): Trs | undefined {
+    const object = this.transformTool.object;
+    if (!object || !this.toolMode) return undefined;
+    const path = MODE_PATHS[this.toolMode];
+    const values =
+      path === 'translation'
+        ? object.position.toArray()
+        : path === 'rotation'
+          ? object.quaternion.toArray()
+          : object.scale.toArray();
+    return withPath(start, path, values);
+  }
+
+  private duringDrag(): void {
+    const start = this.dragStart;
+    const now = start && this.dragged(start);
+    if (!now || this.toolNode === undefined) return this.requestRender();
+    this.model?.updateMatrixWorld(true);
+    this.updateBoxes();
+    this.measure();
+    this.requestRender();
+    this.events.transforming(this.toolNode, now);
+  }
+
+  private endDrag(): void {
+    const start = this.dragStart;
+    this.dragStart = undefined;
+    const end = start && this.dragged(start);
+    if (!start || !end || this.toolNode === undefined) return;
+    this.afterTransform();
+    if (!sameTrs(start, end)) this.events.transformed(this.toolNode, start, end);
   }
 
   /** Plays clip `index` from where it is now, or from the start if it is another clip. */
@@ -917,11 +1063,18 @@ export class ModelView {
    * drawn again and read in the same task.
    */
   async screenshot(): Promise<Uint8Array | undefined> {
+    // The handles are for moving the model, not part of its picture.
+    const handles = this.transformTool.helper;
+    const shown = handles.visible;
+    handles.visible = false;
     this.render();
-    const blob = await new Promise<Blob | null>((resolve) =>
+    const blob = new Promise<Blob | null>((resolve) =>
       this.renderer.domElement.toBlob(resolve, 'image/png'),
     );
-    return blob ? new Uint8Array(await blob.arrayBuffer()) : undefined;
+    handles.visible = shown;
+    this.requestRender();
+    const picture = await blob;
+    return picture ? new Uint8Array(await picture.arrayBuffer()) : undefined;
   }
 
   requestRender(): void {
@@ -963,6 +1116,7 @@ export class ModelView {
     cancelAnimationFrame(this.frameRequest);
     clearTimeout(this.snapTimer);
     this.resizeObserver.disconnect();
+    this.transformTool.dispose();
     this.viewpoint.dispose();
     this.picker.dispose();
     this.ruler.dispose();
@@ -1010,8 +1164,9 @@ export class ModelView {
   private listenForClicks(): void {
     let down: { x: number; y: number; button: number } | undefined;
     this.canvas.addEventListener('pointerdown', (event) => {
+      // A press on a handle moves the node, rather than picking what is behind it.
       down =
-        event.button === 0 || event.button === 2
+        (event.button === 0 && !this.transformTool.engaged) || event.button === 2
           ? { x: event.clientX, y: event.clientY, button: event.button }
           : undefined;
     });
@@ -1028,7 +1183,8 @@ export class ModelView {
       }
     });
     this.canvas.addEventListener('dblclick', (event) => {
-      if (!this.measuring) this.events.picked(this.pickAt(event), true);
+      if (this.measuring || this.transformTool.engaged) return;
+      this.events.picked(this.pickAt(event), true);
     });
     // While measuring, a ring shows the vertex or the point on an edge a click would snap to.
     this.canvas.addEventListener('pointermove', (event) => {
@@ -1168,6 +1324,7 @@ export class ModelView {
 
   private render(): void {
     const camera = this.viewpoint.camera;
+    this.transformTool.setCamera(camera);
     const measurement = this.measuring
       ? this.ruler.update(camera, (metres) => this.events.lengthText(metres))
       : undefined;

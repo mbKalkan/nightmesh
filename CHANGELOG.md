@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Move, rotate and scale glTF and GLB models, or a part of them, and save. <kbd>G</kbd>,
+  <kbd>R</kbd> and <kbd>S</kbd> (or the toolbar) show handles on the selection, or on the whole
+  model when nothing is selected; the inspector's **Transform** section takes typed values: the
+  position in metres, the rotation in degrees and the scale. <kbd>Ctrl</kbd>+<kbd>S</kbd>
+  saves, <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes, **File › Save As** saves a copy, and changes not
+  yet saved come back after a restart. Saving writes only the changed nodes' transforms: a GLB's
+  binary chunk is copied as it is and a `.gltf` keeps its layout. Moving a whole model with
+  several top nodes adds one node above them; what an animation sets can't be changed.
+
 ## [0.6.0] - 2026-10-31
 
 Several measurements and edge snapping, the mesh check for glTF, and GPU instances' metadata.
