@@ -28,6 +28,8 @@ const extension = {
   format: 'cjs',
   target: 'node20',
   external: ['vscode'],
+  // jsonc-parser's main build is UMD, whose requires esbuild can't follow: it would fail to load.
+  alias: { 'jsonc-parser': 'jsonc-parser/lib/esm/main.js' },
 };
 
 /** The glTF Validator runs in a worker thread of the extension host, from a file of its own. */

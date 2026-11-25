@@ -209,9 +209,9 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
      * Opens a fixture the way the extension host does, with the host's own loading code: the
      * fixtures folder stands in for the workspace, so resources can't reach outside it.
      */
-    async open(fixture: string, { reload = false } = {}) {
+    async open(fixture: string, { reload = false, editable = false } = {}) {
       shown = fixture;
-      if (!reload) await this.post(this.openMessage(fixture));
+      if (!reload) await this.post(this.openMessage(fixture, editable));
       // Cleared here, so waiting for it below waits for this load and not the one before.
       await page.evaluate(() => {
         delete (document.querySelector('.nm-viewport') as HTMLElement).dataset.state;
@@ -220,13 +220,15 @@ export async function openViewer(page: Page, theme: ThemeName, options: ViewerOp
       await page.waitForSelector('.nm-viewport[data-state]');
       await page.waitForSelector('.nm-progress', { state: 'hidden' });
     },
-    openMessage: (fixture: string): HostToWebviewMessage => ({
+    /** `editable` as the host has it for a glTF file on disk; a version from Git isn't. */
+    openMessage: (fixture: string, editable = false): HostToWebviewMessage => ({
       type: 'open',
       fileName: fixture,
       format: formatForPath(fixture) ?? 'glb',
       locale: 'en',
       strings,
       preferences: {},
+      editable,
     }),
     /** The messages the host sends for one load of a fixture, to post some or all of them. */
     async messages(

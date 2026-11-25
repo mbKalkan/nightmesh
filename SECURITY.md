@@ -1,7 +1,8 @@
 # Security policy
 
-Nightmesh only reads the models you open: it makes no network requests, never writes to your
-files, and draws models in a webview with a strict Content Security Policy. Model files are
+Nightmesh makes no network requests and draws models in a webview with a strict Content
+Security Policy. It writes to a model file only when you save transforms you made to a glTF or
+GLB model, and then only to that file or the one you pick in **Save As**. Model files are
 treated as untrusted input; files a `.gltf` refers to are read only from its folder and
 workspace.
 

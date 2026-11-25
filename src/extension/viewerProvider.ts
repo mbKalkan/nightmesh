@@ -28,6 +28,8 @@ import { resolveResourceUri } from './model/resources';
 import { fileSource, memorySource, type ByteSource } from './model/sources';
 import { readTile, tilesetPlace } from './model/tiles';
 import { validationMessage } from './model/validation';
+import { ModelDocument, restoredTransforms } from './modelDocument';
+import { saveTransformed, transformedBytes } from './model/transformSave';
 import { loadTexts, viewerStrings } from './texts';
 import { buildWebviewHtml } from './webviewHtml';
 import { workerMeshParser } from './workerMesh';
@@ -35,7 +37,7 @@ import { workerValidator } from './workerValidator';
 
 const PREFERENCES = 'nightmesh.preferences';
 
-export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
+export class ViewerProvider implements vscode.CustomEditorProvider<ModelDocument> {
   static readonly viewType = 'nightmesh.viewer';
   /** 3D Tiles tilesets, which are JSON files: opened with Nightmesh only when the user says so. */
   static readonly tilesetViewType = 'nightmesh.tileset';
@@ -46,6 +48,11 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
   private viewers = 0;
   /** The two sides of each comparison, which move together. */
   private readonly diffs = new DiffPairs();
+  private readonly documentChanges = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<ModelDocument>
+  >();
+  /** A change to a model, which VS Code marks unsaved and can undo (D-069). */
+  readonly onDidChangeCustomDocument = this.documentChanges.event;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -118,11 +125,65 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
     void this.active?.webview.postMessage({ type: 'export', what } satisfies HostToWebviewMessage);
   }
 
-  openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
-    return { uri, dispose: () => {} };
+  /**
+   * A model to view; glTF and GLB files on disk can be changed and saved too (D-069). Changes kept
+   * from before VS Code restarted come back from their backup.
+   */
+  async openCustomDocument(
+    uri: vscode.Uri,
+    context: vscode.CustomDocumentOpenContext,
+  ): Promise<ModelDocument> {
+    const format = formatForPath(uri.path);
+    const editable = uri.scheme === 'file' && (format === 'glb' || format === 'gltf');
+    let restored: ReturnType<typeof restoredTransforms> = [];
+    if (editable && context.backupId) {
+      try {
+        const backup = await vscode.workspace.fs.readFile(vscode.Uri.parse(context.backupId));
+        restored = restoredTransforms(new TextDecoder().decode(backup));
+      } catch {
+        // A backup that can't be read leaves the model as the file has it.
+      }
+    }
+    const document = new ModelDocument(uri, editable, restored);
+    document.onDidChange((event) => this.documentChanges.fire(event));
+    return document;
   }
 
-  resolveCustomEditor(document: vscode.CustomDocument, panel: vscode.WebviewPanel): void {
+  async saveCustomDocument(document: ModelDocument): Promise<void> {
+    await saveTransformed(document.uri.fsPath, document.uri.fsPath, document.transforms);
+    document.saved();
+  }
+
+  /** Saves the model, as changed, to another file; a model that can't be changed is copied. */
+  async saveCustomDocumentAs(document: ModelDocument, destination: vscode.Uri): Promise<void> {
+    if (!document.editable) {
+      await vscode.workspace.fs.copy(document.uri, destination, { overwrite: true });
+    } else if (destination.scheme === 'file') {
+      await saveTransformed(document.uri.fsPath, destination.fsPath, document.transforms);
+    } else {
+      const data = await vscode.workspace.fs.readFile(document.uri);
+      await vscode.workspace.fs.writeFile(destination, transformedBytes(data, document.transforms));
+    }
+  }
+
+  revertCustomDocument(document: ModelDocument): Promise<void> {
+    document.revert();
+    return Promise.resolve();
+  }
+
+  async backupCustomDocument(
+    document: ModelDocument,
+    context: vscode.CustomDocumentBackupContext,
+  ): Promise<vscode.CustomDocumentBackup> {
+    const { destination } = context;
+    await vscode.workspace.fs.writeFile(destination, new TextEncoder().encode(document.backup()));
+    return {
+      id: destination.toString(),
+      delete: () => void vscode.workspace.fs.delete(destination).then(undefined, () => {}),
+    };
+  }
+
+  resolveCustomEditor(document: ModelDocument, panel: vscode.WebviewPanel): void {
     const { uri } = document;
     const format = formatForPath(uri.path);
     if (!format) {
@@ -190,6 +251,9 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
             structured = true;
             this.jsonDocuments.set(viewer, fileName, message.json);
           }
+          // The changes not yet saved, made to the structure just read: none once it is the
+          // file as saved with them.
+          if (message.type === 'structure' && document.editable) await post(document.message());
           if (message.type === 'large') {
             await new Promise<void>((resolve) => (drawRequest = resolve));
             drawRequest = undefined;
@@ -242,6 +306,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
               strings: viewerStrings(vscode.l10n.t),
               preferences: this.globalState.get<Preferences>(PREFERENCES) ?? {},
               environment,
+              editable: document.editable,
             });
             void load(false);
             this.diffs.ready(member);
@@ -262,6 +327,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
           this.diffs.summary(member, message.summary);
         } else if (message.type === 'compareSelect') {
           this.diffs.select(member, message.target);
+        } else if (message.type === 'transform') {
+          document.edit(message.node, message.from, message.to);
         } else if (message.type === 'reload') {
           void load(true);
         } else if (message.type === 'draw') {
@@ -294,6 +361,7 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
       }),
       watchFile(uri, () => void load(true)),
+      document.addViewer(post),
       // Moving through the glTF JSON with the keyboard or mouse selects what the cursor is in; a
       // selection the viewer made there itself is left alone.
       vscode.window.onDidChangeTextEditorSelection((event) => {
@@ -331,8 +399,8 @@ export class ViewerProvider implements vscode.CustomReadonlyEditorProvider {
 }
 
 /**
- * Saves a screenshot or a report where the user picks, by default next to the model. The model
- * itself is never written: Nightmesh is read-only.
+ * Saves a screenshot or a report where the user picks, by default next to the model, never in
+ * its place.
  */
 async function save(
   model: vscode.Uri,
@@ -362,7 +430,7 @@ async function save(
       : target.path === model.path);
   if (same) {
     void vscode.window.showErrorMessage(
-      t("Nightmesh doesn't write to the model it shows. Pick another file."),
+      t("A screenshot or report can't take the model's place. Pick another file."),
     );
     return;
   }

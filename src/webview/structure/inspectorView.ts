@@ -20,6 +20,8 @@ export class InspectorView {
   private readonly body: HTMLElement;
 
   private previewToken = 0;
+  /** Fields to change a node's transform, in place of its rows, when the model can be changed. */
+  transformEditor: ((node: number) => HTMLElement | undefined) | undefined;
 
   constructor(
     private readonly onLink: (key: EntryKey) => void,
@@ -60,6 +62,12 @@ export class InspectorView {
           title.className = 'nm-section-title';
           title.textContent = section.title;
           element.append(title);
+        }
+        const editor =
+          section.transform === undefined ? undefined : this.transformEditor?.(section.transform);
+        if (editor) {
+          element.append(editor);
+          return element;
         }
         const list = document.createElement('dl');
         list.className = 'nm-props';

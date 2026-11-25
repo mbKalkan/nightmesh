@@ -42,6 +42,8 @@ import { summarize } from './summary';
 import { StructureTree, type TreeMark } from './tree';
 import { ModelUsage } from './usage';
 import { ValidationView } from './validationView';
+import { TransformEditor } from './transformEditor';
+import { animatedPaths, modelTarget, nodeTrs, type Trs } from '../../shared/transforms';
 
 export interface StructureEvents {
   /** The selection changed: in the tree, through a link, or from the 3D view. */
@@ -92,6 +94,10 @@ export class StructureView {
   private usage: ModelUsage | undefined;
   private json: string | undefined;
   private selected: EntryKey = 'model';
+  /** The fields to change a node's transform, once the model can be changed (D-069). */
+  private transformEditor: TransformEditor | undefined;
+  /** The nodes changed since the file was saved. */
+  private transforms: ReadonlyMap<number, Trs> = new Map();
   /** glTF, GLB and the tiles that hold one: the formats with JSON of their own, validated and sized. */
   private readonly gltf: boolean;
 
@@ -428,6 +434,58 @@ export class StructureView {
     return this.usage;
   }
 
+  /**
+   * Lets the inspector change the transform of the node selected, or of the whole model
+   * (D-069); `edited` is told each change, which comes back through `setTransforms`.
+   */
+  enableTransforms(edited: (node: number, from: Trs, to: Trs) => void): void {
+    if (this.transformEditor) return;
+    const editor = new TransformEditor(this.strings.transform, edited);
+    this.transformEditor = editor;
+    this.inspector.transformEditor = (node) => {
+      if (!this.context) return undefined;
+      this.showTransform(node);
+      return editor.element;
+    };
+    this.render(true);
+  }
+
+  /** The nodes changed since the file was saved, as the host keeps them. */
+  setTransforms(transforms: ReadonlyMap<number, Trs>): void {
+    this.transforms = transforms;
+    const node = this.transformNode(this.selected);
+    if (node !== undefined) this.showTransform(node);
+  }
+
+  /** A node as a handle in the view drags it, before the change is made. */
+  liveTransform(node: number, trs: Trs): void {
+    this.transformEditor?.live(node, trs);
+  }
+
+  /** The node whose transform an entry has: a node's own, or the whole model's. */
+  transformNode(key: EntryKey): number | undefined {
+    if (!this.context || !this.gltf) return undefined;
+    if (key === 'model') return modelTarget(this.context.model.root);
+    const parsed = parseKey(key);
+    return parsed?.kind === 'node' ? parsed.index : undefined;
+  }
+
+  /** The glTF JSON last read, which has the saved file's values. */
+  get modelJson(): unknown {
+    return this.context?.model.root;
+  }
+
+  private showTransform(node: number): void {
+    const json = this.context?.model.root;
+    const saved = nodeTrs(json, node);
+    this.transformEditor?.show(
+      node,
+      this.transforms.get(node) ?? saved,
+      saved,
+      animatedPaths(json, node),
+    );
+  }
+
   /** Shows the selected entry's details again, now that the 3D view can preview more of it. */
   refresh(): void {
     this.render(true);
@@ -522,6 +580,19 @@ export class StructureView {
 
   private render(sameEntry: boolean): void {
     if (!this.context) return;
-    this.inspector.show(withFeature(inspect(this.context, this.selected), this.feature), sameEntry);
+    const inspection = withFeature(inspect(this.context, this.selected), this.feature);
+    // The whole model's transform, next to what the model is, when it can be changed.
+    const node = this.selected === 'model' ? this.transformNode('model') : undefined;
+    if (inspection && this.transformEditor && node !== undefined) {
+      const at = inspection.sections.findIndex(
+        (section) => section.title === this.strings.structure.kinds.model,
+      );
+      inspection.sections.splice(at + 1, 0, {
+        title: this.strings.structure.sections.transform,
+        rows: [],
+        transform: node,
+      });
+    }
+    this.inspector.show(inspection, sameEntry);
   }
 }

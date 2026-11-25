@@ -584,6 +584,83 @@ body.vscode-high-contrast .nm-tree-description {
   color: var(--vscode-descriptionForeground);
 }
 
+/* The fields to change a node's position, rotation and scale (D-069). */
+.nm-transform {
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+
+.nm-transform-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.nm-transform-label {
+  min-width: 0;
+  max-width: 160px;
+  padding-right: 8px;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nm-transform-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 24px;
+  padding-left: 4px;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-input-border, var(--nm-border));
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.nm-transform-field:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.nm-transform-field .nm-axis {
+  flex: none;
+  font-size: 11px;
+}
+
+.nm-transform-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+
+.nm-transform-input:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+}
+
+.nm-transform-note {
+  grid-column: 2 / -1;
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+
+.nm-transform-revert {
+  grid-column: 2 / -1;
+  justify-self: start;
+  margin-top: 4px;
+}
+
 /* A texture's image, on a checkerboard that shows where it is transparent. */
 .nm-preview {
   margin: 12px 0 4px;
@@ -921,7 +998,15 @@ body .nm-viewport[data-background='light'] {
   --nm-axis-z: #3794ff;
 }
 
-body.vscode-light .nm-viewport {
+/* Lighter in the inspector's fields, to read on a dark theme's input background. */
+.nm-transform {
+  --nm-axis-x: #ff8080;
+  --nm-axis-y: #89d185;
+  --nm-axis-z: #6cb4ff;
+}
+
+body.vscode-light .nm-viewport,
+body.vscode-light .nm-transform {
   --nm-axis-x: #c62828;
   --nm-axis-y: #2e7d32;
   --nm-axis-z: #1565c0;
@@ -1326,6 +1411,27 @@ body.vscode-light .nm-gizmo {
 .nm-button:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 2px;
+}
+
+.nm-button-secondary {
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+}
+
+.nm-button-secondary:hover {
+  background: var(
+    --vscode-button-secondaryHoverBackground,
+    var(--vscode-button-secondaryBackground, transparent)
+  );
+}
+
+.nm-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nm-button-secondary:disabled:hover {
+  background: var(--vscode-button-secondaryBackground, transparent);
 }
 
 /* Read by screen readers, not shown */

@@ -26,6 +26,7 @@ import { meshCounts, primitiveCounts } from './counts';
 import { entryKey, parseKey, type EntryKey } from './outline';
 import { meshBounds, nodeSize, nodesBounds, positionBounds, sizeOf } from './bounds';
 import { drawnImage, textureMemory } from './textures';
+import { eulerDegrees } from '../../shared/transforms';
 
 /** Something the inspector shows a link to; following it selects that entry. */
 export interface Link {
@@ -53,6 +54,8 @@ export interface Row {
 export interface Section {
   title: string;
   rows: Row[];
+  /** The node whose transform the section shows, which the inspector can offer to change. */
+  transform?: number;
 }
 
 export interface Inspection {
@@ -625,7 +628,7 @@ function inspectNode(context: InspectContext, index: number): Section[] {
 
   const sections: Section[] = [
     { title: strings.kinds.node, rows },
-    { title: strings.sections.transform, rows: transformRows(context, node) },
+    { title: strings.sections.transform, rows: transformRows(context, node), transform: index },
   ];
   if (mesh !== undefined) {
     const summary = meshSummary(context, mesh);
@@ -661,28 +664,6 @@ function transformRows(context: InspectContext, node: JsonObject): Row[] {
     },
     { label: 'scale', text: format.vector(scale), mono: true },
   ];
-}
-
-/** Euler angles in degrees, X then Y then Z, as three.js and most tools apply them. */
-function eulerDegrees([x, y, z, w]: number[]): number[] {
-  const length = Math.hypot(x, y, z, w) || 1;
-  [x, y, z, w] = [x / length, y / length, z / length, w / length];
-  const m11 = 1 - 2 * (y * y + z * z);
-  const m12 = 2 * (x * y - z * w);
-  const m13 = 2 * (x * z + y * w);
-  const m22 = 1 - 2 * (x * x + z * z);
-  const m23 = 2 * (y * z - x * w);
-  const m32 = 2 * (y * z + x * w);
-  const m33 = 1 - 2 * (x * x + y * y);
-  const ey = Math.asin(Math.max(-1, Math.min(1, m13)));
-  const [ex, ez] =
-    Math.abs(m13) < 0.9999999
-      ? [Math.atan2(-m23, m33), Math.atan2(-m12, m11)]
-      : [Math.atan2(m32, m22), 0];
-  return [ex, ey, ez].map((angle) => {
-    const degrees = (angle * 180) / Math.PI;
-    return Object.is(degrees, -0) ? 0 : degrees;
-  });
 }
 
 /** Vertex and element totals for a mesh, as rows. */

@@ -24,7 +24,7 @@ interface Rest {
  */
 export class Playback {
   private readonly mixer: AnimationMixer;
-  private readonly rest: Rest[] = [];
+  private readonly rest = new Map<Object3D, Rest>();
   private action: AnimationAction | undefined;
   clip = -1;
   playing = false;
@@ -37,7 +37,7 @@ export class Playback {
     this.mixer = new AnimationMixer(root);
     root.traverse((object) => {
       const influences = (object as Partial<Mesh>).morphTargetInfluences;
-      this.rest.push({
+      this.rest.set(object, {
         object,
         position: object.position.clone(),
         quaternion: object.quaternion.clone(),
@@ -82,6 +82,19 @@ export class Playback {
     this.mixer.update(0);
   }
 
+  /**
+   * Takes where `object` is now as where it rests, as the user moved it (D-069), and poses the
+   * clip again over it: what the clip animates stays the clip's.
+   */
+  setRest(object: Object3D): void {
+    const rest = this.rest.get(object);
+    if (!rest) return;
+    rest.position.copy(object.position);
+    rest.quaternion.copy(object.quaternion);
+    rest.scale.copy(object.scale);
+    if (this.action) this.mixer.update(0);
+  }
+
   /** Moves the clip on by `seconds` of wall-clock time, at the playback speed. */
   advance(seconds: number): void {
     this.mixer.update(seconds * this.speed);
@@ -93,7 +106,7 @@ export class Playback {
   }
 
   private restore(): void {
-    for (const { object, position, quaternion, scale, influences } of this.rest) {
+    for (const { object, position, quaternion, scale, influences } of this.rest.values()) {
       object.position.copy(position);
       object.quaternion.copy(quaternion);
       object.scale.copy(scale);

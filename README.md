@@ -39,7 +39,9 @@ Control shows them, and measures distances on it.
   into a chat with Claude Code or any assistant that works in your workspace.
 - **Offline and private.** The Draco, meshopt and KTX2 decoders and the lighting ship with the
   extension. No network access, no CDN, no telemetry.
-- **View-only.** Your model files are never written to.
+- **Changes only when you ask.** Viewing never writes to your files. Move, rotate or scale a
+  glTF or GLB model, or a part of it, and <kbd>Ctrl</kbd>+<kbd>S</kbd> saves just those
+  transforms; everything else in the file stays as it was.
 
 ## Features
 
@@ -65,6 +67,20 @@ Control shows them, and measures distances on it.
   too. Their decoders load only when a model needs them.
 
 ![The View menu over a toy car on a light background, with the bounding box drawn and the model's cameras listed](docs/images/view-light.png)
+
+### Move, rotate and scale (glTF and GLB)
+
+- Select a part, or nothing for the whole model, and press <kbd>G</kbd>, <kbd>R</kbd> or
+  <kbd>S</kbd> (or the toolbar buttons) for handles to move, rotate or scale it in the view, as
+  in Blender. The same key again, or <kbd>Esc</kbd>, hides them.
+- Or type the values: the inspector's **Transform** section has the position in metres, the
+  rotation in degrees and the scale, along X, Y and Z. **Revert** goes back to the saved values.
+- Save with <kbd>Ctrl</kbd>+<kbd>S</kbd>, undo with <kbd>Ctrl</kbd>+<kbd>Z</kbd>, save a copy
+  with **File › Save As**, as in any editor. Only the changed nodes' `translation`, `rotation`
+  and `scale` are written: a GLB's binary data is copied as it is, and a `.gltf` keeps its
+  layout, so its diff shows just the change.
+- Moving the whole model of several top nodes adds one node above them. What an animation sets
+  can't be changed; the inspector says so.
 
 ### OBJ, STL and PLY
 
@@ -163,7 +179,7 @@ Control shows them, and measures distances on it.
 - The largest meshes, textures and animations, and each image's format, size and bytes, marked
   when it is larger than 4096 pixels or not a power of two.
 - Suggestions for a lighter model, with the [glTF Transform](https://gltf-transform.dev) command
-  that writes an improved copy. Nightmesh never changes the file itself.
+  that writes an improved copy. Nightmesh doesn't apply them itself.
 
 ![The Size tab of a concept car: bars for vertex data, textures, indices and JSON, the compression, the estimated GPU memory and the largest entries](docs/images/size-dark.png)
 
@@ -242,22 +258,24 @@ An `.obj` that is a compiler's object file, not a model, is said to be one: open
 
 ## Mouse and keyboard
 
-| Action                                      | Mouse or key                                              |
-| ------------------------------------------- | --------------------------------------------------------- |
-| Orbit                                       | Drag, or the arrow keys in the view                       |
-| Pan                                         | Right-drag, or <kbd>Shift</kbd>+drag                      |
-| Zoom                                        | Mouse wheel, or <kbd>+</kbd> / <kbd>-</kbd>               |
-| Select what is under the pointer            | Click                                                     |
-| Frame the selection                         | <kbd>F</kbd>, or double-click                             |
-| Let go of the selection                     | <kbd>Esc</kbd>, or click empty space                      |
-| Look from the front, right or top           | <kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>                  |
-| Look from the back, left or bottom          | <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd> |
-| Look from the other side                    | <kbd>9</kbd>                                              |
-| Switch between perspective and orthographic | <kbd>5</kbd>                                              |
-| Look through the next camera in the model   | <kbd>0</kbd>                                              |
-| Play or pause the animation                 | <kbd>Space</kbd>                                          |
-| Measure between two clicked points          | <kbd>M</kbd>, then click twice; <kbd>Esc</kbd> to stop    |
-| Remove the last measurement                 | <kbd>Backspace</kbd>                                      |
+| Action                                      | Mouse or key                                               |
+| ------------------------------------------- | ---------------------------------------------------------- |
+| Orbit                                       | Drag, or the arrow keys in the view                        |
+| Pan                                         | Right-drag, or <kbd>Shift</kbd>+drag                       |
+| Zoom                                        | Mouse wheel, or <kbd>+</kbd> / <kbd>-</kbd>                |
+| Select what is under the pointer            | Click                                                      |
+| Frame the selection                         | <kbd>F</kbd>, or double-click                              |
+| Let go of the selection                     | <kbd>Esc</kbd>, or click empty space                       |
+| Look from the front, right or top           | <kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>                   |
+| Look from the back, left or bottom          | <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>3</kbd>, <kbd>7</kbd>  |
+| Look from the other side                    | <kbd>9</kbd>                                               |
+| Switch between perspective and orthographic | <kbd>5</kbd>                                               |
+| Look through the next camera in the model   | <kbd>0</kbd>                                               |
+| Play or pause the animation                 | <kbd>Space</kbd>                                           |
+| Measure between two clicked points          | <kbd>M</kbd>, then click twice; <kbd>Esc</kbd> to stop     |
+| Remove the last measurement                 | <kbd>Backspace</kbd>                                       |
+| Move, rotate or scale (glTF and GLB)        | <kbd>G</kbd>, <kbd>R</kbd>, <kbd>S</kbd>; drag the handles |
+| Save, undo the last change                  | <kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>Z</kbd> |
 
 The number keys work on the main keyboard and the number pad. Nightmesh doesn't use
 <kbd>Ctrl</kbd> shortcuts in the view, so VS Code's own stay as they are.
@@ -278,6 +296,9 @@ The number keys work on the main keyboard and the number pad. Nightmesh doesn't 
   so and still shows their structure. Animations of material and node properties
   (`KHR_animation_pointer`) don't play.
 - One animation clip plays at a time.
+- Only glTF and GLB files on disk can be moved, rotated and scaled; OBJ, STL, PLY, 3D Tiles and
+  versions from Git open as they are. **Save As** writes the `.gltf` alone, not the `.bin` files
+  and textures it refers to.
 - A `.gltf`'s `.bin` files and textures are read only from the model's folder and workspace:
   never from the network or an absolute path.
 - Nightmesh needs desktop VS Code: it isn't available in VS Code for the Web yet.
